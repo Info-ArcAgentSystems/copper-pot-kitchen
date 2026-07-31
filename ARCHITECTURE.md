@@ -14,8 +14,8 @@ Keep it honest. A stale architecture file is worse than none, because it gets tr
 
 | | |
 |---|---|
-| Current phase | Phase 0 — scaffold (in progress) |
-| Last updated | 30 July 2026 |
+| Current phase | Phase 0 — scaffold complete; Phase 2 (engine) not started |
+| Last updated | 31 July 2026 |
 | Repo | `Info-ArcAgentSystems/copper-pot-kitchen` (private) |
 | Database | Supabase, schema applied, 22 tables |
 | Golden pack | not yet wired |
@@ -34,7 +34,10 @@ session reads to work out where things stand.
 | 30 Jul 2026 | Five contract documents committed (`README`, `REPO_SETUP_GUIDE`, `CLAUDE`, `ARCHITECTURE`, `schema.sql`) |
 | 30 Jul 2026 | Supabase project created; `schema.sql` applied cleanly — 22 tables, RLS enabled |
 | 30 Jul 2026 | Kitchen row created; `info@arcagentsystems.com` granted `owner`; membership verified |
-| | *Phase 0 remaining: Vite scaffold, dependencies, package scripts, fixtures* |
+| 31 Jul 2026 | `BUILD_GUIDE.md` committed — staged build sequence, A through the four priorities |
+| 31 Jul 2026 | Vite + React 19 + TS scaffold (create-vite 9.1.2); `.gitignore`, `.gitattributes`, `.env.example`, package scripts. `typecheck`, `build`, `lint`, `dev` all green |
+| 31 Jul 2026 | Golden fixture pack placed in `tests/fixtures/` (7 files). Not yet wired to a runner |
+| | *Phase 0 remaining: none. Next is Stage B (contract rules) then Phase 2 (engine)* |
 
 ---
 
@@ -179,6 +182,20 @@ guests. Bundling them under-ordered buns for vegetarians — a real defect caugh
 **One repo per project.** Sprints are tracked with GitHub Projects, milestones and tags, not
 with dated folders in the repo path.
 
+**`typecheck` is `tsc -b`, not `tsc --noEmit`.** BUILD_GUIDE A3 specifies `tsc --noEmit`, but
+the Vite template's root `tsconfig.json` is solution-style — `"files": []` plus project
+references — so `tsc --noEmit` compiles zero files and exits 0 unconditionally. That is a
+green check that checks nothing. `tsc -b` builds the referenced projects; `tsconfig.app.json`
+already sets `"noEmit": true`, so nothing is written.
+
+**Linter is oxlint, not ESLint.** create-vite 9 ships oxlint in the react-ts template. The
+`lint` script was kept as generated rather than swapped for ESLint. Revisit only if a rule we
+need turns out to be ESLint-only — the engine import boundary is the likely test of that.
+
+**No `.env.local` in the repo, and none generated.** `.env.example` is the committed template
+with empty values. Real credentials are created per machine from the Supabase dashboard and
+never pass through a tool or a commit.
+
 ---
 
 ## Known gaps
@@ -187,8 +204,12 @@ Things that are genuinely absent, so nobody wastes an hour looking for them.
 
 | Gap | Blocking? | Notes |
 |---|---|---|
-| No application code yet | — | Phase 0 scaffold outstanding |
-| Golden pack not wired | Phase 2 | fixtures still to be copied into `tests/fixtures/` |
+| No engine code yet | Phase 2 | scaffold is in place; `src/` is still the Vite starter page |
+| Golden pack not wired | Phase 2 | fixtures are in `tests/fixtures/`; `tests/golden/` runner not written |
+| Fixture count vs BUILD_GUIDE | Phase 2 | `expected_results.json` holds 6 `deterministic_tests` + 4 `system_behavior_tests`. BUILD_GUIDE Stage C says "33 tests". Reconcile with Paul before C6 |
+| `tests/` not covered by typecheck | Phase 2 | `tsconfig.app.json` includes `src` only. Add `tsconfig.test.json` at C1 |
+| No engine import boundary enforced | Phase 2 | nothing yet stops `src/engine` importing React or Supabase. Add an oxlint rule at C1 |
+| Playwright browsers not installed | Phase 5 | `@playwright/test` is installed; `npx playwright install` deliberately deferred |
 | Owner's own account not created | Phase 8 | `info@arcagentsystems.com` holds `owner` in the meantime |
 
 Awaiting owner decisions (see Part 5 of the setup guide):

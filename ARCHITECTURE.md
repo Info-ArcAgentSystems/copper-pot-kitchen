@@ -39,9 +39,11 @@ session reads to work out where things stand.
 | 31 Jul 2026 | Golden fixture pack placed in `tests/fixtures/` (7 files). Not yet wired to a runner |
 | 31 Jul 2026 | Stage B — owner-confirmed Rules 11–17 added to `CLAUDE.md`; three "awaiting owner" items closed |
 | 31 Jul 2026 | C1 — `src/engine/types.ts`. Rules 4, 13 and 16 enforced structurally, each verified by compiling deliberate violations. Four items raised with the owner; five migrations proposed, none applied |
-| 31 Jul 2026 | C1b — four migrations **written, not run**; `schema.sql` updated to match. `types.ts` gains `meatEatingGuests`, `excludesMeat`, `recipeUnit`, `recipeUnitsPerStockUnit` |
+| 31 Jul 2026 | C1b — four migrations written; `schema.sql` updated to match. `types.ts` gains `meatEatingGuests`, `excludesMeat`, `recipeUnit`, `recipeUnitsPerStockUnit` |
+| 31 Jul 2026 | Migrations **applied and verified** against the live database. 23 tables. `src/data` is unblocked |
 | 31 Jul 2026 | C2 — `units.ts` and `meatEatingGuests()` in `rules.ts`, tests written first. `tsconfig.test.json` and an engine-purity test added. **30 tests green** |
-| | *Next: C3 (`scaling.ts`). The migrations must be run before any `src/data` work* |
+| 31 Jul 2026 | C3 — `scaling.ts`: `scaleRecipe` (recurses sub-recipes, cycle-safe) and `portionsToUnits`. `CALC-CURRY-10` and `CALC-LASAGNE-29` reproduced as unit tests. **56 tests green** |
+| | *Next: C4 (`production.ts`) — `prepDateFor`, `productionBuckets`, `prepPlanByDay`, `prioritisePrep`* |
 
 ---
 
@@ -110,7 +112,7 @@ Mark each as `not started` / `in progress` / `done`, and keep the description ac
 | File | Responsibility | Status |
 |---|---|---|
 | `units.ts` | conversion across recipe / stock / purchase units | **done** — 31 Jul 2026 |
-| `scaling.ts` | `scaleRecipe`, `portionsToUnits` | not started |
+| `scaling.ts` | `scaleRecipe`, `portionsToUnits` | **done** — 31 Jul 2026 |
 | `production.ts` | `prepDateFor`, `productionBuckets`, `prepPlanByDay`, `prioritisePrep` | not started |
 | `shopping.ts` | `requirementsForRange`, `toPurchaseUnits`, `outstandingShopping` | not started |
 | `costing.ts` | `recipeFoodCost`, `jobFoodCost`, `jobMargin` | not started |
@@ -148,6 +150,24 @@ distinct `GuestRef`s, never a sum of categories, and returns null when the guest
 unknown or any dietary is unresolved. Keeping it in one function is what makes Paul's eventual
 answer a one-line change. No caller re-derives it.
 
+**`scaleRecipe` rounds batches up internally, so it must be called ONCE PER CONSOLIDATED
+PORTION TOTAL, never once per job.** Two jobs of 10 lasagne portions is 3 trays consolidated
+(20 / 9) but 4 if each is rounded separately (10 / 9, twice). Scaling per job and summing
+over-orders by a whole tray. Consolidate portions first, then scale once — that ordering is
+what Rule 5 means by one recalculation path. The alternative, keeping `scaleRecipe` linear and
+rounding only in `production.ts`, was considered and rejected: it would make
+`CALC-LASAGNE-29` uncallable against `scaleRecipe` alone, since the fixture expects 8 kg of
+mince for 29 portions rather than the linear 6.44. `scaling.test.ts` demonstrates the
+divergence, so the reason stays executable rather than folklore.
+
+A sub-recipe line's `qty` is **portions of the sub-recipe**, not a measured amount. A measured
+amount would need each recipe's total yield in a measurable unit, which the schema does not
+carry — `portions_per_batch` and `batch_unit` are all there is.
+
+`scaleRecipe` consolidates by `(ingredientId, unit)` only. It receives no `Ingredient` records
+and therefore cannot convert, so the same ingredient in `ml` and `L` stays on two lines for
+`units.ts` to reconcile later (Rule 4).
+
 ### `src/data` — persistence · **not started**
 
 Supabase client, one repository per table, mappers both ways.
@@ -175,19 +195,14 @@ this is the only migration history a future session can read.
 | Date | Change | Why |
 |---|---|---|
 | 30 Jul 2026 | Initial schema applied — 22 tables, indexes, RLS policies | baseline |
+| 31 Jul 2026 | Four migrations applied — see below. 22 tables → 23 | Rules 4, 11, 12, 16 |
 
-### Written 31 Jul 2026 — NOT YET RUN
+### Applied 31 Jul 2026
 
-⚠️ **These four migrations exist as SQL but have not been executed against the database.**
-The live schema is still the 30 July baseline. `schema.sql` has been updated to match, so a
-*fresh* install is correct, but the *existing* Supabase project is not.
-
-They could not be applied from here: `.env.local` holds only the URL and anon key, and
-Supabase's REST layer does not expose DDL at all. They go in through the dashboard SQL editor,
-the same route `schema.sql` took.
-
-**When they have been run, change this heading to "Applied" with the date.** Until then a
-future session must assume the database does not have these columns.
+Run against the live database through the dashboard SQL editor and verified: `job_dietaries`
+no longer carries a summable `guests` column, and both `job_extras` and the ingredient
+conversion columns exist. `schema.sql` matches, so a fresh install and the live project now
+agree. **23 tables.**
 
 | Migration | Change | Why |
 |---|---|---|
@@ -204,11 +219,11 @@ future session must assume the database does not have these columns.
 | `jobs` — reconsider `price` / `price_source` | `JobPricing` needs only the override amount; the engine recomputes the rate-card figure |
 | `job_dishes.portions` — allow null | Currently `not null default 0`. Rule 8 wants null for "not yet allocated" |
 
-**Tables in place:** `kitchens`, `kitchen_members`, `properties`, `customers`,
+**Tables in place (23):** `kitchens`, `kitchen_members`, `properties`, `customers`,
 `client_rates`, `suppliers`, `ingredients`, `ingredient_price_history`, `stock`, `recipes`,
 `recipe_ingredients`, `recipe_unquantified`, `jobs`, `job_dishes`, `job_dietaries`,
-`job_changes`, `purchase_state`, `prep_state`, `packing_state`, `service_templates`,
-`invoices`, `invoice_lines`.
+`job_extras`, `job_changes`, `purchase_state`, `prep_state`, `packing_state`,
+`service_templates`, `invoices`, `invoice_lines`.
 
 **Access model.** One `kitchens` row. `kitchen_members` grants `owner` to the business owner
 and `support` to each developer. Every RLS policy resolves through `my_kitchen_id()`, which
@@ -287,8 +302,7 @@ Things that are genuinely absent, so nobody wastes an hour looking for them.
 
 | Gap | Blocking? | Notes |
 |---|---|---|
-| **Four migrations written but NOT RUN** | **blocks `src/data`** | The live database is still the 30 July baseline. `schema.sql` is updated so a fresh install is correct, but the existing Supabase project lacks `job_extras`, the conversion columns, per-guest `job_dietaries` and `jobs.meat_eating_guests`. Must be run in the dashboard SQL editor before any repository code is written |
-| No engine code beyond `types.ts`, `units.ts`, `rules.ts` | Phase 2 | `src/` is otherwise still the Vite starter page. `scaling.ts` is next |
+| No engine code beyond `types.ts`, `units.ts`, `rules.ts`, `scaling.ts` | Phase 2 | `src/` is otherwise still the Vite starter page. `production.ts` is next |
 | Golden pack not wired | Phase 2 | fixtures are in `tests/fixtures/`; `tests/golden/` runner not written |
 | Fixture count vs BUILD_GUIDE | Phase 2 | `expected_results.json` holds 6 `deterministic_tests` + 4 `system_behavior_tests`. BUILD_GUIDE Stage C says "33 tests". Reconcile with Paul before C6 |
 | ~~`tests/` not covered by typecheck~~ | closed | `tsconfig.test.json` added 31 Jul, referenced from the root config. No DOM lib, so a test needing a browser global fails to compile |
@@ -348,7 +362,7 @@ the eight tapas dishes. Cheesecake needs confirming before it is treated as lock
 
 | Suite | Command | Covers | Status |
 |---|---|---|---|
-| Unit | `npm run test` | engine functions | **30 green** — `units`, `rules`, `purity` |
+| Unit | `npm run test` | engine functions | **56 green** — `units`, `rules`, `scaling`, `purity` |
 | Golden | `npm run test:copperpot` | the owner's regression pack | not started — see `tests/golden/PENDING_OWNER.md` before wiring |
 | E2E | `npm run test:e2e` | workflows, desktop and mobile | not started |
 

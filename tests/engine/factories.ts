@@ -18,7 +18,12 @@ import type {
   JobId,
   KitchenId,
   PurchaseUnit,
+  Recipe,
+  RecipeId,
+  RecipeIngredientLine,
+  RecipeLineId,
   RecipeQuantity,
+  RecipeSubRecipeLine,
   RecipeUnit,
   StockQuantity,
   StockUnit,
@@ -82,6 +87,78 @@ export function makeJob(over: Partial<Job> = {}): Job {
     extras: [],
     ...over,
   };
+}
+
+export const recipeId = (id: string): RecipeId => id as RecipeId;
+export const ingredientId = (id: string): IngredientId => id as IngredientId;
+
+let lineSeq = 0;
+
+/** An ingredient line. `qty: null` means unquantified — Rule 8, never zero. */
+export function ingredientLine(
+  ingredient: string,
+  qty: number | null,
+  unit: string | null,
+  over: Partial<RecipeIngredientLine> = {},
+): RecipeIngredientLine {
+  lineSeq += 1;
+  return {
+    kind: 'ingredient',
+    id: `line-${lineSeq}` as RecipeLineId,
+    displayName: ingredient,
+    position: lineSeq,
+    qty,
+    unit: unit === null ? null : recipeUnit(unit),
+    ingredientId: ingredientId(ingredient),
+    ...over,
+  };
+}
+
+/** A sub-recipe line. `qty` is PORTIONS of the sub-recipe. */
+export function subRecipeLine(
+  sub: string,
+  qty: number | null,
+  over: Partial<RecipeSubRecipeLine> = {},
+): RecipeSubRecipeLine {
+  lineSeq += 1;
+  return {
+    kind: 'sub_recipe',
+    id: `line-${lineSeq}` as RecipeLineId,
+    displayName: sub,
+    position: lineSeq,
+    qty,
+    unit: null,
+    subRecipeId: recipeId(sub),
+    ...over,
+  };
+}
+
+export function makeRecipe(name: string, over: Partial<Recipe> = {}): Recipe {
+  return {
+    id: recipeId(name),
+    kitchenId: KITCHEN,
+    name,
+    course: null,
+    yieldType: 'per_person',
+    portionsPerBatch: null,
+    batchUnit: null,
+    confidence: 'confirm',
+    makeAheadDays: 0,
+    sameDayOnly: true,
+    freezable: false,
+    onsiteFinish: false,
+    method: null,
+    note: null,
+    components: [],
+    unquantified: [],
+    ...over,
+  };
+}
+
+/** Builds the `lookup` argument scaleRecipe takes, from a list of recipes. */
+export function lookupFor(recipes: readonly Recipe[]) {
+  const byId = new Map(recipes.map((r) => [r.id, r]));
+  return (id: RecipeId): Recipe | undefined => byId.get(id);
 }
 
 let dietarySeq = 0;

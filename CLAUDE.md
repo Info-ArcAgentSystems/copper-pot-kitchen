@@ -106,6 +106,97 @@ leaves a trail. This is not optional.
 
 ---
 
+Rules 11–17 were confirmed by the owner after the prototype and are equally non-negotiable.
+Several extend an earlier rule rather than replacing it; where that is so, it is stated.
+Nothing above is weakened.
+
+### Rule 11 — Pricing is by client group + service type.
+
+A rate is identified by the pair (client group, service type). It carries an **optional
+per-head rate** and an **optional flat fee** — either, both, or neither may be set.
+
+A job may carry **extras and surcharges as named line items**. They are separate rows, not
+folded into the rate.
+
+Revenue normally computes as:
+
+```
+guests × per-head rate + extras
+flat fee + extras
+```
+
+Any job may **override the computed price with a manual figure**. The override is stored as
+an override — the computed figure remains visible alongside it — and the act of overriding is
+recorded in `job_changes` as an override, not as an ordinary edit.
+
+Per Rule 8, a job with no applicable rate and no manual figure has revenue **null**, not 0.
+Never present a partial sum as a total.
+
+### Rule 12 — Unresolved input blocks exact quantities. *(extends Rule 8)*
+
+Rule 8 says never invent missing data. Rule 12 says what the system does about it.
+
+"A few vegetarians" is stored as **the owner's original wording**, flagged unresolved. It is
+never parsed into a number. While an unresolved value is outstanding it **blocks exact
+purchase quantities** for anything that depends on it — the shopping list is not silently
+computed as though the value were zero or a guess.
+
+The UI must make the need for confirmation obvious at the point of use, not bury it in a
+detail screen. An unresolved value the owner never sees is the same defect as a guessed one.
+
+### Rule 13 — Orange juice is a single fixed value, not a range.
+
+Orange juice is **200 ml per person**. There is no 150–200 ml range.
+
+This settles a **modelling** question: a recipe ingredient quantity is one number. There is no
+range type, no min/max pair, no "about" qualifier in the recipe schema. Genuine range-valued
+items are a separate later feature and nothing should be built for them now.
+
+Rule 1 still holds without exception. The 200 ml is a recipe quantity **the owner enters
+through the UI**. It is not a constant in `src/`, not a default, not a fallback. If a future
+session finds itself typing `200` into engine or UI code, it has misread this rule.
+
+### Rule 14 — Every meaningful change is attributed. *(extends Rule 10)*
+
+Rule 10 covers job mutations. Rule 14 states the scope: every meaningful change to a **job, a
+menu, a dietary requirement or a price** records who changed it, when, the old value and the
+new value, in `job_changes`.
+
+"Meaningful" excludes UI state and draft keystrokes. It includes anything that can move a
+quantity, a cost or a service decision.
+
+### Rule 15 — Completed and cancelled jobs stay in the system.
+
+They are never deleted and never hidden from history. Historical aggregates depend on them.
+
+A completed job **can still be corrected** — an invoice arrives late, a guest count is
+remembered wrong. The correction is a logged change under Rule 14, never a silent overwrite.
+Status is not a lock; it is a state.
+
+### Rule 16 — Dietary counts are never summed automatically.
+
+Dietary requirements are structured where possible. But **one guest can belong to several
+dietary categories at once** — coeliac and vegetarian is one person, not two.
+
+Therefore: never add dietary counts together to produce a total, and never derive a
+"remaining standard guests" figure by subtracting the sum from the guest count. Both are
+wrong whenever any guest holds two requirements.
+
+Where a true count is needed, it comes from per-guest allocation the owner has entered, or it
+is unresolved under Rule 12. This is a data-model constraint, not a display preference — types
+must not encode dietary counts as a summable set.
+
+### Rule 17 — The `support` role is controlled and revocable.
+
+Developer `support` access to live data is acceptable during development. It stays acceptable
+only while it remains **controlled** — granted per person through `kitchen_members` — and
+**revocable** — removable by deleting the row, taking effect immediately through RLS.
+
+No code path may assume support access exists. Nothing is built that only works when a
+developer is a member.
+
+---
+
 ## 2. STRUCTURE
 
 ```

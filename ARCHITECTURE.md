@@ -37,7 +37,8 @@ session reads to work out where things stand.
 | 31 Jul 2026 | `BUILD_GUIDE.md` committed — staged build sequence, A through the four priorities |
 | 31 Jul 2026 | Vite + React 19 + TS scaffold (create-vite 9.1.2); `.gitignore`, `.gitattributes`, `.env.example`, package scripts. `typecheck`, `build`, `lint`, `dev` all green |
 | 31 Jul 2026 | Golden fixture pack placed in `tests/fixtures/` (7 files). Not yet wired to a runner |
-| | *Phase 0 remaining: none. Next is Stage B (contract rules) then Phase 2 (engine)* |
+| 31 Jul 2026 | Stage B — owner-confirmed Rules 11–17 added to `CLAUDE.md`; three "awaiting owner" items closed |
+| | *Next: Phase 2 / Stage C1 — `src/engine/types.ts`* |
 
 ---
 
@@ -196,6 +197,29 @@ need turns out to be ESLint-only — the engine import boundary is the likely te
 with empty values. Real credentials are created per machine from the Supabase dashboard and
 never pass through a tool or a commit.
 
+**Rules 11–17 landed in `CLAUDE.md` on 31 Jul 2026** — the owner's confirmed rules, added
+after Rule 10 with nothing above them changed. Three of them constrain the engine types
+directly and must be in place before `types.ts` is written:
+
+- **Rule 11, pricing.** A rate is keyed on (client group, service type) and carries an
+  optional per-head rate *and* an optional flat fee. Extras are named line items, not folded
+  into the rate. A manual override is stored as an override, with the computed figure still
+  visible beside it. No rate and no manual figure means revenue is null, not 0.
+- **Rule 13, orange juice, recorded as a modelling decision rather than the literal reading.**
+  Taken literally — "200 ml per person" — it is business data, which Rule 1 forbids in `src/`.
+  What it actually settles is that a recipe ingredient quantity is **one number**: no range
+  type, no min/max pair, no "about" qualifier. The 200 ml is a value the owner enters through
+  the UI. The rule carries an explicit tripwire: a literal `200` appearing in engine or UI
+  code means the rule was misread. Genuine range-valued items remain a later feature.
+- **Rule 16, dietary counts are never summed.** One guest can be coeliac *and* vegetarian.
+  The corollary matters as much as the rule: "remaining standard guests" must not be derived
+  by subtracting the dietary sum from the guest count — same double-count, opposite
+  direction. Types must not model dietary counts as a summable set.
+
+Rules 12, 14 and 15 extend Rules 8 and 10 rather than standing alone, and are marked as such
+in `CLAUDE.md` so the pairs cannot drift apart. Rule 17 governs `support` access: controlled
+via `kitchen_members`, revocable by deleting the row, and no code path may assume it exists.
+
 ---
 
 ## Known gaps
@@ -215,9 +239,15 @@ Things that are genuinely absent, so nobody wastes an hour looking for them.
 Awaiting owner decisions (see Part 5 of the setup guide):
 
 - Tranquillity BBQ rate — history says €20pp, rate card has no entry
-- Whether revenue derives from the rate card or is typed per job
-- Continental orange juice: lock a number or keep 150–200 ml as a range
-- Whether an unresolved dietary count blocks the shopping list or only warns
+
+Closed on 31 Jul 2026 by the owner-confirmed rules (see Decisions below):
+
+- ~~Whether revenue derives from the rate card or is typed per job~~ → both, plus a recorded
+  manual override. `CLAUDE.md` Rule 11.
+- ~~Continental orange juice: lock a number or keep 150–200 ml as a range~~ → a single fixed
+  value. No range type in the schema. Rule 13.
+- ~~Whether an unresolved dietary count blocks the shopping list or only warns~~ → it blocks
+  exact purchase quantities. Rule 12.
 
 Recipes with no usable quantities, to stay flagged and never guessed: sticky toffee pudding,
 the eight tapas dishes. Cheesecake needs confirming before it is treated as locked.

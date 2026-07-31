@@ -38,7 +38,8 @@ session reads to work out where things stand.
 | 31 Jul 2026 | Vite + React 19 + TS scaffold (create-vite 9.1.2); `.gitignore`, `.gitattributes`, `.env.example`, package scripts. `typecheck`, `build`, `lint`, `dev` all green |
 | 31 Jul 2026 | Golden fixture pack placed in `tests/fixtures/` (7 files). Not yet wired to a runner |
 | 31 Jul 2026 | Stage B — owner-confirmed Rules 11–17 added to `CLAUDE.md`; three "awaiting owner" items closed |
-| | *Next: Phase 2 / Stage C1 — `src/engine/types.ts`* |
+| 31 Jul 2026 | C1 — `src/engine/types.ts`. Rules 4, 13 and 16 enforced structurally, each verified by compiling deliberate violations. Four items raised with the owner; five migrations proposed, none applied |
+| | *Next: C2 (`units.ts`) — **held** pending the ingredient conversion-factor decision* |
 
 ---
 
@@ -102,11 +103,11 @@ Any write to `jobs`, `job_dishes` or `job_dietaries` also writes a `job_changes`
 
 Mark each as `not started` / `in progress` / `done`, and keep the description accurate.
 
-### `src/engine` — pure calculation · **not started**
+### `src/engine` — pure calculation · **in progress**
 
 | File | Responsibility | Status |
 |---|---|---|
-| `units.ts` | conversion across recipe / stock / purchase units | not started |
+| `units.ts` | conversion across recipe / stock / purchase units | **blocked** — see conversion-factor gap |
 | `scaling.ts` | `scaleRecipe`, `portionsToUnits` | not started |
 | `production.ts` | `prepDateFor`, `productionBuckets`, `prepPlanByDay`, `prioritisePrep` | not started |
 | `shopping.ts` | `requirementsForRange`, `toPurchaseUnits`, `outstandingShopping` | not started |
@@ -115,7 +116,22 @@ Mark each as `not started` / `in progress` / `done`, and keep the description ac
 | `checks.ts` | `allergenScan`, `dietaryCrossCheck`, `readinessCheck`, `anomalyScan` | not started |
 | `impact.ts` | `changeImpact` | not started |
 | `history.ts` | `historicalAggregate` | not started |
-| `types.ts` | shared domain types | not started |
+| `types.ts` | shared domain types | **done** — 31 Jul 2026 |
+
+`types.ts` has no imports and no logic; it erases at runtime apart from one `brand` symbol.
+Three rules are enforced structurally there rather than left to be remembered downstream, and
+each was verified by compiling deliberate violations and confirming they are rejected:
+
+- **Rule 4** — `RecipeUnit` / `StockUnit` / `PurchaseUnit` are separate branded types, so a
+  `StockQuantity` cannot be passed where a `RecipeQuantity` is expected. `units.ts` becomes
+  the only place the three systems can meet, because nothing else can name both sides.
+- **Rule 13** — a recipe line carries a single `qty: number | null`. There is no range type.
+- **Rule 16** — `JobDietary` is `AllocatedDietary | UnresolvedDietary` and **neither variant
+  has a count field**. `dietaries.reduce((n, d) => n + d.guests, 0)` fails to compile with
+  "Property 'guests' does not exist". Counting means counting distinct `GuestRef`s.
+
+Money is `Cents`, a branded integer — food cost sums many lines and euro floats drift. IDs are
+branded, so a `RecipeId` cannot be passed as a `JobId`.
 
 ### `src/data` — persistence · **not started**
 
@@ -144,6 +160,20 @@ this is the only migration history a future session can read.
 | Date | Change | Why |
 |---|---|---|
 | 30 Jul 2026 | Initial schema applied — 22 tables, indexes, RLS policies | baseline |
+
+### Proposed at C1, NOT applied
+
+`CLAUDE.md` §5: propose schema changes, never apply them unilaterally. Every table is empty,
+so all of these are cheap — but none has been run, and `schema.sql` is unchanged.
+
+| Proposed change | Why |
+|---|---|
+| `job_dietaries` — drop `guests`, add `guest_ref text` | Per-guest identity. `guests` is the summable column Rule 16 forbids, and `types.ts` has nowhere to map it |
+| new `job_extras` table | Rule 11 requires named line items. Needs label, amount-each and quantity — the fixtures' extras are per-each, not flat |
+| `recipe_ingredients` — drop `qty_min`, `qty_max` | Rule 13: no range type. These columns exist only for the orange juice range that Rule 13 superseded |
+| `jobs` — reconsider `price` / `price_source` | `JobPricing` needs only the override amount; the engine recomputes the rate-card figure, so `price_source` overlaps |
+| `job_dishes.portions` — allow null | Currently `not null default 0`. Rule 8 wants null for "not yet allocated"; 0 reads as "none" |
+| *(if the BBQ resolution is confirmed)* `jobs` — add a meat-eating-guest count | Makes the count owner-entered rather than derived by subtraction. See awaiting-owner item 3 |
 
 **Tables in place:** `kitchens`, `kitchen_members`, `properties`, `customers`,
 `client_rates`, `suppliers`, `ingredients`, `ingredient_price_history`, `stock`, `recipes`,
@@ -228,17 +258,41 @@ Things that are genuinely absent, so nobody wastes an hour looking for them.
 
 | Gap | Blocking? | Notes |
 |---|---|---|
-| No engine code yet | Phase 2 | scaffold is in place; `src/` is still the Vite starter page |
+| **No ingredient conversion factor** | **blocks C2** | `g → kg` is dimensional and derivable. `each → kg` for eggs is not, and no column holds it — `pack_size`/`pack_unit` only covers purchase → stock. `units.ts` cannot be written until this is settled: new column, or an explicit unresolved state. **C2 is held pending this decision.** |
+| **No `job_extras` table** | Phase 3 | Rule 11 requires named line items and `fixtures.json` has real ones ("Bistro steak surcharge €10 each", "Birthday cake €30 each" — per-*each* with a quantity, not flat amounts). `JobExtra` exists in the engine with nothing to persist to |
+| **`job_dietaries` shape vs Rule 16** | Phase 3 | The table has a `guests` count — the summable column Rule 16 forbids. `types.ts` models per-guest `AllocatedDietary` records with a `GuestRef` and has nowhere to put a count. Migration proposed below, **not applied** |
+| No engine code beyond `types.ts` | Phase 2 | `src/` is otherwise still the Vite starter page |
 | Golden pack not wired | Phase 2 | fixtures are in `tests/fixtures/`; `tests/golden/` runner not written |
 | Fixture count vs BUILD_GUIDE | Phase 2 | `expected_results.json` holds 6 `deterministic_tests` + 4 `system_behavior_tests`. BUILD_GUIDE Stage C says "33 tests". Reconcile with Paul before C6 |
-| `tests/` not covered by typecheck | Phase 2 | `tsconfig.app.json` includes `src` only. Add `tsconfig.test.json` at C1 |
-| No engine import boundary enforced | Phase 2 | nothing yet stops `src/engine` importing React or Supabase. Add an oxlint rule at C1 |
+| `tests/` not covered by typecheck | Phase 2 | `tsconfig.app.json` includes `src` only. Add `tsconfig.test.json` at C2, with the first test |
+| No engine import boundary enforced | Phase 2 | nothing yet stops `src/engine` importing React or Supabase. `types.ts` imports nothing, but that is convention, not enforcement. Add an oxlint rule at C2 |
 | Playwright browsers not installed | Phase 5 | `@playwright/test` is installed; `npx playwright install` deliberately deferred |
 | Owner's own account not created | Phase 8 | `info@arcagentsystems.com` holds `owner` in the meantime |
 
 Awaiting owner decisions (see Part 5 of the setup guide):
 
 - Tranquillity BBQ rate — history says €20pp, rate card has no entry
+
+**Raised 31 Jul 2026 at C1, all four with the owner and none actioned:**
+
+1. **Ingredient conversion factors.** Blocks C2. `each → kg` is not derivable and no column
+   holds it. Needs either a new column or a defined unresolved state.
+2. **The orange juice fixture is superseded.** `fixtures.json` carries
+   `orange_juice_ml_range: [150, 200]` marked `confidence: "confirmed"`, and
+   `CALC-SWEETPEA-BREAKFAST` expects `[600, 800]` for 4 continental guests. Rule 13 makes the
+   correct answer a flat `800`. Per `CLAUDE.md` §5 **no expected value has been edited** — the
+   owner confirms the v2 fixture is superseded, or Rule 13 is wrong. One or the other.
+   (`metadata.name` says v2 while `ENGINEER_README` calls it v3; worth resolving together.)
+3. **The BBQ meat-eater conflict.** `CALC-NUCELLA-BBQ-SPLIT` expects `meat_eaters: 22` from
+   27 guests, 4 salmon-vegetarians and 1 vegan — i.e. `27 − (4 + 1)`, summing dietary counts
+   and subtracting from the guest count, which Rule 16 forbids.
+   **Proposed resolution, pending owner confirmation:** the meat-eater count becomes an
+   **explicit job field the owner sets**, not a value the engine derives by subtraction. Rule
+   16 then holds untouched and `CALC-NUCELLA-BBQ-SPLIT` still passes, because 22 is entered
+   rather than inferred. This also matches Rule 16's own escape hatch — a true count "comes
+   from per-guest allocation the owner has entered". **Not built.** It needs a `Job` field and
+   a column, neither of which exists.
+4. **Five schema migrations proposed, none applied** — see the Schema section.
 
 Closed on 31 Jul 2026 by the owner-confirmed rules (see Decisions below):
 

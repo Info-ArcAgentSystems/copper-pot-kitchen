@@ -101,6 +101,11 @@ create table ingredients (
   name           text not null,
   category       text,
   stock_unit     text not null,               -- kg | L | each | jar | box | bag | pack | loaf
+  recipe_unit    text,                        -- how recipes measure it: g | ml | each
+  -- Recipe units in one stock unit, where the pair is NOT dimensionally derivable.
+  -- g -> kg is derivable; "each" -> kg for eggs is not. Null = derive, or unresolved.
+  -- Never assume 1. Rule 8.
+  recipe_units_per_stock_unit numeric(14,6),
   pack_size      numeric(12,4),
   pack_unit      text,
   pack_assumed   boolean not null default true, -- true until the owner confirms it
@@ -204,6 +209,10 @@ create table jobs (
   service_type      text,                      -- Buffet | BBQ | Breakfast | ...
   guests            integer,
   guests_confirmed  boolean not null default false,
+  -- Owner-set. Null = fall back to meatEatingGuests() in src/engine/rules.ts, which
+  -- counts DISTINCT guests flagged excludes_meat rather than summing categories
+  -- (Rule 16), and returns null rather than guessing when anything is unresolved.
+  meat_eating_guests integer,
   price             numeric(10,2),             -- null until known; never 0 as a stand-in
   price_source      text,                      -- 'manual' | 'rate_card'
   status            text not null default 'enquiry'
@@ -223,8 +232,17 @@ create table job_dishes (
   position    integer not null default 0
 );
 
--- guests_unresolved holds "a few vegetarians": the requirement is
--- recorded, the number is not invented, and shopping stays blocked.
+-- One row per guest per requirement. There is deliberately NO count column:
+-- one guest can be coeliac AND vegetarian, so category counts must never be
+-- summed, nor subtracted from the guest count as a total (Rule 16). A count is
+-- the operand that makes that arithmetic writable, so there isn't one.
+--
+-- guest_ref identifies one guest WITHIN one job. It is not a person record —
+-- no guest identities are stored. It exists so two requirements can be pinned
+-- to the same guest, making a distinct-guest count correct by construction.
+--
+-- guests_unresolved holds "a few vegetarians": the requirement is recorded, the
+-- number is not invented, and shopping stays blocked.
 create table job_dietaries (
   id                  uuid primary key default gen_random_uuid(),
   kitchen_id          uuid not null references kitchens(id) on delete cascade,
@@ -232,11 +250,33 @@ create table job_dietaries (
   diet_type           text not null,
   severity            text not null default 'moderate'
                         check (severity in ('info','moderate','severe')),
-  guests              integer,
+  guest_ref           text,
+  -- Owner-set. Never inferred from diet_type — a hardcoded list of which diets
+  -- exclude meat would be business data in the app (Rule 1).
+  excludes_meat       boolean not null default false,
   guests_unresolved   boolean not null default false,
   unresolved_note     text,                    -- verbatim: "a few vegetarians"
   details             text,
-  assigned_recipe_id  uuid references recipes(id) on delete set null
+  assigned_recipe_id  uuid references recipes(id) on delete set null,
+  -- Mirrors the AllocatedDietary | UnresolvedDietary union in src/engine/types.ts.
+  -- An allocated row names its guest; an unresolved one keeps the owner's wording
+  -- and no number. Neither can be half-formed.
+  constraint job_dietaries_allocation_ck check (
+       (guests_unresolved = false and guest_ref       is not null)
+    or (guests_unresolved = true  and unresolved_note is not null)
+  )
+);
+
+-- Rule 11 — extras and surcharges as named line items, never folded into the
+-- rate. Per-each with a quantity, matching how they are actually quoted.
+create table job_extras (
+  id          uuid primary key default gen_random_uuid(),
+  kitchen_id  uuid not null references kitchens(id) on delete cascade,
+  job_id      uuid not null references jobs(id) on delete cascade,
+  label       text not null,
+  amount_each numeric(10,2),               -- null = named but unpriced. Rule 8: never 0.
+  quantity    integer not null default 1,
+  position    integer not null default 0
 );
 
 -- Every field-level change, so a corrected eircode leaves a trail.
@@ -335,6 +375,7 @@ create index on recipe_ingredients (kitchen_id, recipe_id);
 create index on jobs            (kitchen_id, service_date);
 create index on job_dishes      (kitchen_id, job_id);
 create index on job_dietaries   (kitchen_id, job_id);
+create index on job_extras      (kitchen_id, job_id);
 create index on job_changes     (kitchen_id, job_id, changed_at desc);
 create index on invoice_lines   (kitchen_id, invoice_id);
 create index on ingredient_price_history (kitchen_id, ingredient_id, recorded_at desc);
@@ -347,7 +388,7 @@ begin
   foreach t in array array[
     'kitchens','kitchen_members','properties','customers','client_rates','suppliers',
     'ingredients','ingredient_price_history','stock','recipes','recipe_ingredients',
-    'recipe_unquantified','jobs','job_dishes','job_dietaries','job_changes',
+    'recipe_unquantified','jobs','job_dishes','job_dietaries','job_extras','job_changes',
     'purchase_state','prep_state','packing_state','service_templates',
     'invoices','invoice_lines'
   ]
@@ -363,7 +404,7 @@ begin
   foreach t in array array[
     'properties','customers','client_rates','suppliers','ingredients',
     'ingredient_price_history','stock','recipes','recipe_ingredients',
-    'recipe_unquantified','jobs','job_dishes','job_dietaries','job_changes',
+    'recipe_unquantified','jobs','job_dishes','job_dietaries','job_extras','job_changes',
     'purchase_state','prep_state','packing_state','service_templates',
     'invoices','invoice_lines'
   ]

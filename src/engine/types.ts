@@ -176,6 +176,15 @@ export interface Ingredient {
   readonly name: string;
   readonly category: string | null;
   readonly stockUnit: StockUnit;
+  /** How recipes measure this ingredient. Null until the owner sets it. */
+  readonly recipeUnit: RecipeUnit | null;
+  /**
+   * Recipe units in one stock unit, for pairs that are NOT dimensionally derivable.
+   * `g → kg` is derivable and needs nothing here; `each → kg` for eggs is not.
+   * Null means derive dimensionally, or — if that is impossible — unresolved.
+   * Never assume 1 (Rule 8).
+   */
+  readonly recipeUnitsPerStockUnit: number | null;
   readonly pack: PackDefinition | null;
   readonly supplierId: SupplierId | null;
   /** null = unpriced. Rule 8: never 0 as a stand-in. */
@@ -298,6 +307,11 @@ export interface Job {
   /** Rule 8 — null, never a guess. */
   readonly guests: number | null;
   readonly guestsConfirmed: boolean;
+  /**
+   * Owner-set meat-eating guest count. Null means fall back to `meatEatingGuests()`
+   * in rules.ts — the single place that derivation lives.
+   */
+  readonly meatEatingGuests: number | null;
   readonly pricing: JobPricing;
   readonly status: JobStatus;
   readonly notes: string | null;
@@ -325,6 +339,11 @@ interface DietaryBase {
   /** Free text. The owner names their own categories. */
   readonly dietType: string;
   readonly severity: DietarySeverity;
+  /**
+   * Owner-set. Deliberately NOT inferred from `dietType` — a hardcoded list of which
+   * diets exclude meat would be business data in `src/`, which Rule 1 forbids.
+   */
+  readonly excludesMeat: boolean;
   readonly details: string | null;
   readonly assignedRecipeId: RecipeId | null;
 }

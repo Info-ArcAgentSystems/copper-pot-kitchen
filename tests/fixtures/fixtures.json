@@ -1,0 +1,435 @@
+{
+  "metadata": {
+    "name": "Copper Pot Kitchen Golden Regression Dataset v2",
+    "purpose": "Historical regression testing for Copper Pot Kitchen Operations app built with Claude Code.",
+    "confidence_levels": {
+      "confirmed": "Directly retained from prior Copper Pot operational records / user-confirmed data.",
+      "derived": "Mathematically derived from confirmed rules.",
+      "historical_output": "Previously reported output retained as a benchmark; validate against source if conflict appears.",
+      "uncertain": "Known to be incomplete, changed, or needing owner confirmation. Must not be used as a hard pass/fail value."
+    }
+  },
+  "business_rules": {
+    "pricing": {
+      "Tranquillity": {
+        "Breakfast": {
+          "amount_eur_pp": 15,
+          "confidence": "confirmed"
+        },
+        "Buffet": {
+          "amount_eur_pp": 20,
+          "confidence": "confirmed"
+        },
+        "Bistro": {
+          "amount_eur_pp": 40,
+          "confidence": "confirmed"
+        }
+      },
+      "Visit Carlingford": {
+        "Breakfast": {
+          "amount_eur_pp": 10,
+          "confidence": "confirmed"
+        },
+        "BBQ": {
+          "amount_eur_pp": 15,
+          "confidence": "confirmed"
+        },
+        "Buffet": {
+          "amount_eur_pp": 15,
+          "confidence": "confirmed"
+        }
+      },
+      "Other": {
+        "Afternoon Tea": {
+          "amount_eur_pp": 18,
+          "confidence": "confirmed"
+        },
+        "Bistro steak surcharge": {
+          "amount_eur_each": 10,
+          "confidence": "confirmed"
+        },
+        "Birthday cake": {
+          "amount_eur_each": 30,
+          "confidence": "confirmed"
+        }
+      }
+    },
+    "recipes": {
+      "Chicken Curry": {
+        "per_portion": {
+          "chicken_breast_g": 150,
+          "curry_sauce_jars": 0.5,
+          "rice_g": 100
+        },
+        "confidence": "confirmed"
+      },
+      "Lasagne": {
+        "yield_portions_per_tray": 9,
+        "per_tray": {
+          "mince_kg": 2,
+          "red_sauce_units": 4,
+          "white_sauce_units": 2,
+          "cheese_g": 100
+        },
+        "rounding": "ceil trays",
+        "confidence": "confirmed"
+      },
+      "Pancakes": {
+        "per_portion": {
+          "flour_g": 125,
+          "buttermilk_ml": 125,
+          "nutella_g": 25,
+          "blueberries_g": 25,
+          "banana_each": 1,
+          "maple_syrup_ml": 25
+        },
+        "confidence": "confirmed"
+      },
+      "Continental Breakfast": {
+        "per_portion": {
+          "pastry_each": 1,
+          "yoghurt_g": 50,
+          "granola_g": 50,
+          "fruit_g": 100,
+          "orange_juice_ml_range": [
+            150,
+            200
+          ]
+        },
+        "confidence": "confirmed"
+      },
+      "Full Irish": {
+        "per_portion": {
+          "sausages_each": 2,
+          "bacon_rashers_each": 2,
+          "egg_each": 1
+        },
+        "other_components": [
+          "black pudding",
+          "white pudding",
+          "mushrooms",
+          "cherry tomatoes",
+          "toast/bread"
+        ],
+        "confidence": "confirmed",
+        "note": "Do not derive exact quantities for 'other_components' unless a locked quantity exists."
+      },
+      "BBQ": {
+        "per_meat_eating_guest": {
+          "burger_mince_g": 110,
+          "pork_g": 50,
+          "chicken_drumstick_each": 1
+        },
+        "per_guest": {
+          "burger_bap_each": 1,
+          "corn_each": 1,
+          "wedges_or_baby_potatoes_g": 100,
+          "coleslaw_g": 100
+        },
+        "rules": [
+          "No sausages by default.",
+          "Vegetarian guest gets vegetarian burger unless another vegetarian option is explicitly selected.",
+          "If salmon is selected for vegetarians, do not also add vegetarian burgers.",
+          "Vegan requirements must be calculated separately."
+        ],
+        "confidence": "confirmed"
+      }
+    }
+  },
+  "historical_jobs": [
+    {
+      "id": "HIST-2026-07-17-NUCELLA-BUFFET",
+      "date": "2026-07-17",
+      "venue": "Nucella Lodge",
+      "service": "Buffet",
+      "guests": 15,
+      "menu": [
+        "Chicken curry",
+        "Lasagne",
+        "Vegan chickpea curry x3",
+        "Pavlova",
+        "Raspberry brownies"
+      ],
+      "dietaries": [
+        {
+          "type": "vegan",
+          "count": 3
+        }
+      ],
+      "pricing": {
+        "client": "Tranquillity",
+        "rate_eur_pp": 20,
+        "expected_revenue_eur": 300
+      },
+      "confidence": "confirmed"
+    },
+    {
+      "id": "HIST-2026-07-17-STARBOARD-BBQ",
+      "date": "2026-07-17",
+      "venue": "Starboard House",
+      "service": "BBQ",
+      "guests": 12,
+      "pricing": {
+        "client": "Visit Carlingford",
+        "rate_eur_pp": 15,
+        "expected_revenue_eur": 180
+      },
+      "confidence": "confirmed"
+    },
+    {
+      "id": "HIST-2026-07-18-PANDORA-AFTERNOON-TEA",
+      "date": "2026-07-18",
+      "venue": "Pandora's Cottage",
+      "service": "Afternoon Tea",
+      "guests": 16,
+      "dietaries": [
+        {
+          "type": "gluten_free",
+          "count": 1
+        },
+        {
+          "type": "dairy_free",
+          "count": 1
+        },
+        {
+          "type": "shellfish_and_mushroom_restriction",
+          "count": 1
+        },
+        {
+          "type": "no_pork_no_alcohol",
+          "count": 1
+        }
+      ],
+      "pricing": {
+        "client": "Other",
+        "rate_eur_pp": 18,
+        "expected_revenue_eur": 288
+      },
+      "confidence": "confirmed"
+    },
+    {
+      "id": "HIST-2026-07-18-TRANQUILLITY-BBQ",
+      "date": "2026-07-18",
+      "venue": "Tranquillity Villa",
+      "service": "BBQ",
+      "guests": 16,
+      "dietaries": [
+        {
+          "type": "vegetarian",
+          "count": 1
+        }
+      ],
+      "pricing": {
+        "client": "Tranquillity",
+        "expected_revenue_eur": 320
+      },
+      "confidence": "historical_output",
+      "note": "Revenue retained from prior confirmed schedule; rate may reflect booking-specific pricing."
+    },
+    {
+      "id": "HIST-2026-07-18-SWEETPEA-BUFFET",
+      "date": "2026-07-18",
+      "venue": "Sweetpea Cottage",
+      "service": "Buffet",
+      "guests": 12,
+      "menu": [
+        "Chicken curry",
+        "Goujons",
+        "Vegetarian lasagne",
+        "Cheesecake",
+        "Raspberry brownies"
+      ],
+      "pricing": {
+        "client": "Tranquillity",
+        "rate_eur_pp": 20,
+        "expected_revenue_eur": 240
+      },
+      "confidence": "confirmed"
+    },
+    {
+      "id": "HIST-2026-07-18-PANDORA-BUFFET",
+      "date": "2026-07-18",
+      "venue": "Pandora's Cottage",
+      "service": "Buffet",
+      "guests": 16,
+      "menu": [
+        "GF/DF chicken curry",
+        "Vegetarian lasagne",
+        "Wedges",
+        "Fruit pavlova",
+        "Raspberry brownies"
+      ],
+      "pricing": {
+        "client": "Tranquillity",
+        "rate_eur_pp": 20,
+        "expected_revenue_eur": 320
+      },
+      "confidence": "confirmed"
+    },
+    {
+      "id": "HIST-2026-07-19-PANDORA-BREAKFAST",
+      "date": "2026-07-19",
+      "venue": "Pandora's Cottage",
+      "service": "Breakfast",
+      "guests": 16,
+      "choices": {
+        "Full Irish": 8,
+        "Continental": 8
+      },
+      "pricing": {
+        "client": "Tranquillity",
+        "rate_eur_pp": 15,
+        "expected_revenue_eur": 240
+      },
+      "confidence": "confirmed"
+    },
+    {
+      "id": "HIST-2026-07-19-SWEETPEA-BREAKFAST",
+      "date": "2026-07-19",
+      "venue": "Sweetpea Cottage",
+      "service": "Breakfast",
+      "guests": 12,
+      "choices": {
+        "Full Irish": 5,
+        "Pancakes": 3,
+        "Continental": 4
+      },
+      "dietaries": [
+        {
+          "type": "gluten_free",
+          "count": 1,
+          "applies_to": "Full Irish"
+        },
+        {
+          "type": "gluten_free",
+          "count": 1,
+          "applies_to": "Continental"
+        }
+      ],
+      "pricing": {
+        "client": "Tranquillity",
+        "rate_eur_pp": 15,
+        "expected_revenue_eur": 180
+      },
+      "confidence": "confirmed"
+    },
+    {
+      "id": "HIST-2026-07-20-NUCELLA-BUFFET",
+      "date": "2026-07-20",
+      "venue": "Nucella Lodge",
+      "service": "Buffet",
+      "guests": 20,
+      "menu": [
+        "Chicken curry",
+        "Lasagne",
+        "Vegan chickpea curry x2",
+        "Fish & chips x3",
+        "Wedges",
+        "Pavlova",
+        "Raspberry brownies"
+      ],
+      "dietaries": [
+        {
+          "type": "severe_mushroom_allergy",
+          "count": 1,
+          "severity": "severe"
+        }
+      ],
+      "pricing": {
+        "client": "Tranquillity",
+        "rate_eur_pp": 20,
+        "expected_revenue_eur": 400
+      },
+      "confidence": "confirmed"
+    },
+    {
+      "id": "HIST-2026-07-22-NUCELLA-BBQ",
+      "date": "2026-07-22",
+      "venue": "Nucella Lodge",
+      "service": "BBQ",
+      "guests": 27,
+      "guest_split": {
+        "meat_eaters": 22,
+        "vegetarians_salmon": 4,
+        "vegan_bean_burger": 1
+      },
+      "rules": [
+        "salad suitable for vegan",
+        "do not add vegetarian burgers for salmon guests"
+      ],
+      "pricing": {
+        "client": "Tranquillity",
+        "expected_revenue_eur": 540
+      },
+      "confidence": "confirmed"
+    },
+    {
+      "id": "HIST-2026-08-22-JESSICA-ROE",
+      "date": "2026-08-22",
+      "time": "19:30",
+      "venue": "Drumallagh, Omeath",
+      "service": "Catering",
+      "guests": 15,
+      "menu": [
+        "Lasagne",
+        "Chicken curry",
+        "Cheesecake",
+        "Brownie"
+      ],
+      "payment": {
+        "deposit_required": false,
+        "payment_timing": "on the day"
+      },
+      "confidence": "confirmed"
+    }
+  ],
+  "weekend_benchmarks": [
+    {
+      "id": "WEEKEND-2026-07-13-22",
+      "range": [
+        "2026-07-13",
+        "2026-07-22"
+      ],
+      "historical_total_revenue_eur": 4748,
+      "confidence": "confirmed",
+      "note": "Use as a top-level financial regression only when the same full set of included jobs is loaded."
+    },
+    {
+      "id": "WEEKEND-2026-07-17-19",
+      "jobs": [
+        "HIST-2026-07-17-NUCELLA-BUFFET",
+        "HIST-2026-07-17-STARBOARD-BBQ",
+        "HIST-2026-07-18-PANDORA-AFTERNOON-TEA",
+        "HIST-2026-07-18-TRANQUILLITY-BBQ",
+        "HIST-2026-07-18-SWEETPEA-BUFFET",
+        "HIST-2026-07-18-PANDORA-BUFFET",
+        "HIST-2026-07-19-PANDORA-BREAKFAST",
+        "HIST-2026-07-19-SWEETPEA-BREAKFAST"
+      ],
+      "expected_revenue_eur": 2068,
+      "confidence": "derived"
+    }
+  ],
+  "change_history_cases": [
+    {
+      "id": "CHANGE-VISIT-CARLINGFORD-EIRCODE",
+      "description": "A Saturday buffet Eircode was later corrected to A91 RY71.",
+      "expected_behavior": [
+        "Store booking changes as an auditable update rather than silently overwriting without history.",
+        "Latest confirmed value should drive current schedule/output.",
+        "Prior value should remain traceable."
+      ],
+      "confidence": "confirmed"
+    },
+    {
+      "id": "CHANGE-UNCONFIRMED-DIETARY-COUNT",
+      "description": "A Visit Carlingford BBQ had 'a few vegetarians' plus 1 coeliac, with vegetarian count unconfirmed.",
+      "expected_behavior": [
+        "Do not convert 'a few' into an exact integer.",
+        "Mark vegetarian count as unresolved/uncertain.",
+        "Show a blocking or warning state before final purchasing calculation."
+      ],
+      "confidence": "confirmed"
+    }
+  ]
+}

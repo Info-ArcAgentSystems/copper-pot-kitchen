@@ -1,0 +1,123 @@
+{
+  "deterministic_tests": [
+    {
+      "id": "CALC-CURRY-10",
+      "input": {
+        "recipe": "Chicken Curry",
+        "portions": 10
+      },
+      "expected": {
+        "chicken_breast_g": 1500,
+        "curry_sauce_jars": 5,
+        "rice_g": 1000
+      },
+      "confidence": "derived"
+    },
+    {
+      "id": "CALC-LASAGNE-29",
+      "input": {
+        "recipe": "Lasagne",
+        "required_portions": 29
+      },
+      "expected": {
+        "trays": 4,
+        "production_capacity_portions": 36,
+        "mince_kg": 8,
+        "red_sauce_units": 16,
+        "white_sauce_units": 8,
+        "cheese_g": 400
+      },
+      "confidence": "derived"
+    },
+    {
+      "id": "CALC-SWEETPEA-BREAKFAST",
+      "input_job_id": "HIST-2026-07-19-SWEETPEA-BREAKFAST",
+      "expected": {
+        "full_irish": {
+          "sausages_each": 10,
+          "bacon_rashers_each": 10,
+          "eggs_each": 5
+        },
+        "pancakes": {
+          "flour_g": 375,
+          "buttermilk_ml": 375,
+          "nutella_g": 75,
+          "blueberries_g": 75,
+          "bananas_each": 3,
+          "maple_syrup_ml": 75
+        },
+        "continental": {
+          "pastries_each": 4,
+          "yoghurt_g": 200,
+          "granola_g": 200,
+          "fruit_g": 400,
+          "orange_juice_ml_range": [
+            600,
+            800
+          ]
+        },
+        "warnings": [
+          "1 GF Full Irish requires safe substitutions/handling.",
+          "1 GF Continental requires safe substitutions/handling."
+        ]
+      },
+      "confidence": "derived"
+    },
+    {
+      "id": "CALC-NUCELLA-BBQ-SPLIT",
+      "input_job_id": "HIST-2026-07-22-NUCELLA-BBQ",
+      "expected": {
+        "meat_eaters": 22,
+        "salmon_vegetarians": 4,
+        "vegan_bean_burger": 1,
+        "burger_mince_g_for_meat_eaters": 2420,
+        "pork_g_for_meat_eaters": 1100,
+        "drumsticks_each_for_meat_eaters": 22,
+        "burger_baps_each_all_guests": 27,
+        "corn_each_all_guests": 27,
+        "potatoes_or_wedges_g_all_guests": 2700,
+        "coleslaw_g_all_guests": 2700,
+        "vegetarian_burgers_for_salmon_guests": 0
+      },
+      "confidence": "derived"
+    },
+    {
+      "id": "WARN-SEVERE-MUSHROOM-ALLERGY",
+      "input_job_id": "HIST-2026-07-20-NUCELLA-BUFFET",
+      "expected": {
+        "must_surface_warning": true,
+        "severity": "severe",
+        "must_not_auto_substitute": true
+      },
+      "confidence": "derived"
+    },
+    {
+      "id": "FIN-REVENUE-WEEKEND-17-19",
+      "input_weekend_id": "WEEKEND-2026-07-17-19",
+      "expected_revenue_eur": 2068,
+      "confidence": "derived"
+    }
+  ],
+  "system_behavior_tests": [
+    {
+      "id": "UNCERTAINTY-NO-GUESSING",
+      "given": "Dietary quantity is described as 'a few vegetarians'.",
+      "expected": "System retains uncertainty and blocks exact derived shopping quantities until resolved."
+    },
+    {
+      "id": "AUDIT-CHANGE-HISTORY",
+      "given": "Booking Eircode changes after original entry.",
+      "expected": "New value becomes active while prior value remains in audit/change history."
+    },
+    {
+      "id": "DOWNSTREAM-RECALC",
+      "given": "Guest count or menu changes on a confirmed job.",
+      "expected": "Recipe quantities, ingredient totals, shopping, prep, packing and financial outputs recalculate from the updated job."
+    },
+    {
+      "id": "ASK-SOUS-NO-HALLUCINATION",
+      "given": "Ask Sous is asked for a quantity that cannot be calculated from confirmed structured data.",
+      "expected": "It explicitly reports missing/uncertain information rather than guessing."
+    }
+  ]
+}

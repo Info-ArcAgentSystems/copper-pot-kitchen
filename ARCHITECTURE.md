@@ -43,7 +43,8 @@ session reads to work out where things stand.
 | 31 Jul 2026 | Migrations **applied and verified** against the live database. 23 tables. `src/data` is unblocked |
 | 31 Jul 2026 | C2 — `units.ts` and `meatEatingGuests()` in `rules.ts`, tests written first. `tsconfig.test.json` and an engine-purity test added. **30 tests green** |
 | 31 Jul 2026 | C3 — `scaling.ts`: `scaleRecipe` (recurses sub-recipes, cycle-safe) and `portionsToUnits`. `CALC-CURRY-10` and `CALC-LASAGNE-29` reproduced as unit tests. **56 tests green** |
-| | *Next: C4 (`production.ts`) — `prepDateFor`, `productionBuckets`, `prepPlanByDay`, `prioritisePrep`* |
+| 1 Aug 2026 | C4 — `production.ts`. Consolidate-then-round proven by temporarily inverting the implementation: the CLAUDE.md 12/18/9 example passed against the bug, the added 1/1/1 guard failed. **85 tests green** |
+| | *Next: C5 (`shopping.ts`) — `requirementsForRange`, `toPurchaseUnits`, `outstandingShopping`* |
 
 ---
 
@@ -113,7 +114,7 @@ Mark each as `not started` / `in progress` / `done`, and keep the description ac
 |---|---|---|
 | `units.ts` | conversion across recipe / stock / purchase units | **done** — 31 Jul 2026 |
 | `scaling.ts` | `scaleRecipe`, `portionsToUnits` | **done** — 31 Jul 2026 |
-| `production.ts` | `prepDateFor`, `productionBuckets`, `prepPlanByDay`, `prioritisePrep` | not started |
+| `production.ts` | `prepDateFor`, `productionBuckets`, `prepPlanByDay`, `prioritisePrep` | **done** — 1 Aug 2026 |
 | `shopping.ts` | `requirementsForRange`, `toPurchaseUnits`, `outstandingShopping` | not started |
 | `costing.ts` | `recipeFoodCost`, `jobFoodCost`, `jobMargin` | not started |
 | `rules.ts` | `applyBuffetSplit`, BBQ meat/sides split | **partial** — `meatEatingGuests` only |
@@ -159,6 +160,24 @@ rounding only in `production.ts`, was considered and rejected: it would make
 `CALC-LASAGNE-29` uncallable against `scaleRecipe` alone, since the fixture expects 8 kg of
 mince for 29 portions rather than the linear 6.44. `scaling.test.ts` demonstrates the
 divergence, so the reason stays executable rather than folklore.
+
+**`productionBuckets` is what enforces that contract**, and the arithmetic proving it is worth
+recording. The `CLAUDE.md` §3 example — three jobs of 12 / 18 / 9 lasagne consolidating to 39
+portions and 5 trays — gives **5 either way**, because `2 + 2 + 1` is also 5. As a test it pins
+the allocation breakdown but does **not** catch per-job rounding. This was verified empirically:
+with the implementation temporarily switched to per-job rounding, the 12/18/9 test **passed**
+while `1 / 1 / 1 → 1 tray` and `4 / 4 / 4 → 2 trays` failed. Keep both guards. A test that
+agrees with the bug is the same defect shape the golden pack caught in the BBQ split.
+
+**`prioritisePrep`'s ordering is a documented default, not an owner decision.** Prep date →
+slack (service date − prep date, tightest first) → portions descending → recipe name. Only the
+slack step makes an operational claim: something made on the day it is served cannot be moved.
+Paul has not said how he sequences a prep day, so this is a guess with a rationale, and should
+be put to him.
+
+**Calendar arithmetic uses UTC accessors and ignores `Kitchen.timezone`.** These are plain
+calendar dates, not instants; mixing a timezone into date-only arithmetic is how off-by-one-day
+bugs start. A test pins the Europe/Dublin DST boundary (2026-03-29) to keep it that way.
 
 A sub-recipe line's `qty` is **portions of the sub-recipe**, not a measured amount. A measured
 amount would need each recipe's total yield in a measurable unit, which the schema does not
@@ -302,7 +321,8 @@ Things that are genuinely absent, so nobody wastes an hour looking for them.
 
 | Gap | Blocking? | Notes |
 |---|---|---|
-| No engine code beyond `types.ts`, `units.ts`, `rules.ts`, `scaling.ts` | Phase 2 | `src/` is otherwise still the Vite starter page. `production.ts` is next |
+| No engine code beyond `types.ts`, `units.ts`, `rules.ts`, `scaling.ts`, `production.ts` | Phase 2 | `src/` is otherwise still the Vite starter page. `shopping.ts` is next |
+| `prioritisePrep` ordering is a guess | no | Prep date → slack → size → name. Only Paul knows how he actually sequences a prep day. Put it to him with the other open items |
 | Golden pack not wired | Phase 2 | fixtures are in `tests/fixtures/`; `tests/golden/` runner not written |
 | Fixture count vs BUILD_GUIDE | Phase 2 | `expected_results.json` holds 6 `deterministic_tests` + 4 `system_behavior_tests`. BUILD_GUIDE Stage C says "33 tests". Reconcile with Paul before C6 |
 | ~~`tests/` not covered by typecheck~~ | closed | `tsconfig.test.json` added 31 Jul, referenced from the root config. No DOM lib, so a test needing a browser global fails to compile |
@@ -362,7 +382,7 @@ the eight tapas dishes. Cheesecake needs confirming before it is treated as lock
 
 | Suite | Command | Covers | Status |
 |---|---|---|---|
-| Unit | `npm run test` | engine functions | **56 green** — `units`, `rules`, `scaling`, `purity` |
+| Unit | `npm run test` | engine functions | **85 green** — `units`, `rules`, `scaling`, `production`, `purity` |
 | Golden | `npm run test:copperpot` | the owner's regression pack | not started — see `tests/golden/PENDING_OWNER.md` before wiring |
 | E2E | `npm run test:e2e` | workflows, desktop and mobile | not started |
 

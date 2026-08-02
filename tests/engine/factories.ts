@@ -13,8 +13,11 @@ import type {
   GuestRef,
   Ingredient,
   IngredientId,
+  IsoDate,
   Job,
   JobDietary,
+  JobDish,
+  JobDishId,
   JobId,
   KitchenId,
   PurchaseUnit,
@@ -91,6 +94,28 @@ export function makeJob(over: Partial<Job> = {}): Job {
 
 export const recipeId = (id: string): RecipeId => id as RecipeId;
 export const ingredientId = (id: string): IngredientId => id as IngredientId;
+export const jobId = (id: string): JobId => id as JobId;
+export const isoDate = (d: string): IsoDate => d as IsoDate;
+
+let dishSeq = 0;
+
+/**
+ * A dish on a job. `portions: null` means not yet allocated — Rule 8, never zero.
+ *
+ * `jobId` here is decorative: productionBuckets attributes allocations from the
+ * enclosing Job, not from the dish row.
+ */
+export function dish(recipe: string, portions: number | null): JobDish {
+  dishSeq += 1;
+  return {
+    id: `dish-${dishSeq}` as JobDishId,
+    jobId: jobId('job-test'),
+    recipeId: recipeId(recipe),
+    portions,
+    note: null,
+    position: dishSeq,
+  };
+}
 
 let lineSeq = 0;
 

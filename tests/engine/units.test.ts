@@ -162,6 +162,51 @@ describe('stockToPacks', () => {
     });
   });
 
+  it('routes a dozen-egg pack through the owner factor when stock is in kg', () => {
+    // Eggs are counted "each" in recipes but stocked by weight. A dozen is not
+    // dimensionally comparable to a kilogram, so the owner's factor is the only
+    // thing that can bridge it.
+    //   17 each / 20 per kg  = 0.85 kg required
+    //   12 each / 20 per kg  = 0.6 kg per pack
+    //   ceil(0.85 / 0.6)     = 2 packs
+    const eggs = makeIngredient({
+      stockUnit: stockUnit('kg'),
+      recipeUnit: 'each' as never,
+      recipeUnitsPerStockUnit: 20,
+      pack: { size: 12, unit: purchaseUnit('each'), assumed: false },
+    });
+    const result = stockToPacks(stockQty(0.85, 'kg'), eggs);
+
+    expect(result).toEqual({
+      kind: 'converted',
+      value: { packs: 2, overage: { value: 0.35, unit: 'kg' } },
+    });
+  });
+
+  it('still refuses that pack shape when the owner has given no factor', () => {
+    const eggs = makeIngredient({
+      stockUnit: stockUnit('kg'),
+      recipeUnit: 'each' as never,
+      recipeUnitsPerStockUnit: null,
+      pack: { size: 12, unit: purchaseUnit('each'), assumed: false },
+    });
+    const result = stockToPacks(stockQty(0.85, 'kg'), eggs);
+
+    expect(result.kind).toBe('unresolved');
+  });
+
+  it('does not use the factor when the pack unit is not the recipe unit', () => {
+    // Factor is "each per kg". A pack measured in litres cannot borrow it.
+    const odd = makeIngredient({
+      stockUnit: stockUnit('kg'),
+      recipeUnit: 'each' as never,
+      recipeUnitsPerStockUnit: 20,
+      pack: { size: 1, unit: purchaseUnit('L'), assumed: false },
+    });
+
+    expect(stockToPacks(stockQty(1, 'kg'), odd).kind).toBe('unresolved');
+  });
+
   it('REFUSES when the ingredient has no pack size (Rule 8)', () => {
     const flour = makeIngredient({ stockUnit: stockUnit('kg'), pack: null });
     const result = stockToPacks(stockQty(4.2, 'kg'), flour);

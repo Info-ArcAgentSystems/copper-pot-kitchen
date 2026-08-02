@@ -14,6 +14,7 @@ import type {
   Ingredient,
   IngredientId,
   IsoDate,
+  IsoTimestamp,
   Job,
   JobDietary,
   JobDish,
@@ -28,6 +29,7 @@ import type {
   RecipeQuantity,
   RecipeSubRecipeLine,
   RecipeUnit,
+  StockLevel,
   StockQuantity,
   StockUnit,
   UnresolvedDietary,
@@ -66,6 +68,20 @@ export function makeIngredient(over: Partial<Ingredient> = {}): Ingredient {
     priceChecked: null,
     allergens: [],
     ...over,
+  };
+}
+
+export function stockLevel(
+  ingredient: IngredientId,
+  value: number,
+  unit: string,
+): StockLevel {
+  return {
+    kitchenId: KITCHEN,
+    ingredientId: ingredient,
+    onHand: stockQty(value, unit),
+    useBy: null,
+    countedAt: '2026-07-01T00:00:00Z' as IsoTimestamp,
   };
 }
 

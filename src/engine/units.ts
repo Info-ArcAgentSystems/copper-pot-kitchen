@@ -171,6 +171,55 @@ export function recipeToStock(
 }
 
 // ---------------------------------------------------------------------------
+// Stock -> stock
+// ---------------------------------------------------------------------------
+
+/**
+ * Restate a stock quantity in a different stock unit — 500 g of flour as 0.5 kg.
+ *
+ * Dimensional where it can be; otherwise the ingredient's own factor, and only
+ * when the source unit is the ingredient's declared recipe unit. Refuses rather
+ * than adding numbers that are not comparable, which is the Rule 4 failure this
+ * layer exists to prevent.
+ */
+export function stockToStock(
+  qty: StockQuantity,
+  to: StockUnit,
+  ingredient: Ingredient,
+): Conversion<StockQuantity> {
+  const from = normalise(qty.unit);
+  const target = normalise(to);
+
+  if (from === target) {
+    return { kind: 'converted', value: { value: roundQuantity(qty.value), unit: to } };
+  }
+
+  const dimensional = convertDimensional(qty.value, from, target);
+  if (dimensional !== null) {
+    return { kind: 'converted', value: { value: dimensional, unit: to } };
+  }
+
+  const factor = ingredient.recipeUnitsPerStockUnit;
+  if (
+    ingredient.recipeUnit !== null &&
+    normalise(ingredient.recipeUnit) === from &&
+    factor !== null &&
+    factor > 0 &&
+    normalise(ingredient.stockUnit) === target
+  ) {
+    return {
+      kind: 'converted',
+      value: { value: roundQuantity(qty.value / factor), unit: to },
+    };
+  }
+
+  return unresolved(
+    'incompatible_units',
+    `${ingredient.name}: "${qty.unit}" cannot be restated as "${to}"`,
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Stock -> purchase
 // ---------------------------------------------------------------------------
 
@@ -196,9 +245,22 @@ export function stockToPacks(
   const packUnit = normalise(pack.unit);
   const stockUnit = normalise(stock);
 
-  // Express one pack in stock units.
-  const packInStock =
+  // Express one pack in stock units. Dimensional first; failing that, the
+  // ingredient's own factor, which is the only thing that can bridge a dozen eggs
+  // to a kilogram. The factor is defined in terms of the recipe unit, so it only
+  // applies when the pack is measured in that same unit.
+  let packInStock: number | null =
     packUnit === stockUnit ? pack.size : convertDimensional(pack.size, packUnit, stockUnit);
+
+  if (
+    packInStock === null &&
+    ingredient.recipeUnit !== null &&
+    normalise(ingredient.recipeUnit) === packUnit &&
+    ingredient.recipeUnitsPerStockUnit !== null &&
+    ingredient.recipeUnitsPerStockUnit > 0
+  ) {
+    packInStock = roundQuantity(pack.size / ingredient.recipeUnitsPerStockUnit);
+  }
 
   if (packInStock === null || packInStock <= 0) {
     return unresolved(

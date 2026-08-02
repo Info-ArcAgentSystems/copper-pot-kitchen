@@ -44,7 +44,8 @@ session reads to work out where things stand.
 | 31 Jul 2026 | C2 — `units.ts` and `meatEatingGuests()` in `rules.ts`, tests written first. `tsconfig.test.json` and an engine-purity test added. **30 tests green** |
 | 31 Jul 2026 | C3 — `scaling.ts`: `scaleRecipe` (recurses sub-recipes, cycle-safe) and `portionsToUnits`. `CALC-CURRY-10` and `CALC-LASAGNE-29` reproduced as unit tests. **56 tests green** |
 | 1 Aug 2026 | C4 — `production.ts`. Consolidate-then-round proven by temporarily inverting the implementation: the CLAUDE.md 12/18/9 example passed against the bug, the added 1/1/1 guard failed. **85 tests green** |
-| | *Next: C5 (`shopping.ts`) — `requirementsForRange`, `toPurchaseUnits`, `outstandingShopping`* |
+| 1 Aug 2026 | C5 — `shopping.ts`. All three unit systems run end-to-end. `units.ts` gained `stockToStock` and a pack-side factor fallback. Consolidation guard proven by inversion. **115 tests green** |
+| | *Next: C6 (`costing.ts`) — `recipeFoodCost`, `jobFoodCost`, `jobMargin`* |
 
 ---
 
@@ -115,7 +116,7 @@ Mark each as `not started` / `in progress` / `done`, and keep the description ac
 | `units.ts` | conversion across recipe / stock / purchase units | **done** — 31 Jul 2026 |
 | `scaling.ts` | `scaleRecipe`, `portionsToUnits` | **done** — 31 Jul 2026 |
 | `production.ts` | `prepDateFor`, `productionBuckets`, `prepPlanByDay`, `prioritisePrep` | **done** — 1 Aug 2026 |
-| `shopping.ts` | `requirementsForRange`, `toPurchaseUnits`, `outstandingShopping` | not started |
+| `shopping.ts` | `requirementsForRange`, `toPurchaseUnits`, `outstandingShopping` | **done** — 1 Aug 2026 |
 | `costing.ts` | `recipeFoodCost`, `jobFoodCost`, `jobMargin` | not started |
 | `rules.ts` | `applyBuffetSplit`, BBQ meat/sides split | **partial** — `meatEatingGuests` only |
 | `checks.ts` | `allergenScan`, `dietaryCrossCheck`, `readinessCheck`, `anomalyScan` | not started |
@@ -168,6 +169,28 @@ the allocation breakdown but does **not** catch per-job rounding. This was verif
 with the implementation temporarily switched to per-job rounding, the 12/18/9 test **passed**
 while `1 / 1 / 1 → 1 tray` and `4 / 4 / 4 → 2 trays` failed. Keep both guards. A test that
 agrees with the bug is the same defect shape the golden pack caught in the BBQ split.
+
+**The consolidation discipline holds one more link in `shopping.ts`.** `requirementsForRange`
+runs `productionBuckets` → `scaleRecipe` (once per bucket) → `recipeToStock` → consolidate
+across the whole range → `toPurchaseUnits` (once per ingredient). Packs are rounded on the
+consolidated total, never per item: 0.4 kg of flour on three prep days is 1.2 kg and **2**
+packs, where per-item rounding buys 3. Verified the same way as C4, by temporarily inverting
+the implementation and watching the guard go red.
+
+**`toPurchaseUnits` delegates to `stockToPacks` and does no arithmetic.** The two have
+identical worked numbers, and Rule 5 forbids a second version of a step. It exists to give
+shopping the name `CLAUDE.md` §3 uses and to carry shopping's gap semantics.
+
+**`outstandingShopping` computes packs from the OUTSTANDING amount, not the required one.**
+4.2 kg required with 4 kg on hand is 0.2 kg outstanding and one pack, not five. Reusing the
+required-side pack count is the obvious mistake and re-buys the store cupboard; a test pins it.
+Surplus is reported on its own field so `outstanding` is never negative — a negative would
+silently offset another line if anything ever summed them.
+
+**Stock that cannot be restated in the requirement's unit is counted, not dropped.** Each
+`OutstandingLine` carries an `unreconciled` count. Non-zero means the outstanding figure is an
+over-estimate because some stock row could not be converted. Silently treating unconvertible
+stock as absent would be a Rule 8 failure wearing a Rule 4 costume.
 
 **`prioritisePrep`'s ordering is a documented default, not an owner decision.** Prep date →
 slack (service date − prep date, tightest first) → portions descending → recipe name. Only the
@@ -321,7 +344,7 @@ Things that are genuinely absent, so nobody wastes an hour looking for them.
 
 | Gap | Blocking? | Notes |
 |---|---|---|
-| No engine code beyond `types.ts`, `units.ts`, `rules.ts`, `scaling.ts`, `production.ts` | Phase 2 | `src/` is otherwise still the Vite starter page. `shopping.ts` is next |
+| Engine remaining: `costing.ts`, `checks.ts`, `impact.ts`, `history.ts`, most of `rules.ts` | Phase 2 | `src/` is otherwise still the Vite starter page. `costing.ts` is next |
 | `prioritisePrep` ordering is a guess | no | Prep date → slack → size → name. Only Paul knows how he actually sequences a prep day. Put it to him with the other open items |
 | Golden pack not wired | Phase 2 | fixtures are in `tests/fixtures/`; `tests/golden/` runner not written |
 | Fixture count vs BUILD_GUIDE | Phase 2 | `expected_results.json` holds 6 `deterministic_tests` + 4 `system_behavior_tests`. BUILD_GUIDE Stage C says "33 tests". Reconcile with Paul before C6 |
@@ -382,7 +405,7 @@ the eight tapas dishes. Cheesecake needs confirming before it is treated as lock
 
 | Suite | Command | Covers | Status |
 |---|---|---|---|
-| Unit | `npm run test` | engine functions | **85 green** — `units`, `rules`, `scaling`, `production`, `purity` |
+| Unit | `npm run test` | engine functions | **115 green** — `units`, `rules`, `scaling`, `production`, `shopping`, `purity` |
 | Golden | `npm run test:copperpot` | the owner's regression pack | not started — see `tests/golden/PENDING_OWNER.md` before wiring |
 | E2E | `npm run test:e2e` | workflows, desktop and mobile | not started |
 

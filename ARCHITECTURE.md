@@ -14,11 +14,11 @@ Keep it honest. A stale architecture file is worse than none, because it gets tr
 
 | | |
 |---|---|
-| Current phase | Phase 2 — engine, in progress. `history.ts` is next |
+| Current phase | Phase 2 **complete** — the engine is built. Next: wire the golden pack |
 | Last updated | 1 August 2026 |
 | Repo | `Info-ArcAgentSystems/copper-pot-kitchen` (private) |
 | Database | Supabase, schema + 4 migrations applied, 23 tables |
-| Unit tests | **231 green** (`npm run test`) |
+| Unit tests | **253 green** (`npm run test`) |
 | Golden pack | not yet wired — see `tests/golden/PENDING_OWNER.md` before wiring |
 | `npm run test:copperpot` | not yet passing |
 
@@ -50,7 +50,8 @@ session reads to work out where things stand.
 | 1 Aug 2026 | C7 — `checks.ts`. Rule 9 enforced by a language test over real output. BBQ guard generalised to course structure. Three inversion checks passed. **185 tests green** |
 | 1 Aug 2026 | C8 — `impact.ts`. A pure diff of two cascade runs, enforced by source inspection. Batch-boundary proof: 18→19 portions is +2 kg, not the linear +0.222. **214 tests green** |
 | 1 Aug 2026 | C9 — `applyBuffetSplit` finishes `rules.ts` and closes the guest-count gap. Wired into `productionBuckets` and `jobFoodCost`. **231 tests green** |
-| | *Next: `history.ts` (`historicalAggregate`) — the last engine file* |
+| 1 Aug 2026 | C10 — `history.ts`. **THE ENGINE IS COMPLETE**: all ten files built, tests written before each. **253 tests green** |
+| | *Next: wire the golden pack. **Read `tests/golden/PENDING_OWNER.md` first** — two assertions are blocked on the owner* |
 
 ---
 
@@ -114,7 +115,7 @@ Any write to `jobs`, `job_dishes` or `job_dietaries` also writes a `job_changes`
 
 Mark each as `not started` / `in progress` / `done`, and keep the description accurate.
 
-### `src/engine` — pure calculation · **in progress**
+### `src/engine` — pure calculation · **COMPLETE** (1 Aug 2026)
 
 | File | Responsibility | Status |
 |---|---|---|
@@ -126,7 +127,7 @@ Mark each as `not started` / `in progress` / `done`, and keep the description ac
 | `rules.ts` | `applyBuffetSplit`, `meatEatingGuests` | **done** — 1 Aug 2026 |
 | `checks.ts` | `allergenScan`, `dietaryCrossCheck`, `readinessCheck`, `anomalyScan` | **done** — 1 Aug 2026 |
 | `impact.ts` | `changeImpact` | **done** — 1 Aug 2026 |
-| `history.ts` | `historicalAggregate` | not started |
+| `history.ts` | `historicalAggregate` | **done** — 1 Aug 2026 |
 | `types.ts` | shared domain types | **done** — 31 Jul 2026 |
 
 `types.ts` has no imports and no logic; it erases at runtime apart from one `brand` symbol.
@@ -196,6 +197,19 @@ silently offset another line if anything ever summed them.
 `OutstandingLine` carries an `unreconciled` count. Non-zero means the outstanding figure is an
 over-estimate because some stock row could not be converted. Silently treating unconvertible
 stock as absent would be a Rule 8 failure wearing a Rule 4 costume.
+
+**`historicalAggregate` never averages an unknown as zero.** Revenue divides by `priced`, not
+by every job; covers divide by `withGuestCount`, not by every job. The excluded count sits beside
+each figure so it can never be mistaken for complete. On the real weekend set this is the
+difference between the honest **€249.71** over 7 priceable jobs and the silent-zero **€218.50**
+over 8 — verified by inverting the divisor and watching the test report exactly those two
+numbers.
+
+**Cancelled jobs are counted, excluded, and reported separately.** Rule 15 keeps them in history;
+they contribute nothing to covers served or revenue earned, and their value lands in
+`cancelledRevenue` so "what did we lose to cancellations" is answerable without contaminating
+the earned total. Only closed statuses aggregate at all — an enquiry has not happened, and
+counting it would inflate both figures with work that may never exist.
 
 **`applyBuffetSplit` is the single place guests become portions**, called by both
 `productionBuckets` and `jobFoodCost` so prep, shopping, costing and impact cannot disagree
@@ -428,7 +442,7 @@ Things that are genuinely absent, so nobody wastes an hour looking for them.
 
 | Gap | Blocking? | Notes |
 |---|---|---|
-| Engine remaining: `history.ts` | Phase 2 | `src/` is otherwise still the Vite starter page. `history.ts` is the last engine file |
+| No UI, no data layer | Phase 3 | The engine is complete and tested, but `src/` is otherwise still the Vite starter page. `src/data` is unblocked — the migrations are applied |
 | ~~A guest-count change does not move ingredients~~ | **closed 1 Aug** | `applyBuffetSplit` landed and is wired into `productionBuckets` and `jobFoodCost`. The impact preview now moves revenue, ingredients and food cost together. The `impact.test.ts` test that pinned the gap was rewritten to assert the corrected cascade |
 | `anomalyScan` false-positives on sides | no | It flags any menu with mains and no side, because keying off the service type would put owner-defined text ("BBQ") in `src/` and breach Rule 1. A precise version needs an owner-configured "service types that require sides" table, which does not exist. It is a report, not a blocked action |
 | `prioritisePrep` ordering is a guess | no | Prep date → slack → size → name. Only Paul knows how he actually sequences a prep day. Put it to him with the other open items |
@@ -497,7 +511,7 @@ the eight tapas dishes. Cheesecake needs confirming before it is treated as lock
 
 | Suite | Command | Covers | Status |
 |---|---|---|---|
-| Unit | `npm run test` | engine functions | **231 green** — `units`, `rules`, `scaling`, `production`, `shopping`, `costing`, `checks`, `impact`, `purity` |
+| Unit | `npm run test` | engine functions | **253 green** — every engine module, plus `purity` |
 | Golden | `npm run test:copperpot` | the owner's regression pack | not started — see `tests/golden/PENDING_OWNER.md` before wiring |
 | E2E | `npm run test:e2e` | workflows, desktop and mobile | not started |
 

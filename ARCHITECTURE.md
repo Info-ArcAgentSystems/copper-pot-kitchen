@@ -14,13 +14,13 @@ Keep it honest. A stale architecture file is worse than none, because it gets tr
 
 | | |
 |---|---|
-| Current phase | Phase 2 **complete** — the engine is built. Next: wire the golden pack |
+| Current phase | Phase 2 **complete** — engine built and the golden pack green. Next: Phase 3, `src/data` |
 | Last updated | 1 August 2026 |
 | Repo | `Info-ArcAgentSystems/copper-pot-kitchen` (private) |
 | Database | Supabase, schema + 4 migrations applied, 23 tables |
-| Unit tests | **253 green** (`npm run test`) |
-| Golden pack | not yet wired — see `tests/golden/PENDING_OWNER.md` before wiring |
-| `npm run test:copperpot` | not yet passing |
+| Unit tests | **268 pass**, 2 skipped, 2 todo (`npm run test`) |
+| Golden pack | **wired** — 15 pass, 2 skipped pending owner, 2 todo |
+| `npm run test:copperpot` | **passing** |
 
 ---
 
@@ -51,7 +51,8 @@ session reads to work out where things stand.
 | 1 Aug 2026 | C8 — `impact.ts`. A pure diff of two cascade runs, enforced by source inspection. Batch-boundary proof: 18→19 portions is +2 kg, not the linear +0.222. **214 tests green** |
 | 1 Aug 2026 | C9 — `applyBuffetSplit` finishes `rules.ts` and closes the guest-count gap. Wired into `productionBuckets` and `jobFoodCost`. **231 tests green** |
 | 1 Aug 2026 | C10 — `history.ts`. **THE ENGINE IS COMPLETE**: all ten files built, tests written before each. **253 tests green** |
-| | *Next: wire the golden pack. **Read `tests/golden/PENDING_OWNER.md` first** — two assertions are blocked on the owner* |
+| 1 Aug 2026 | C11 — **golden pack wired**. `npm run test:copperpot` runs: 15 pass, 2 skipped pending owner, 2 todo. Fixtures byte-identical. **268 pass overall** |
+| | *Next: Phase 3 — `src/data` repositories and mappers. The migrations are applied* |
 
 ---
 
@@ -197,6 +198,24 @@ silently offset another line if anything ever summed them.
 `OutstandingLine` carries an `unreconciled` count. Non-zero means the outstanding figure is an
 over-estimate because some stock row could not be converted. Silently treating unconvertible
 stock as absent would be a Rule 8 failure wearing a Rule 4 costume.
+
+**The golden pack reads the fixture, never restates it.** `tests/golden/adapter.ts` turns
+`business_rules.recipes` and `historical_jobs` into engine domain objects; the assertions read
+expected values out of `expected_results.json` rather than hardcoding them, so a fixture change
+shows up as a failure instead of passing silently against a stale copy.
+
+Two guards make that safe. `qty()` throws when the engine produces no such component and `num()`
+throws when a fixture key is not a number — without them a typo yields `undefined` on both sides
+and the test passes vacuously, which is the worst possible outcome for a regression pack. The
+pack's teeth were verified by inversion: merging BBQ back into one recipe fails the split test,
+and making Lasagne per-person fails the tray test and the downstream-recalc behaviour test.
+
+**BBQ is two recipes in the adapter too** — `BBQ Meat` (course `main`) and `BBQ Sides` (course
+`side`). Merging them is precisely the defect the pack was built to catch.
+
+**`Continental Breakfast.orange_juice_ml_range` is mapped as unquantified, not as a number.**
+`types.ts` has no range type (Rule 13) and picking either end would be inventing owner data. It
+surfaces as an unquantified component, and the assertion that depends on it is skipped.
 
 **`historicalAggregate` never averages an unknown as zero.** Revenue divides by `priced`, not
 by every job; covers divide by `withGuestCount`, not by every job. The excluded count sits beside
@@ -447,7 +466,7 @@ Things that are genuinely absent, so nobody wastes an hour looking for them.
 | `anomalyScan` false-positives on sides | no | It flags any menu with mains and no side, because keying off the service type would put owner-defined text ("BBQ") in `src/` and breach Rule 1. A precise version needs an owner-configured "service types that require sides" table, which does not exist. It is a report, not a blocked action |
 | `prioritisePrep` ordering is a guess | no | Prep date → slack → size → name. Only Paul knows how he actually sequences a prep day. Put it to him with the other open items |
 | Golden pack not wired | Phase 2 | fixtures are in `tests/fixtures/`; `tests/golden/` runner not written |
-| Fixture count vs BUILD_GUIDE | Phase 2 | `expected_results.json` holds 6 `deterministic_tests` + 4 `system_behavior_tests`. BUILD_GUIDE Stage C says "33 tests". Reconcile with Paul before C6 |
+| The "33 tests" figure is unexplained | no | Counted every way, nothing in the pack is 33: 6 deterministic, 4 system-behaviour, 39 leaf assertions, 30 fixture entities. The dataset calls itself v2 while `ENGINEER_README` calls it v3. Likely describes an earlier or larger pack. Recorded in `PENDING_OWNER.md` §5, not reconciled by inventing cases |
 | ~~`tests/` not covered by typecheck~~ | closed | `tsconfig.test.json` added 31 Jul, referenced from the root config. No DOM lib, so a test needing a browser global fails to compile |
 | ~~No engine import boundary enforced~~ | closed | Enforced by `tests/engine/purity.test.ts`, **not** by oxlint — oxlint 1.75 has no `no-restricted-imports`. A test is stronger here: it asserts the real rule ("imports nothing outside `src/engine`", including Node builtins) and was verified to fail on a planted `react` import |
 | Playwright browsers not installed | Phase 5 | `@playwright/test` is installed; `npx playwright install` deliberately deferred |
@@ -512,7 +531,7 @@ the eight tapas dishes. Cheesecake needs confirming before it is treated as lock
 | Suite | Command | Covers | Status |
 |---|---|---|---|
 | Unit | `npm run test` | engine functions | **253 green** — every engine module, plus `purity` |
-| Golden | `npm run test:copperpot` | the owner's regression pack | not started — see `tests/golden/PENDING_OWNER.md` before wiring |
+| Golden | `npm run test:copperpot` | the owner's regression pack | **15 pass, 2 skipped, 2 todo** — read `tests/golden/PENDING_OWNER.md` before touching |
 | E2E | `npm run test:e2e` | workflows, desktop and mobile | not started |
 
 Every confirmed bug gets a permanent regression test. Record notable ones here with the

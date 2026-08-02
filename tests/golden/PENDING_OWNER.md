@@ -106,8 +106,26 @@ forbids, and the reason the explicit field exists.
 
 ---
 
-## 4. Still open with the owner, not blocking a specific assertion
+## 4. `WEEKEND-2026-07-13-22` — not wired, same blocker
 
+The €4748 ten-day benchmark spans 13–22 July, so it contains the same unpriceable
+`HIST-2026-07-18-TRANQUILLITY-BBQ`. Its own note already warns it is valid "only when the same
+full set of included jobs is loaded".
+
+It is **not wired** at all — it is a `weekend_benchmark`, not a `deterministic_test`, so it was
+never in scope, and it would be blocked by §2 even if it were. It becomes wireable at the same
+moment §2 is resolved.
+
+---
+
+## 5. Still open with the owner, not blocking a specific assertion
+
+- **The "33 tests" figure.** BUILD_GUIDE Stage C is titled "the engine and the 33 tests". No
+  count in this pack is 33: there are 6 `deterministic_tests`, 4 `system_behavior_tests`, 39
+  leaf assertions across the deterministic six, and 30 fixture entities in total. The dataset
+  calls itself v2 in `metadata.name` while `ENGINEER_README.md` calls the pack v3. The likely
+  explanation is that 33 describes an earlier or larger pack than the one delivered. **Not
+  reconciled by inventing cases.**
 - **Fixture count.** `expected_results.json` holds 6 `deterministic_tests` and 4
   `system_behavior_tests`. BUILD_GUIDE Stage C refers to "the 33 tests". Reconcile before
   treating the pack as complete.

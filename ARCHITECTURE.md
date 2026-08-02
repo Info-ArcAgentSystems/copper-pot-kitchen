@@ -14,11 +14,11 @@ Keep it honest. A stale architecture file is worse than none, because it gets tr
 
 | | |
 |---|---|
-| Current phase | Phase 2 — engine, in progress. `checks.ts` is next |
+| Current phase | Phase 2 — engine, in progress. `impact.ts` is next |
 | Last updated | 1 August 2026 |
 | Repo | `Info-ArcAgentSystems/copper-pot-kitchen` (private) |
 | Database | Supabase, schema + 4 migrations applied, 23 tables |
-| Unit tests | **151 green** (`npm run test`) |
+| Unit tests | **185 green** (`npm run test`) |
 | Golden pack | not yet wired — see `tests/golden/PENDING_OWNER.md` before wiring |
 | `npm run test:copperpot` | not yet passing |
 
@@ -47,7 +47,8 @@ session reads to work out where things stand.
 | 1 Aug 2026 | C4 — `production.ts`. Consolidate-then-round proven by temporarily inverting the implementation: the CLAUDE.md 12/18/9 example passed against the bug, the added 1/1/1 guard failed. **85 tests green** |
 | 1 Aug 2026 | C5 — `shopping.ts`. All three unit systems run end-to-end. `units.ts` gained `stockToStock` and a pack-side factor fallback. Consolidation guard proven by inversion. **115 tests green** |
 | 1 Aug 2026 | C6 — `costing.ts`. Rule 8's sharpest edge: any missing input voids the total. A double-rounding bug was caught by its own test and fixed. **151 tests green** |
-| | *Next: C7 (`checks.ts`) — `allergenScan`, `dietaryCrossCheck`, `readinessCheck`, `anomalyScan`* |
+| 1 Aug 2026 | C7 — `checks.ts`. Rule 9 enforced by a language test over real output. BBQ guard generalised to course structure. Three inversion checks passed. **185 tests green** |
+| | *Next: C8 (`impact.ts`) — `changeImpact`, then `history.ts`* |
 
 ---
 
@@ -121,7 +122,7 @@ Mark each as `not started` / `in progress` / `done`, and keep the description ac
 | `shopping.ts` | `requirementsForRange`, `toPurchaseUnits`, `outstandingShopping` | **done** — 1 Aug 2026 |
 | `costing.ts` | `recipeFoodCost`, `recipePortionCost`, `jobFoodCost`, `jobRevenue`, `jobMargin` | **done** — 1 Aug 2026 |
 | `rules.ts` | `applyBuffetSplit`, BBQ meat/sides split | **partial** — `meatEatingGuests` only |
-| `checks.ts` | `allergenScan`, `dietaryCrossCheck`, `readinessCheck`, `anomalyScan` | not started |
+| `checks.ts` | `allergenScan`, `dietaryCrossCheck`, `readinessCheck`, `anomalyScan` | **done** — 1 Aug 2026 |
 | `impact.ts` | `changeImpact` | not started |
 | `history.ts` | `historicalAggregate` | not started |
 | `types.ts` | shared domain types | **done** — 31 Jul 2026 |
@@ -193,6 +194,33 @@ silently offset another line if anything ever summed them.
 `OutstandingLine` carries an `unreconciled` count. Non-zero means the outstanding figure is an
 over-estimate because some stock row could not be converted. Silently treating unconvertible
 stock as absent would be a Rule 8 failure wearing a Rule 4 costume.
+
+**Rule 9 is enforced by a language test, not by discipline.** `checks.test.ts` serialises the
+whole `allergenScan` result and asserts it contains none of `safe`, `no allergen`,
+`allergen-free`, `free from`, `none found`, `no conflict`, `verified`, `guaranteed`, `cleared`.
+Verified by inversion: changing the shared message to "no conflict found — safe to serve" turns
+it red. `AllergenScanResult` also carries **no boolean verdict of any kind** — no `safe`, no
+`hasConflicts` — because a `false` invites exactly the reading Rule 9 forbids.
+
+**`allergenScan` reports what it could NOT check.** The golden fixture has no allergen tags on
+any ingredient, so a keyword scan finds nothing on `HIST-2026-07-20-NUCELLA-BUFFET`, which
+carries a severe mushroom allergy. Empty findings is the *normal* case on real data. `unchecked`
+names every dish with a missing recipe or no allergen tags, so absence of findings is visibly
+not a clean bill of health. The severe-without-assigned-dish rule is the only thing that catches
+that job at all — which is why CLAUDE.md says "regardless of keyword hits".
+
+**Allergen matching uses no built-in vocabulary.** Token overlap between two owner-entered
+strings: the dietary's `dietType`/`details` and the ingredient's `allergens` tags. A hardcoded
+allergen list would be business data in `src/` (Rule 1) and would miss owner phrasings like
+`no_pork_no_alcohol`, which token overlap catches against an ingredient tagged `pork`.
+
+**The BBQ guard is expressed through `Recipe.course`, not through `serviceType`.** `serviceType`
+is owner-defined free text; putting `"BBQ"` in `src/` would breach Rule 1 and break silently if
+he renamed it. So the guard is structural: a menu with mains and no side is flagged, and a side
+whose portions fall below the guest count is flagged. A main below the guest count is *not*
+flagged the same way — meat legitimately scales to meat eaters, so its floor is
+`meatEatingGuests` when set. The 27-guest / 22-meat-eater case is a test, and inverting the
+sides comparison to use meat eaters turns it red.
 
 **Money composes in fractional cents and rounds exactly once, at the boundary.** `costing.ts`
 keeps unrounded internals (`recipeCostFractional`, `portionCostFractional`) precisely so a
@@ -366,7 +394,8 @@ Things that are genuinely absent, so nobody wastes an hour looking for them.
 
 | Gap | Blocking? | Notes |
 |---|---|---|
-| Engine remaining: `checks.ts`, `impact.ts`, `history.ts`, most of `rules.ts` | Phase 2 | `src/` is otherwise still the Vite starter page. `checks.ts` is next |
+| Engine remaining: `impact.ts`, `history.ts`, most of `rules.ts` | Phase 2 | `src/` is otherwise still the Vite starter page. `impact.ts` is next |
+| `anomalyScan` false-positives on sides | no | It flags any menu with mains and no side, because keying off the service type would put owner-defined text ("BBQ") in `src/` and breach Rule 1. A precise version needs an owner-configured "service types that require sides" table, which does not exist. It is a report, not a blocked action |
 | `prioritisePrep` ordering is a guess | no | Prep date → slack → size → name. Only Paul knows how he actually sequences a prep day. Put it to him with the other open items |
 | Golden pack not wired | Phase 2 | fixtures are in `tests/fixtures/`; `tests/golden/` runner not written |
 | Fixture count vs BUILD_GUIDE | Phase 2 | `expected_results.json` holds 6 `deterministic_tests` + 4 `system_behavior_tests`. BUILD_GUIDE Stage C says "33 tests". Reconcile with Paul before C6 |
@@ -433,7 +462,7 @@ the eight tapas dishes. Cheesecake needs confirming before it is treated as lock
 
 | Suite | Command | Covers | Status |
 |---|---|---|---|
-| Unit | `npm run test` | engine functions | **151 green** — `units`, `rules`, `scaling`, `production`, `shopping`, `costing`, `purity` |
+| Unit | `npm run test` | engine functions | **185 green** — `units`, `rules`, `scaling`, `production`, `shopping`, `costing`, `checks`, `purity` |
 | Golden | `npm run test:copperpot` | the owner's regression pack | not started — see `tests/golden/PENDING_OWNER.md` before wiring |
 | E2E | `npm run test:e2e` | workflows, desktop and mobile | not started |
 

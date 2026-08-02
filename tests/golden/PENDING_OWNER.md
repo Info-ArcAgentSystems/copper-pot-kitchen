@@ -49,11 +49,54 @@ Do **not** use `it.todo` — a skip with the reason in the title keeps it visibl
 
 ---
 
-## 2. Nothing else is pending
+## 2. `FIN-REVENUE-WEEKEND-17-19` — blocked on the Tranquillity BBQ rate
 
-The other five `deterministic_tests` — `CALC-CURRY-10`, `CALC-LASAGNE-29`,
-`CALC-NUCELLA-BBQ-SPLIT`, `WARN-SEVERE-MUSHROOM-ALLERGY`, `FIN-REVENUE-WEEKEND-17-19` — have
-no known rule conflict and should be wired as ordinary assertions.
+| | |
+|---|---|
+| Fixture expects | `expected_revenue_eur: 2068` across eight named jobs |
+| The problem | `HIST-2026-07-18-TRANQUILLITY-BBQ` has **no rate**. 16 guests, €320, `confidence: "historical_output"`, note: "rate may reflect booking-specific pricing" |
+| Conflicting rule | `CLAUDE.md` Rule 11 — a job with no applicable rate and no manual figure has revenue **null**, not 0, and "never present a partial sum as a total" |
+
+The €2068 sums exactly from the eight job revenues, and the other seven all resolve cleanly
+from the rate card. Only this one does not: the rate card has no (Tranquillity, BBQ) entry,
+which is the **single remaining open owner decision** in `ARCHITECTURE.md`.
+
+Under a correct implementation that job's revenue is null, so the weekend total cannot be
+computed at all. Not €1748 — null. Rule 11 forbids reporting the sum of seven as a total of
+eight.
+
+**Two ways out, both Paul's:**
+
+1. He confirms the Tranquillity BBQ rate. History suggests €20pp, and 16 × €20 = €320, which
+   fits. Then it is an ordinary rate-card lookup and this entry goes away.
+2. That job is recorded with a **manual override** of €320. This is the better fit — "rate may
+   reflect booking-specific pricing" is a description of an override, and it needs no rate-card
+   change. `jobRevenue` already returns the typed figure as the total and keeps the computed
+   figure visible alongside it, per Rule 11.
+
+Option 2 is the recommendation. **Neither has been applied**, and no fixture is edited.
+
+### How to wire it
+
+```ts
+it.skip('FIN-REVENUE-WEEKEND-17-19 — pending owner, see PENDING_OWNER.md', () => {
+  // Blocked on the Tranquillity BBQ rate. Under Rule 11 the weekend total is
+  // null, not 2068, because one of the eight jobs has no applicable rate.
+  // Do NOT invent a rate to make this pass.
+});
+```
+
+The warning matters more than usual here: adding a €20pp Tranquillity BBQ rate to a test
+fixture would make this go green while inventing owner data, which is a Rule 1 breach dressed
+up as a passing test.
+
+---
+
+## 3. Nothing else is pending
+
+The other four `deterministic_tests` — `CALC-CURRY-10`, `CALC-LASAGNE-29`,
+`CALC-NUCELLA-BBQ-SPLIT`, `WARN-SEVERE-MUSHROOM-ALLERGY` — have no known rule conflict and
+should be wired as ordinary assertions.
 
 Note on `CALC-NUCELLA-BBQ-SPLIT`: it expects `meat_eaters: 22`, and the historical job carries
 `guest_split.meat_eaters: 22` explicitly at `confidence: "confirmed"`. Feed that through
@@ -63,12 +106,8 @@ forbids, and the reason the explicit field exists.
 
 ---
 
-## 3. Still open with the owner, not blocking a specific assertion
+## 4. Still open with the owner, not blocking a specific assertion
 
-- **Tranquillity BBQ rate.** History says €20pp; the rate card has no entry.
-  `HIST-2026-07-18-TRANQUILLITY-BBQ` is `confidence: "historical_output"` with the note "rate
-  may reflect booking-specific pricing", so revenue for it should stay unpriced rather than be
-  back-derived.
 - **Fixture count.** `expected_results.json` holds 6 `deterministic_tests` and 4
   `system_behavior_tests`. BUILD_GUIDE Stage C refers to "the 33 tests". Reconcile before
   treating the pack as complete.

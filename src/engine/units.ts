@@ -224,6 +224,44 @@ export function stockToStock(
 // ---------------------------------------------------------------------------
 
 /**
+ * How much of one pack there is, expressed in the given stock unit.
+ *
+ * Dimensional first; failing that, the ingredient's own factor, which is the only
+ * thing that can bridge a dozen eggs to a kilogram. The factor is defined in terms
+ * of the recipe unit, so it applies only when the pack is measured in that unit.
+ *
+ * Null when there is no pack, or when the two units cannot be reconciled — never a
+ * silent assumption of 1 (Rule 8).
+ *
+ * Shared by `stockToPacks` and by `costing.ts`, which needs it to derive a price
+ * per stock unit. One definition, so pack maths cannot diverge (Rule 5).
+ */
+export function packSizeIn(ingredient: Ingredient, unit: StockUnit): number | null {
+  const pack = ingredient.pack;
+  if (pack === null || pack.size <= 0) return null;
+
+  const packUnit = normalise(pack.unit);
+  const target = normalise(unit);
+
+  if (packUnit === target) return pack.size;
+
+  const dimensional = convertDimensional(pack.size, packUnit, target);
+  if (dimensional !== null) return dimensional;
+
+  const factor = ingredient.recipeUnitsPerStockUnit;
+  if (
+    ingredient.recipeUnit !== null &&
+    normalise(ingredient.recipeUnit) === packUnit &&
+    factor !== null &&
+    factor > 0
+  ) {
+    return roundQuantity(pack.size / factor);
+  }
+
+  return null;
+}
+
+/**
  * 4.2 kg with 1 kg packs is 5 packs, not 4.2. 17 eggs at 12 per pack is 2.
  *
  * Always rounds up, and reports the overage so the surplus is visible rather than
@@ -242,25 +280,7 @@ export function stockToPacks(
   }
 
   const stock: StockUnit = qty.unit;
-  const packUnit = normalise(pack.unit);
-  const stockUnit = normalise(stock);
-
-  // Express one pack in stock units. Dimensional first; failing that, the
-  // ingredient's own factor, which is the only thing that can bridge a dozen eggs
-  // to a kilogram. The factor is defined in terms of the recipe unit, so it only
-  // applies when the pack is measured in that same unit.
-  let packInStock: number | null =
-    packUnit === stockUnit ? pack.size : convertDimensional(pack.size, packUnit, stockUnit);
-
-  if (
-    packInStock === null &&
-    ingredient.recipeUnit !== null &&
-    normalise(ingredient.recipeUnit) === packUnit &&
-    ingredient.recipeUnitsPerStockUnit !== null &&
-    ingredient.recipeUnitsPerStockUnit > 0
-  ) {
-    packInStock = roundQuantity(pack.size / ingredient.recipeUnitsPerStockUnit);
-  }
+  const packInStock = packSizeIn(ingredient, stock);
 
   if (packInStock === null || packInStock <= 0) {
     return unresolved(

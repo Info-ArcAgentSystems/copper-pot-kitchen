@@ -14,11 +14,12 @@ Keep it honest. A stale architecture file is worse than none, because it gets tr
 
 | | |
 |---|---|
-| Current phase | Phase 0 — scaffold complete; Phase 2 (engine) not started |
-| Last updated | 31 July 2026 |
+| Current phase | Phase 2 — engine, in progress. `checks.ts` is next |
+| Last updated | 1 August 2026 |
 | Repo | `Info-ArcAgentSystems/copper-pot-kitchen` (private) |
-| Database | Supabase, schema applied, 22 tables |
-| Golden pack | not yet wired |
+| Database | Supabase, schema + 4 migrations applied, 23 tables |
+| Unit tests | **151 green** (`npm run test`) |
+| Golden pack | not yet wired — see `tests/golden/PENDING_OWNER.md` before wiring |
 | `npm run test:copperpot` | not yet passing |
 
 ---
@@ -45,7 +46,8 @@ session reads to work out where things stand.
 | 31 Jul 2026 | C3 — `scaling.ts`: `scaleRecipe` (recurses sub-recipes, cycle-safe) and `portionsToUnits`. `CALC-CURRY-10` and `CALC-LASAGNE-29` reproduced as unit tests. **56 tests green** |
 | 1 Aug 2026 | C4 — `production.ts`. Consolidate-then-round proven by temporarily inverting the implementation: the CLAUDE.md 12/18/9 example passed against the bug, the added 1/1/1 guard failed. **85 tests green** |
 | 1 Aug 2026 | C5 — `shopping.ts`. All three unit systems run end-to-end. `units.ts` gained `stockToStock` and a pack-side factor fallback. Consolidation guard proven by inversion. **115 tests green** |
-| | *Next: C6 (`costing.ts`) — `recipeFoodCost`, `jobFoodCost`, `jobMargin`* |
+| 1 Aug 2026 | C6 — `costing.ts`. Rule 8's sharpest edge: any missing input voids the total. A double-rounding bug was caught by its own test and fixed. **151 tests green** |
+| | *Next: C7 (`checks.ts`) — `allergenScan`, `dietaryCrossCheck`, `readinessCheck`, `anomalyScan`* |
 
 ---
 
@@ -117,7 +119,7 @@ Mark each as `not started` / `in progress` / `done`, and keep the description ac
 | `scaling.ts` | `scaleRecipe`, `portionsToUnits` | **done** — 31 Jul 2026 |
 | `production.ts` | `prepDateFor`, `productionBuckets`, `prepPlanByDay`, `prioritisePrep` | **done** — 1 Aug 2026 |
 | `shopping.ts` | `requirementsForRange`, `toPurchaseUnits`, `outstandingShopping` | **done** — 1 Aug 2026 |
-| `costing.ts` | `recipeFoodCost`, `jobFoodCost`, `jobMargin` | not started |
+| `costing.ts` | `recipeFoodCost`, `recipePortionCost`, `jobFoodCost`, `jobRevenue`, `jobMargin` | **done** — 1 Aug 2026 |
 | `rules.ts` | `applyBuffetSplit`, BBQ meat/sides split | **partial** — `meatEatingGuests` only |
 | `checks.ts` | `allergenScan`, `dietaryCrossCheck`, `readinessCheck`, `anomalyScan` | not started |
 | `impact.ts` | `changeImpact` | not started |
@@ -191,6 +193,26 @@ silently offset another line if anything ever summed them.
 `OutstandingLine` carries an `unreconciled` count. Non-zero means the outstanding figure is an
 over-estimate because some stock row could not be converted. Silently treating unconvertible
 stock as absent would be a Rule 8 failure wearing a Rule 4 costume.
+
+**Money composes in fractional cents and rounds exactly once, at the boundary.** `costing.ts`
+keeps unrounded internals (`recipeCostFractional`, `portionCostFractional`) precisely so a
+rounded per-portion figure is never multiplied back up. A tray costing 200c across 9 portions
+is 22.22c each; ten of those is 222c, but ten times a rounded 22c is 220c. The first draft had
+this bug and a test caught it — the expectation was right and the implementation was wrong.
+`recipePortionCost` is the rounded display figure; `jobFoodCost` does not use it.
+
+**`jobFoodCost` is proportional per portion, not whole batches.** Batch rounding is consolidated
+across jobs, so two jobs can share a tray; charging each a whole tray double-counts and per-job
+costs would not sum to what was spent. The deliberate consequence: **surplus from batch rounding
+is attributed to no job**, so job costs sum to slightly less than the shopping spend. That is
+correct for margin, and the surplus belongs on a range view rather than smuggled into a job.
+`recipeFoodCost(recipe, portions)` is the other question — what it costs to *make* that many —
+and does round to whole batches.
+
+**A manual override replaces the whole revenue figure, extras included** (Rule 11). The typed
+figure IS the revenue, so an unpriced extra cannot block it. The rate-card figure stays on
+`RevenueResult.computed` so a screen can show "computed €300, overridden to €320" without a
+second calculation. A rate carrying both a per-head rate and a flat fee adds them.
 
 **`prioritisePrep`'s ordering is a documented default, not an owner decision.** Prep date →
 slack (service date − prep date, tightest first) → portions descending → recipe name. Only the
@@ -344,7 +366,7 @@ Things that are genuinely absent, so nobody wastes an hour looking for them.
 
 | Gap | Blocking? | Notes |
 |---|---|---|
-| Engine remaining: `costing.ts`, `checks.ts`, `impact.ts`, `history.ts`, most of `rules.ts` | Phase 2 | `src/` is otherwise still the Vite starter page. `costing.ts` is next |
+| Engine remaining: `checks.ts`, `impact.ts`, `history.ts`, most of `rules.ts` | Phase 2 | `src/` is otherwise still the Vite starter page. `checks.ts` is next |
 | `prioritisePrep` ordering is a guess | no | Prep date → slack → size → name. Only Paul knows how he actually sequences a prep day. Put it to him with the other open items |
 | Golden pack not wired | Phase 2 | fixtures are in `tests/fixtures/`; `tests/golden/` runner not written |
 | Fixture count vs BUILD_GUIDE | Phase 2 | `expected_results.json` holds 6 `deterministic_tests` + 4 `system_behavior_tests`. BUILD_GUIDE Stage C says "33 tests". Reconcile with Paul before C6 |
@@ -355,7 +377,13 @@ Things that are genuinely absent, so nobody wastes an hour looking for them.
 
 Awaiting owner decisions (see Part 5 of the setup guide):
 
-- Tranquillity BBQ rate — history says €20pp, rate card has no entry
+- **Tranquillity BBQ rate** — history says €20pp, rate card has no entry. **This now blocks a
+  golden test.** `FIN-REVENUE-WEEKEND-17-19` expects €2068, which sums exactly from eight jobs,
+  but `HIST-2026-07-18-TRANQUILLITY-BBQ` (16 guests, €320) has no applicable rate. Under Rule 11
+  its revenue is null, so the weekend total is null too — not €1748, since Rule 11 forbids
+  presenting a partial sum as a total. Recommended resolution: record that job with a **manual
+  override** of €320, which is what "rate may reflect booking-specific pricing" describes and
+  needs no rate-card change. Recorded in `tests/golden/PENDING_OWNER.md` §2. Not applied.
 
 **Raised 31 Jul 2026 at C1. Paul unavailable, so items 1, 3 and 4 proceeded on documented
 defaults; item 2 could not, because it needs his ground truth and nothing else will do:**
@@ -405,7 +433,7 @@ the eight tapas dishes. Cheesecake needs confirming before it is treated as lock
 
 | Suite | Command | Covers | Status |
 |---|---|---|---|
-| Unit | `npm run test` | engine functions | **115 green** — `units`, `rules`, `scaling`, `production`, `shopping`, `purity` |
+| Unit | `npm run test` | engine functions | **151 green** — `units`, `rules`, `scaling`, `production`, `shopping`, `costing`, `purity` |
 | Golden | `npm run test:copperpot` | the owner's regression pack | not started — see `tests/golden/PENDING_OWNER.md` before wiring |
 | E2E | `npm run test:e2e` | workflows, desktop and mobile | not started |
 

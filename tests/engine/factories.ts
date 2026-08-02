@@ -10,7 +10,14 @@
 
 import type {
   AllocatedDietary,
+  Cents,
+  ClientRate,
+  ClientRateId,
+  Customer,
+  CustomerId,
   GuestRef,
+  JobExtra,
+  JobExtraId,
   Ingredient,
   IngredientId,
   IsoDate,
@@ -105,6 +112,53 @@ export function makeJob(over: Partial<Job> = {}): Job {
     dietaries: [],
     extras: [],
     ...over,
+  };
+}
+
+/** Whole cents. */
+export const cents = (n: number): Cents => n as Cents;
+/** Euros, expressed as cents. euros(20) is 2000. */
+export const euros = (n: number): Cents => Math.round(n * 100) as Cents;
+
+export function makeCustomer(clientGroup: string | null, over: Partial<Customer> = {}): Customer {
+  return {
+    id: 'cust-test' as CustomerId,
+    kitchenId: KITCHEN,
+    name: 'test customer',
+    phone: null,
+    email: null,
+    clientGroup,
+    notes: null,
+    ...over,
+  };
+}
+
+export function clientRate(
+  clientGroup: string,
+  serviceType: string,
+  rates: { perHead?: number; flatFee?: number } = {},
+): ClientRate {
+  return {
+    id: `rate-${clientGroup}-${serviceType}` as ClientRateId,
+    kitchenId: KITCHEN,
+    clientGroup,
+    serviceType,
+    ratePerHead: rates.perHead === undefined ? null : euros(rates.perHead),
+    flatFee: rates.flatFee === undefined ? null : euros(rates.flatFee),
+  };
+}
+
+let extraSeq = 0;
+
+/** A named surcharge line. `amountEach: null` means named but unpriced. */
+export function extra(label: string, amountEach: number | null, quantity = 1): JobExtra {
+  extraSeq += 1;
+  return {
+    id: `extra-${extraSeq}` as JobExtraId,
+    jobId: 'job-test' as JobId,
+    label,
+    amountEach: amountEach === null ? null : euros(amountEach),
+    quantity,
   };
 }
 

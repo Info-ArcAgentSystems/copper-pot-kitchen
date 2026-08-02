@@ -233,10 +233,53 @@ describe('changeImpact — money', () => {
     expect(impact.revenue.delta).toBe(euros(100));
   });
 
-  it('THE KNOWN GAP: a guest-count change does not move ingredients yet', () => {
-    // JobDish.portions is explicit and nothing derives it from job.guests.
-    // applyBuffetSplit is the unbuilt half of rules.ts. This test pins the current
-    // behaviour so the gap stays visible instead of surfacing on a screen.
+  it('a guest-count change now moves ingredients too, via applyBuffetSplit', () => {
+    // This test previously pinned a gap: guests moved revenue but not food, which
+    // is worse than showing nothing. applyBuffetSplit closed it. With portions
+    // unallocated and one main on the menu, the dish takes the full guest count.
+    //   18 guests -> 2 trays -> 4 kg mince
+    //   23 guests -> 3 trays -> 6 kg mince
+    const unallocated = [jobWith(18, { dishes: [dish('Lasagne', null)] })];
+
+    const impact = changeImpact(
+      unallocated,
+      recipes,
+      ingredients,
+      jobId('j1'),
+      { guests: 23 },
+      { customer, rates },
+    );
+
+    expect(mincedIn(impact)?.required.before).toBe(4);
+    expect(mincedIn(impact)?.required.after).toBe(6);
+    expect(mincedIn(impact)?.required.delta).toBe(2);
+
+    const batch = impact.batches.find((b) => b.recipeName === 'Lasagne');
+    expect(batch?.batches?.before).toBe(2);
+    expect(batch?.batches?.after).toBe(3);
+  });
+
+  it('moves revenue and food together, so the preview is coherent', () => {
+    const unallocated = [jobWith(18, { dishes: [dish('Lasagne', null)] })];
+
+    const impact = changeImpact(
+      unallocated,
+      recipes,
+      ingredients,
+      jobId('j1'),
+      { guests: 23 },
+      { customer, rates },
+    );
+
+    // More guests, more money, more food. Previously the middle one moved alone.
+    expect(impact.revenue.delta).toBe(euros(100));
+    expect(mincedIn(impact)?.required.delta).toBeGreaterThan(0);
+    expect(impact.foodCost.delta).not.toBe(0);
+  });
+
+  it("still leaves the owner's explicit portions alone when guests change", () => {
+    // jobWith sets portions explicitly. A guest change must not silently rewrite
+    // a number the owner typed.
     const impact = changeImpact(
       [jobWith(18)],
       recipes,
@@ -247,6 +290,7 @@ describe('changeImpact — money', () => {
     );
 
     expect(mincedIn(impact)?.required.delta).toBe(0);
+    expect(impact.revenue.delta).toBe(euros(100));
   });
 
   it('leaves the revenue delta null when either side is unknown', () => {

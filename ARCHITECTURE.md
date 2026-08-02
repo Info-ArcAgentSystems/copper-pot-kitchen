@@ -18,7 +18,7 @@ Keep it honest. A stale architecture file is worse than none, because it gets tr
 | Last updated | 1 August 2026 |
 | Repo | `Info-ArcAgentSystems/copper-pot-kitchen` (private) |
 | Database | Supabase, schema + 4 migrations applied, 23 tables |
-| Unit tests | **214 green** (`npm run test`) |
+| Unit tests | **231 green** (`npm run test`) |
 | Golden pack | not yet wired — see `tests/golden/PENDING_OWNER.md` before wiring |
 | `npm run test:copperpot` | not yet passing |
 
@@ -49,7 +49,8 @@ session reads to work out where things stand.
 | 1 Aug 2026 | C6 — `costing.ts`. Rule 8's sharpest edge: any missing input voids the total. A double-rounding bug was caught by its own test and fixed. **151 tests green** |
 | 1 Aug 2026 | C7 — `checks.ts`. Rule 9 enforced by a language test over real output. BBQ guard generalised to course structure. Three inversion checks passed. **185 tests green** |
 | 1 Aug 2026 | C8 — `impact.ts`. A pure diff of two cascade runs, enforced by source inspection. Batch-boundary proof: 18→19 portions is +2 kg, not the linear +0.222. **214 tests green** |
-| | *Next: `history.ts` (`historicalAggregate`), then `applyBuffetSplit` to finish `rules.ts`* |
+| 1 Aug 2026 | C9 — `applyBuffetSplit` finishes `rules.ts` and closes the guest-count gap. Wired into `productionBuckets` and `jobFoodCost`. **231 tests green** |
+| | *Next: `history.ts` (`historicalAggregate`) — the last engine file* |
 
 ---
 
@@ -122,7 +123,7 @@ Mark each as `not started` / `in progress` / `done`, and keep the description ac
 | `production.ts` | `prepDateFor`, `productionBuckets`, `prepPlanByDay`, `prioritisePrep` | **done** — 1 Aug 2026 |
 | `shopping.ts` | `requirementsForRange`, `toPurchaseUnits`, `outstandingShopping` | **done** — 1 Aug 2026 |
 | `costing.ts` | `recipeFoodCost`, `recipePortionCost`, `jobFoodCost`, `jobRevenue`, `jobMargin` | **done** — 1 Aug 2026 |
-| `rules.ts` | `applyBuffetSplit`, BBQ meat/sides split | **partial** — `meatEatingGuests` only |
+| `rules.ts` | `applyBuffetSplit`, `meatEatingGuests` | **done** — 1 Aug 2026 |
 | `checks.ts` | `allergenScan`, `dietaryCrossCheck`, `readinessCheck`, `anomalyScan` | **done** — 1 Aug 2026 |
 | `impact.ts` | `changeImpact` | **done** — 1 Aug 2026 |
 | `history.ts` | `historicalAggregate` | not started |
@@ -195,6 +196,24 @@ silently offset another line if anything ever summed them.
 `OutstandingLine` carries an `unreconciled` count. Non-zero means the outstanding figure is an
 over-estimate because some stock row could not be converted. Silently treating unconvertible
 stock as absent would be a Rule 8 failure wearing a Rule 4 costume.
+
+**`applyBuffetSplit` is the single place guests become portions**, called by both
+`productionBuckets` and `jobFoodCost` so prep, shopping, costing and impact cannot disagree
+(Rule 5). It only ever fills `portions: null` — the owner's explicit numbers always win — and
+only when the guest count is known; deriving from an unknown would be the invention Rule 8
+forbids, so a null-portion dish on a job with no guest count is still a gap.
+
+Mains and desserts split evenly; sides take the full guest count however many there are, which
+is the BBQ rule. **Breakfast is deliberately excluded**, on evidence rather than by omission:
+`CALC-SWEETPEA-BREAKFAST` is 12 guests across Full Irish / pancakes / continental at 5 / 3 / 4,
+a choice the owner recorded rather than a division. An even split would say 4/4/4 and break a
+golden expectation.
+
+The split is not cosmetic — it feeds batch consolidation. 17 guests across curry + lasagne gives
+the lasagne 8 portions and **one** tray; the wrong full-17 gives **two**. Remainders go to the
+earliest dishes by `position`, which is deterministic and consequential: with 19 guests a batch
+dish listed first takes 10 and needs two trays, listed second it takes 9 and needs one. Both are
+tested.
 
 **`changeImpact` holds no arithmetic of its own, and a test enforces it.** `impact.test.ts`
 reads `src/engine/impact.ts` as source, strips comments, and fails if it contains `Math.ceil`,
@@ -409,8 +428,8 @@ Things that are genuinely absent, so nobody wastes an hour looking for them.
 
 | Gap | Blocking? | Notes |
 |---|---|---|
-| Engine remaining: `history.ts`, most of `rules.ts` | Phase 2 | `src/` is otherwise still the Vite starter page. `history.ts` is next |
-| **A guest-count change does not move ingredients** | **yes — a promised feature** | `JobDish.portions` is explicit and nothing derives it from `job.guests`. `applyBuffetSplit` (17 guests across curry + lasagne = 9 and 8) is the unbuilt half of `rules.ts`. CLAUDE.md §4 promises "guest-count change shows a live impact preview before saving", and today that preview moves revenue but not ingredients. Pinned by a test in `impact.test.ts` so it stays visible |
+| Engine remaining: `history.ts` | Phase 2 | `src/` is otherwise still the Vite starter page. `history.ts` is the last engine file |
+| ~~A guest-count change does not move ingredients~~ | **closed 1 Aug** | `applyBuffetSplit` landed and is wired into `productionBuckets` and `jobFoodCost`. The impact preview now moves revenue, ingredients and food cost together. The `impact.test.ts` test that pinned the gap was rewritten to assert the corrected cascade |
 | `anomalyScan` false-positives on sides | no | It flags any menu with mains and no side, because keying off the service type would put owner-defined text ("BBQ") in `src/` and breach Rule 1. A precise version needs an owner-configured "service types that require sides" table, which does not exist. It is a report, not a blocked action |
 | `prioritisePrep` ordering is a guess | no | Prep date → slack → size → name. Only Paul knows how he actually sequences a prep day. Put it to him with the other open items |
 | Golden pack not wired | Phase 2 | fixtures are in `tests/fixtures/`; `tests/golden/` runner not written |
@@ -478,7 +497,7 @@ the eight tapas dishes. Cheesecake needs confirming before it is treated as lock
 
 | Suite | Command | Covers | Status |
 |---|---|---|---|
-| Unit | `npm run test` | engine functions | **214 green** — `units`, `rules`, `scaling`, `production`, `shopping`, `costing`, `checks`, `impact`, `purity` |
+| Unit | `npm run test` | engine functions | **231 green** — `units`, `rules`, `scaling`, `production`, `shopping`, `costing`, `checks`, `impact`, `purity` |
 | Golden | `npm run test:copperpot` | the owner's regression pack | not started — see `tests/golden/PENDING_OWNER.md` before wiring |
 | E2E | `npm run test:e2e` | workflows, desktop and mobile | not started |
 

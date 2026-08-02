@@ -11,6 +11,7 @@
  * per line and then summing accumulates error.
  */
 
+import { applyBuffetSplit } from './rules';
 import { scaleRecipe } from './scaling';
 import { packSizeIn, recipeToStock } from './units';
 import type {
@@ -270,7 +271,12 @@ export function jobFoodCost(
   const missing: MissingInput[] = [];
   let fractional = 0;
 
-  for (const d of job.dishes) {
+  // Same portion resolution the production side uses, from the same function, so
+  // the cost of a job cannot disagree with what the prep sheet says to make.
+  const dishes =
+    job.guests === null ? job.dishes : applyBuffetSplit(job.guests, job.dishes, recipes);
+
+  for (const d of dishes) {
     const recipe = byId.get(d.recipeId);
     if (recipe === undefined) {
       missing.push({

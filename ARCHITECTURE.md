@@ -14,11 +14,11 @@ Keep it honest. A stale architecture file is worse than none, because it gets tr
 
 | | |
 |---|---|
-| Current phase | Phase 3 — `src/data` built; audit trigger **applied and verified** |
+| Current phase | Phase 4 — auth and shell built; screens next |
 | Last updated | 1 August 2026 |
 | Repo | `Info-ArcAgentSystems/copper-pot-kitchen` (private) |
 | Database | Supabase, schema + 4 migrations applied, 23 tables |
-| Unit tests | **336 pass**, 2 skipped, 16 todo (`npm run test`) |
+| Unit tests | **348 pass**, 17 skipped, 2 todo (`npm run test`) |
 | Golden pack | **wired** — 15 pass, 2 skipped pending owner, 2 todo |
 | `npm run test:copperpot` | **passing** |
 
@@ -54,7 +54,8 @@ session reads to work out where things stand.
 | 1 Aug 2026 | C11 — **golden pack wired**. `npm run test:copperpot` runs: 15 pass, 2 skipped pending owner, 2 todo. Fixtures byte-identical. **268 pass overall** |
 | 3 Aug 2026 | Phase 3 begun — `src/data`: client, port, rows, mappers, 9 repositories. **336 pass, 2 skipped, 16 todo** |
 | 3 Aug 2026 | Audit trigger **applied and verified** — one row per changed field, nothing for a no-op. `changed_by` and RLS still need the integration tests |
-| | *Next: the remaining data tables, or Phase 4 UI. Integration tests need a signed-in session* |
+| 3 Aug 2026 | Phase 4a — auth, shell, design tokens. `react-router-dom` added; Vite starter removed. Integration suite written: 16 live tests, **not yet run** |
+| | *Next: run `npx vitest run tests/integration` with credentials — three Known gaps close or a real defect surfaces* |
 
 ---
 
@@ -363,6 +364,42 @@ than expose it.
 branded integer, rounded once. `1.005` is outside the contract — the column holds two decimal
 places, so it can never arrive.
 
+### `src/auth` — sign in and kitchen resolution · **done** (3 Aug 2026)
+
+| File | Responsibility |
+|---|---|
+| `session.ts` | signIn / signOut / currentUser / onAuthChange |
+| `kitchenState.ts` | the three-state union and `useKitchen` |
+| `KitchenContext.tsx` | provider — resolves membership on every auth change |
+| `SignIn.tsx` · `RequireKitchen.tsx` | the form and the route guard |
+
+**Three states, kept distinct**: `signed_out`, `no_kitchen`, `ready`. The middle one is Rule 17
+working — the account exists, the `kitchen_members` row does not — and it gets its own screen
+saying so. Collapsing it into an empty app is how "why can't I see anything" becomes an hour of
+debugging.
+
+**Membership is re-read on every auth change, never cached.** "Revocable, taking effect
+immediately through RLS" is the whole of Rule 17; a cached membership would keep a revoked
+developer inside the app until reload. A failed read reports `no_kitchen` but does **not** claim
+access was revoked — a dropped connection is not proof of anything.
+
+`src/auth/session.ts` is the second and last file permitted to import the Supabase client, named
+explicitly in `tests/data/purity.test.ts` rather than the rule being widened. A further test
+asserts it never touches `.from()` or `.rpc()`, so the exception cannot grow into table access
+that would step around the repositories and the audit trail.
+
+### `src/ui` and `src/styles` — shell · **done** (3 Aug 2026)
+
+Bottom tab bar, not a top nav: used one-handed, and the top of a phone is where a thumb cannot
+reach. `useAsync` is a ~40-line hook over the repositories — deliberately not a cache, since one
+user on one device does not need staleness bugs.
+
+`styles/tokens.css` holds the `CLAUDE.md` §5 kitchen constraints as definitions rather than
+conventions, and `tests/ui/tokens.test.ts` checks the checkable parts: a 44px touch floor with
+no rule allowed below it, tabular numerals, 16px inputs so iOS Safari does not zoom on focus, a
+`:focus-visible` for every `:hover`, no webfont, `100dvh` rather than `100vh`, and safe-area
+insets at both ends.
+
 ### `src/features` — screens · **not started**
 
 `jobs` · `recipes` · `ingredients` · `shopping` · `prep` · `packing` · `money` · `setup` · `scan`
@@ -516,9 +553,10 @@ Things that are genuinely absent, so nobody wastes an hour looking for them.
 | Gap | Blocking? | Notes |
 |---|---|---|
 | ~~Audit trigger written but NOT RUN~~ | **closed 3 Aug** | Applied and verified: functions present, and a rolled-back smoke test produced exactly one row per changed field and nothing for a no-op update |
-| `changed_by` unproven through the app | **yes** | The smoke test ran in the SQL editor, where `auth.uid()` is null. That a real signed-in user lands in `changed_by` is still untested — it needs `tests/integration/` |
-| Child triggers created but never fired | no | All four triggers confirmed present and `enabled` in `pg_trigger`. `jobs_audit` is proven end to end by the smoke test; `job_dishes_audit`, `job_dietaries_audit` and `job_extras_audit` have not executed their function body, which needs a job with a real recipe |
-| **RLS scoping is unverified** | **yes** | No repository filters by `kitchen_id` — deliberately, so the policy is the single definition. The cost is that nothing in CI proves it works. Only `tests/integration/` can |
+| `changed_by` unproven through the app | **yes** | The smoke test ran in the SQL editor, where `auth.uid()` is null. `tests/integration/live.test.ts` now covers it but **has not been run** — it needs `.env.local` plus `CPK_TEST_EMAIL` and `CPK_TEST_PASSWORD` |
+| Child triggers created but never fired | no | All four confirmed present and `enabled`. `jobs_audit` is proven end to end; the three child triggers have tests written in `tests/integration/` but **not yet run** |
+| **RLS scoping is unverified** | **yes** | No repository filters by `kitchen_id` — deliberately, so the policy is the single definition. Three tests now cover it in `tests/integration/`, **not yet run**. This is the weakest link: if the policy is wrong, nothing else in the codebase would notice |
+| Bundle is 443 kB (128 kB gzip) | no | Almost all `@supabase/supabase-js`. Fine over wifi, noticeable on supermarket 4G. Worth measuring again before it grows |
 | `source` is always `'ui'` | no | PostgREST runs each request in its own transaction, so a client-side `set_config` does not carry into the following statement. Writes attributable to `ask_sous` or `scan` need an RPC that sets the value and writes in one transaction. Rule 7's propose-and-confirm commit call is the natural place |
 | No UI | Phase 4 | `src/` outside `engine` and `data` is still the Vite starter page |
 | ~~A guest-count change does not move ingredients~~ | **closed 1 Aug** | `applyBuffetSplit` landed and is wired into `productionBuckets` and `jobFoodCost`. The impact preview now moves revenue, ingredients and food cost together. The `impact.test.ts` test that pinned the gap was rewritten to assert the corrected cascade |

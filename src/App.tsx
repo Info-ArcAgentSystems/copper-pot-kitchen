@@ -1,122 +1,86 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+/**
+ * The shell.
+ *
+ * A BOTTOM tab bar, not a top nav: this is used one-handed, and the top of a
+ * phone is where a thumb cannot reach.
+ *
+ * The screens themselves land in later batches. The routes exist now so the shell
+ * and the guard can be exercised, and each renders an honest "not built yet"
+ * rather than a placeholder that looks like an empty kitchen — those are different
+ * things, and Rule 1 makes the distinction matter.
+ */
 
-function App() {
-  const [count, setCount] = useState(0)
+import { NavLink, Route, Routes } from 'react-router-dom';
+import type { ReactNode } from 'react';
+import { KitchenProvider } from './auth/KitchenContext';
+import { useKitchen } from './auth/kitchenState';
+import { RequireKitchen } from './auth/RequireKitchen';
+import { signOut } from './auth/session';
 
+const TABS = [
+  { to: '/', label: 'Jobs' },
+  { to: '/prep', label: 'Prep' },
+  { to: '/shopping', label: 'Shopping' },
+  { to: '/recipes', label: 'Recipes' },
+  { to: '/setup', label: 'Setup' },
+] as const;
+
+function NotBuiltYet({ name }: { name: string }): ReactNode {
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+    <div className="empty">
+      <h2>{name}</h2>
+      <p className="muted">This screen is not built yet.</p>
+    </div>
+  );
 }
 
-export default App
+function Header(): ReactNode {
+  const { state } = useKitchen();
+  if (state.status !== 'ready') return null;
+
+  return (
+    <header className="app-header">
+      <span>{state.membership.kitchenName}</span>
+      <button
+        type="button"
+        onClick={() => {
+          void signOut();
+        }}
+      >
+        Sign out
+      </button>
+    </header>
+  );
+}
+
+function TabBar(): ReactNode {
+  return (
+    <nav className="tabs" aria-label="Sections">
+      {TABS.map((tab) => (
+        <NavLink key={tab.to} to={tab.to} end={tab.to === '/'} className="tap">
+          {tab.label}
+        </NavLink>
+      ))}
+    </nav>
+  );
+}
+
+export default function App(): ReactNode {
+  return (
+    <KitchenProvider>
+      <RequireKitchen>
+        <Header />
+        <main className="app-main">
+          <Routes>
+            <Route path="/" element={<NotBuiltYet name="Jobs" />} />
+            <Route path="/prep" element={<NotBuiltYet name="Prep" />} />
+            <Route path="/shopping" element={<NotBuiltYet name="Shopping" />} />
+            <Route path="/recipes" element={<NotBuiltYet name="Recipes" />} />
+            <Route path="/setup" element={<NotBuiltYet name="Setup" />} />
+          </Routes>
+        </main>
+        <TabBar />
+      </RequireKitchen>
+    </KitchenProvider>
+  );
+}

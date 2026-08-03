@@ -60,9 +60,15 @@ describe('src/data purity', () => {
     expect(offenders, 'only client.ts may import @supabase/supabase-js').toEqual([]);
   });
 
-  it('confines the Supabase client to src/data entirely', () => {
-    // Nothing outside src/data may construct one either — that is what keeps every
-    // job write on the audited path through a repository.
+  it('confines the Supabase client to src/data and the one auth exception', () => {
+    // Nothing else may construct one — that is what keeps every job write on the
+    // audited path through a repository.
+    //
+    // `src/auth/session.ts` is a DELIBERATE exception, named here rather than the
+    // rule being widened. Auth genuinely is a client concern: signing in is not a
+    // row read, so it has no repository to go through. It calls `auth.*` only.
+    const ALLOWED = ['src/data/client.ts', 'src/auth/session.ts'];
+
     const srcDir = fileURLToPath(new URL('../../src', import.meta.url));
     const outside: string[] = [];
 
@@ -70,16 +76,40 @@ describe('src/data purity', () => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
         const path = join(dir, entry.name);
         if (entry.isDirectory()) {
-          if (entry.name !== 'data') walk(path);
+          walk(path);
           continue;
         }
         if (!entry.name.endsWith('.ts') && !entry.name.endsWith('.tsx')) continue;
-        if (readFileSync(path, 'utf8').includes('@supabase/supabase-js')) outside.push(path);
+
+        // Checked as an IMPORT SPECIFIER, not as a substring. `db.ts` documents in
+        // prose that repositories must never import the client, and a substring
+        // match flagged that comment as a violation — a guard firing on the
+        // sentence explaining the rule it enforces.
+        const source = readFileSync(path, 'utf8')
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/\/\/.*$/gm, '');
+        if (!importsIn(source).includes('@supabase/supabase-js')) continue;
+
+        const relative = path.slice(path.indexOf('src/'));
+        if (!ALLOWED.includes(relative)) outside.push(relative);
       }
     };
     walk(srcDir);
 
     expect(outside).toEqual([]);
+  });
+
+  it('keeps the auth exception to auth calls only — no table access', () => {
+    // The exception is for `auth.signIn` and friends. If session.ts ever reads or
+    // writes a table it has stepped around the repositories, and with them the
+    // audit trail.
+    const session = readFileSync(
+      fileURLToPath(new URL('../../src/auth/session.ts', import.meta.url)),
+      'utf8',
+    );
+
+    expect(session).not.toMatch(/\.from\s*\(/);
+    expect(session).not.toMatch(/\.rpc\s*\(/);
   });
 
   it('does not hand-filter kitchen_id — RLS scopes reads and writes', () => {

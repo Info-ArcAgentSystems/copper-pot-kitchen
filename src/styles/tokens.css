@@ -1,0 +1,123 @@
+/*
+ * Design tokens.
+ *
+ * CLAUDE.md section 5: "Every screen works on an iPhone in Safari. Used
+ * one-handed, in a kitchen and in a supermarket. Large touch targets, readable
+ * numerals, no hover-dependent interaction."
+ *
+ * Those are requirements, not preferences, so they are defined once here rather
+ * than remembered per screen. `tests/ui/tokens.test.ts` checks the ones that can
+ * be checked.
+ */
+
+:root {
+  /* The floor for anything tappable, not a target to aim at. A wet thumb in a
+     supermarket is not a mouse pointer. */
+  --touch-min: 44px;
+
+  /* Quantities and money align down a column. 1111 must be the same width as
+     8888, or a shopping list cannot be scanned. */
+  --num: tabular-nums;
+
+  /* System stack: no webfont to fetch. This screen loads on 4G in a shop. */
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --radius: 10px;
+
+  /* High contrast: this is read in daylight through a kitchen window. */
+  --bg: #ffffff;
+  --surface: #f5f5f4;
+  --border: #d6d3d1;
+  --text: #1c1917;
+  --text-muted: #57534e;
+
+  --accent: #9a3412;
+  --accent-text: #ffffff;
+
+  --danger: #b91c1c;
+  --warning: #a16207;
+
+  /* Unresolved and unpriced values are surfaced, never silently zeroed (Rule 8).
+     They get their own colour so the eye finds them. */
+  --unresolved: #a16207;
+  --unresolved-bg: #fef3c7;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1917;
+    --surface: #292524;
+    --border: #44403c;
+    --text: #fafaf9;
+    --text-muted: #a8a29e;
+    --accent: #ea580c;
+    --accent-text: #1c1917;
+    --danger: #f87171;
+    --warning: #fbbf24;
+    --unresolved: #fbbf24;
+    --unresolved-bg: #422006;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  /* Stops iOS Safari inflating text in landscape. */
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Every interactive element clears the floor. Declared once so a new screen
+   cannot forget it. */
+button,
+[role='button'],
+a.tap,
+input,
+select,
+textarea {
+  min-height: var(--touch-min);
+  font-family: inherit;
+  font-size: 16px; /* below 16px iOS Safari zooms the whole page on focus */
+}
+
+/* Quantities, money, counts. */
+.num {
+  font-variant-numeric: var(--num);
+  font-feature-settings: 'tnum';
+}
+
+/* Nothing is revealed by hover alone — a touch screen has no hover. Every hover
+   rule in this codebase pairs with :focus-visible. */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

@@ -65,6 +65,8 @@ import type {
 } from '../engine/types';
 
 const T = {
+  kitchens: 'kitchens',
+  kitchenMembers: 'kitchen_members',
   properties: 'properties',
   customers: 'customers',
   clientRates: 'client_rates',
@@ -80,6 +82,51 @@ const T = {
   jobExtras: 'job_extras',
   jobChanges: 'job_changes',
 } as const;
+
+// ---------------------------------------------------------------------------
+// Kitchen and membership
+// ---------------------------------------------------------------------------
+
+export interface KitchenMembership {
+  readonly kitchenId: string;
+  readonly kitchenName: string;
+  readonly role: 'owner' | 'member' | 'support';
+}
+
+/**
+ * Which kitchen the caller belongs to, and in what role.
+ *
+ * RLS scopes both tables, so no filter is needed here: `kitchen_members` returns
+ * only the caller's own rows and `kitchens` only the one they may see.
+ *
+ * Rule 17 — support access must be REVOCABLE, taking effect immediately when the
+ * membership row is deleted. So this is re-read rather than cached past sign-in,
+ * and returns null when there is no membership. Null is a real state the UI must
+ * distinguish from "not signed in": it means the account exists but has been
+ * granted nothing, which is the rule working, not a failure.
+ */
+export const kitchenRepository = (db: Db) => ({
+  async currentMembership(): Promise<KitchenMembership | null> {
+    const members = (await db.selectAll(T.kitchenMembers)) as unknown as {
+      kitchen_id: string;
+      role: string;
+    }[];
+    const membership = members[0];
+    if (membership === undefined) return null;
+
+    const kitchens = (await db.selectAll(T.kitchens)) as unknown as {
+      id: string;
+      name: string;
+    }[];
+    const kitchen = kitchens.find((k) => k.id === membership.kitchen_id);
+
+    return {
+      kitchenId: membership.kitchen_id,
+      kitchenName: kitchen?.name ?? 'Kitchen',
+      role: membership.role as KitchenMembership['role'],
+    };
+  },
+});
 
 // ---------------------------------------------------------------------------
 // Simple aggregates

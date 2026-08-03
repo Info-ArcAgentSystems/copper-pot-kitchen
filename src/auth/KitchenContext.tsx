@@ -25,7 +25,7 @@ export function KitchenProvider({ children }: { children: ReactNode }): ReactNod
     }
 
     try {
-      const membership = await kitchenRepository(supabaseDb()).currentMembership();
+      const membership = await kitchenRepository(supabaseDb()).currentMembership(user.id);
       setState(
         membership === null
           ? { status: 'no_kitchen', user }

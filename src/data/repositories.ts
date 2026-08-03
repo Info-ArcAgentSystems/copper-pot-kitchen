@@ -106,8 +106,16 @@ export interface KitchenMembership {
  * granted nothing, which is the rule working, not a failure.
  */
 export const kitchenRepository = (db: Db) => ({
-  async currentMembership(): Promise<KitchenMembership | null> {
-    const members = (await db.selectAll(T.kitchenMembers)) as unknown as {
+  async currentMembership(userId: string): Promise<KitchenMembership | null> {
+    // Filtered by user_id, NOT taken as the first row. The `members_read` policy
+    // is `using (kitchen_id = my_kitchen_id())`, so it returns every member of the
+    // caller's kitchen — taking members[0] could hand back a colleague's row and
+    // report a `support` developer as `owner`. The kitchen_id would be right and
+    // the role silently wrong, which is precisely the field Rule 17 turns on.
+    //
+    // This is not kitchen scoping — RLS still does that. It is picking the
+    // caller's own row out of the rows RLS already permitted.
+    const members = (await db.selectWhere(T.kitchenMembers, 'user_id', userId)) as unknown as {
       kitchen_id: string;
       role: string;
     }[];

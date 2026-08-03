@@ -97,11 +97,25 @@ live('RLS scoping', () => {
     expect(error, 'the with-check policy should have refused this').not.toBeNull();
   });
 
-  it('resolves exactly one kitchen for the caller', async () => {
-    // my_kitchen_id() takes `limit 1`, so more than one membership row would make
-    // scoping ambiguous — ARCHITECTURE.md calls this out explicitly.
+  it('resolves exactly one DISTINCT kitchen for the caller', async () => {
+    // my_kitchen_id() takes `limit 1`, so scoping is ambiguous only if the caller
+    // can see rows for MORE THAN ONE kitchen. Several rows for one kitchen is
+    // normal and correct — `members_read` is `using (kitchen_id = my_kitchen_id())`,
+    // so an owner plus a support developer is two rows, one kitchen.
+    //
+    // Asserting a row count of 1 here would have failed the moment a second person
+    // was added, which is the setup this suite is run under.
     const { data } = await db.from('kitchen_members').select('kitchen_id');
-    expect((data ?? []).length).toBe(1);
+    const distinct = new Set((data ?? []).map((r) => (r as { kitchen_id: string }).kitchen_id));
+
+    expect(distinct.size).toBe(1);
+  });
+
+  it('sees only its own kitchen in kitchen_members', async () => {
+    const { data } = await db.from('kitchen_members').select('kitchen_id');
+    for (const row of (data ?? []) as { kitchen_id: string }[]) {
+      expect(row.kitchen_id).toBe(kitchenId);
+    }
   });
 });
 

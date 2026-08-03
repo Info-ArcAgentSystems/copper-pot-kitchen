@@ -18,6 +18,7 @@ import {
   ingredientRepository,
   jobChangeRepository,
   jobRepository,
+  kitchenRepository,
   propertyRepository,
   recipeRepository,
   stockRepository,
@@ -87,6 +88,7 @@ describe('no repository scopes by kitchen_id', () => {
     await stockRepository(db).list();
     await jobRepository(db).list();
     await jobChangeRepository(db).forJob('j1' as JobId);
+    await kitchenRepository(db).currentMembership('u1');
 
     expect(db.calls.length).toBeGreaterThan(8);
 

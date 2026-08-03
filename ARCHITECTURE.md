@@ -14,11 +14,11 @@ Keep it honest. A stale architecture file is worse than none, because it gets tr
 
 | | |
 |---|---|
-| Current phase | Phase 2 **complete** — engine built and the golden pack green. Next: Phase 3, `src/data` |
+| Current phase | Phase 3 — `src/data` built; audit migration written, **not run** |
 | Last updated | 1 August 2026 |
 | Repo | `Info-ArcAgentSystems/copper-pot-kitchen` (private) |
 | Database | Supabase, schema + 4 migrations applied, 23 tables |
-| Unit tests | **268 pass**, 2 skipped, 2 todo (`npm run test`) |
+| Unit tests | **336 pass**, 2 skipped, 16 todo (`npm run test`) |
 | Golden pack | **wired** — 15 pass, 2 skipped pending owner, 2 todo |
 | `npm run test:copperpot` | **passing** |
 
@@ -52,7 +52,8 @@ session reads to work out where things stand.
 | 1 Aug 2026 | C9 — `applyBuffetSplit` finishes `rules.ts` and closes the guest-count gap. Wired into `productionBuckets` and `jobFoodCost`. **231 tests green** |
 | 1 Aug 2026 | C10 — `history.ts`. **THE ENGINE IS COMPLETE**: all ten files built, tests written before each. **253 tests green** |
 | 1 Aug 2026 | C11 — **golden pack wired**. `npm run test:copperpot` runs: 15 pass, 2 skipped pending owner, 2 todo. Fixtures byte-identical. **268 pass overall** |
-| | *Next: Phase 3 — `src/data` repositories and mappers. The migrations are applied* |
+| 3 Aug 2026 | Phase 3 begun — `src/data`: client, port, rows, mappers, 9 repositories. Audit trigger migration **written, not run**. **336 pass, 2 skipped, 16 todo** |
+| | *Next: run the audit migration, then the integration tests — the audit guarantee is unverified until they pass* |
 
 ---
 
@@ -327,9 +328,39 @@ carry — `portions_per_batch` and `batch_unit` are all there is.
 and therefore cannot convert, so the same ingredient in `ml` and `L` stays on two lines for
 `units.ts` to reconcile later (Rule 4).
 
-### `src/data` — persistence · **not started**
+### `src/data` — persistence · **in progress** (1 Aug → 3 Aug 2026)
 
-Supabase client, one repository per table, mappers both ways.
+| File | Responsibility | Status |
+|---|---|---|
+| `db.ts` | the narrow port repositories depend on | **done** |
+| `client.ts` | Supabase client + `Db` adapter. **The only file that may import `@supabase/supabase-js`** | **done** |
+| `rows.ts` | hand-written row types for 14 tables | **done** |
+| `mappers.ts` | row ↔ domain, pure | **done** |
+| `repositories.ts` | 9 repositories over 14 tables | **done** |
+
+Remaining: `purchase_state`, `prep_state`, `packing_state`, `service_templates`, `invoices`,
+`invoice_lines`, `ingredient_price_history`, `kitchens`, `kitchen_members` — tick-state and
+admin tables with no engine consumer yet.
+
+**The audit trail is a database trigger, not repository code.** Repository code cannot be
+unbypassable: anything holding a client writes around it, and so does the SQL editor. The
+trigger in `20260803000100_job_change_audit.sql` fires inside the same transaction as the
+write, so there is no window in which a change lands unlogged. `jobRepository.update` therefore
+writes **no** `job_changes` row of its own — doing so would double-log, and doing it *instead*
+would be bypassable. A test asserts it does not.
+
+`jobs` is audited field by field, comparing columns explicitly rather than diffing `to_jsonb`,
+so `updated_at` never generates noise — Rule 14's "meaningful" excludes bookkeeping. A manual
+price change logs as `price_override`, not `price` (Rule 11). Menu, dietary and extra rows are
+audited whole, since those tables carry no bookkeeping columns.
+
+**No repository filters by `kitchen_id`.** RLS scopes through `my_kitchen_id()`; a hand-written
+filter would be a second copy of the policy, free to drift, and would mask a broken one rather
+than expose it.
+
+**Money crosses at the mapper and nowhere else.** `numeric(10,2)` euros become `Cents`, a
+branded integer, rounded once. `1.005` is outside the contract — the column holds two decimal
+places, so it can never arrive.
 
 ### `src/features` — screens · **not started**
 
@@ -369,6 +400,16 @@ agree. **23 tables.**
 | `20260731000200_ingredient_conversion.sql` | `ingredients` + `recipe_unit`, `recipe_units_per_stock_unit` | Rule 4 — the gap that blocked C2. `each → kg` is not derivable and nothing held the factor |
 | `20260731000300_job_dietaries_per_guest.sql` | `job_dietaries` − `guests`, + `guest_ref`, + `excludes_meat`, + allocation check constraint | Rules 16 and 12 — removes the summable count; the constraint enforces the allocated/unresolved union at the DB level |
 | `20260731000400_jobs_meat_eating_guests.sql` | `jobs` + `meat_eating_guests` | The BBQ resolution — owner-set rather than derived by subtraction |
+
+### Written 3 Aug 2026 — NOT YET RUN
+
+⚠️ **`20260803000100_job_change_audit.sql` exists as SQL and has not been executed.**
+Until it is, **Rules 10 and 14 are unenforced**: nothing writes `job_changes`, because the
+repository deliberately does not.
+
+| Migration | Change | Why |
+|---|---|---|
+| `20260803000100_job_change_audit.sql` | `app_change_source()`, `log_jobs_change()`, `log_job_child_change()` and four triggers | Rules 10 and 14 — an audit trail that cannot be bypassed, not even from the SQL editor |
 
 ### Still proposed, not written
 
@@ -461,7 +502,10 @@ Things that are genuinely absent, so nobody wastes an hour looking for them.
 
 | Gap | Blocking? | Notes |
 |---|---|---|
-| No UI, no data layer | Phase 3 | The engine is complete and tested, but `src/` is otherwise still the Vite starter page. `src/data` is unblocked — the migrations are applied |
+| **Audit trigger written but NOT RUN** | **yes — Rules 10 and 14** | `20260803000100_job_change_audit.sql` is the only thing that writes `job_changes`; the repository deliberately does not. Until it is applied, **no job change is logged at all**. Run it in the dashboard SQL editor |
+| **The audit guarantee is unverified** | **yes** | Even once applied, nothing in CI can prove the triggers fire — that needs `tests/integration/`, which requires live Supabase. Same for RLS scoping, which no repository duplicates by design |
+| `source` is always `'ui'` | no | PostgREST runs each request in its own transaction, so a client-side `set_config` does not carry into the following statement. Writes attributable to `ask_sous` or `scan` need an RPC that sets the value and writes in one transaction. Rule 7's propose-and-confirm commit call is the natural place |
+| No UI | Phase 4 | `src/` outside `engine` and `data` is still the Vite starter page |
 | ~~A guest-count change does not move ingredients~~ | **closed 1 Aug** | `applyBuffetSplit` landed and is wired into `productionBuckets` and `jobFoodCost`. The impact preview now moves revenue, ingredients and food cost together. The `impact.test.ts` test that pinned the gap was rewritten to assert the corrected cascade |
 | `anomalyScan` false-positives on sides | no | It flags any menu with mains and no side, because keying off the service type would put owner-defined text ("BBQ") in `src/` and breach Rule 1. A precise version needs an owner-configured "service types that require sides" table, which does not exist. It is a report, not a blocked action |
 | `prioritisePrep` ordering is a guess | no | Prep date → slack → size → name. Only Paul knows how he actually sequences a prep day. Put it to him with the other open items |

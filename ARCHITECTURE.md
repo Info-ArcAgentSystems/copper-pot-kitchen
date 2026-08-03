@@ -54,8 +54,9 @@ session reads to work out where things stand.
 | 1 Aug 2026 | C11 — **golden pack wired**. `npm run test:copperpot` runs: 15 pass, 2 skipped pending owner, 2 todo. Fixtures byte-identical. **268 pass overall** |
 | 3 Aug 2026 | Phase 3 begun — `src/data`: client, port, rows, mappers, 9 repositories. **336 pass, 2 skipped, 16 todo** |
 | 3 Aug 2026 | Audit trigger **applied and verified** — one row per changed field, nothing for a no-op. `changed_by` and RLS still need the integration tests |
-| 3 Aug 2026 | Phase 4a — auth, shell, design tokens. `react-router-dom` added; Vite starter removed. Integration suite written: 16 live tests, **not yet run** |
-| | *Next: run `npx vitest run tests/integration` with credentials — three Known gaps close or a real defect surfaces* |
+| 3 Aug 2026 | Phase 4a — auth, shell, design tokens. `react-router-dom` added; Vite starter removed. Integration suite written: 17 live tests, **not yet run** |
+| 3 Aug 2026 | Env vars re-verified against the correct project after a brief mix-up. Schema probed live: 12 tables, per-guest `job_dietaries` with **no** `guests` column, conversion columns, `job_extras`. Four triggers enabled. No key ever committed |
+| | *Next: run `npx vitest run tests/integration` — needs `CPK_TEST_PASSWORD` in `.env.local`. Three Known gaps close or a real defect surfaces* |
 
 ---
 
@@ -66,12 +67,26 @@ session reads to work out where things stand.
 | GitHub org | `Info-ArcAgentSystems` |
 | Repo | `copper-pot-kitchen`, private, branch `main` |
 | Supabase project | Copper Pot Kitchen (free tier) |
+| **Project ref** | `vhzpwdzrlrcfhxrjawym` — the subdomain of `VITE_SUPABASE_URL` |
 | Kitchen id | `15d29fdb-7d54-49b6-9665-2459e6a2a707` |
 | Owner account | `info@arcagentsystems.com` — to be handed to the owner's own account later, with this one stepping down to `support` |
 | Local path | `~/code/arcagent/copper-pot-kitchen` on both machines |
 
 Secrets live in `.env.local` (never committed) and, from Phase 6, in Supabase function
 secrets. Both are recreated per machine from the Supabase dashboard.
+
+**Check the project ref before trusting anything you verify.** On 3 Aug the env vars were
+briefly pointed at a different project, and the mistake is invisible until something fails. Two
+checks, neither of which needs the dashboard:
+
+- the ref in `VITE_SUPABASE_URL` must be `vhzpwdzrlrcfhxrjawym`;
+- a legacy anon key is a JWT whose payload carries its own `ref` claim, so decoding it proves
+  the key and the URL belong to the same project. A URL and key from different projects fail
+  with a 401 that looks like a permissions problem.
+
+Note also that the **dashboard SQL editor is scoped by the open browser tab, not by
+`.env.local`** — so a schema confirmation made there says nothing about which project the app
+is pointed at. They are independent, and both need checking.
 
 **Two machines.** Work moves between a Windows laptop and a Mac through GitHub. Claude Code
 session history does not travel between them; this file is the handoff. Update and commit it

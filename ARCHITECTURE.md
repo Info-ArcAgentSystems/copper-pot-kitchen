@@ -281,6 +281,13 @@ equals an independent `requirementsForRange` run on the after-state, which is wh
 came from the real engine. Both were verified by injecting a linear extrapolation and watching
 eight tests go red.
 
+**`npm run test` never touches the database.** `vite.config.ts` excludes `tests/integration`
+from the default run, and the live suite has its own config invoked by
+`npm run test:integration`. Without that separation the unit suite silently changed shape
+depending on whether `.env.local` held credentials — and on the owner's machine, running the
+unit tests would have written to and deleted from his live data. A CLI `--exclude` appends to
+the config list rather than replacing it, so there is no way to opt back in by accident.
+
 **Rule 9 is enforced by a language test, not by discipline.** `checks.test.ts` serialises the
 whole `allergenScan` result and asserts it contains none of `safe`, `no allergen`,
 `allergen-free`, `free from`, `none found`, `no conflict`, `verified`, `guaranteed`, `cleared`.
@@ -657,7 +664,7 @@ the eight tapas dishes. Cheesecake needs confirming before it is treated as lock
 
 | Suite | Command | Covers | Status |
 |---|---|---|---|
-| Integration | `npx vitest run tests/integration` | RLS, audit triggers, job delete — live Supabase | **18 pass** (3 Aug). Needs `CPK_TEST_EMAIL`/`CPK_TEST_PASSWORD`; skipped without them |
+| Integration | `npm run test:integration` | RLS, audit triggers, job delete — live Supabase | **18 pass** (3 Aug). Needs `CPK_TEST_EMAIL`/`CPK_TEST_PASSWORD` |
 | Unit | `npm run test` | engine functions | **253 green** — every engine module, plus `purity` |
 | Golden | `npm run test:copperpot` | the owner's regression pack | **15 pass, 2 skipped, 2 todo** — read `tests/golden/PENDING_OWNER.md` before touching |
 | E2E | `npm run test:e2e` | workflows, desktop and mobile | not started |

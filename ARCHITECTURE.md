@@ -14,7 +14,7 @@ Keep it honest. A stale architecture file is worse than none, because it gets tr
 
 | | |
 |---|---|
-| Current phase | Phase 3 — `src/data` built; audit migration written, **not run** |
+| Current phase | Phase 3 — `src/data` built; audit trigger **applied and verified** |
 | Last updated | 1 August 2026 |
 | Repo | `Info-ArcAgentSystems/copper-pot-kitchen` (private) |
 | Database | Supabase, schema + 4 migrations applied, 23 tables |
@@ -52,8 +52,9 @@ session reads to work out where things stand.
 | 1 Aug 2026 | C9 — `applyBuffetSplit` finishes `rules.ts` and closes the guest-count gap. Wired into `productionBuckets` and `jobFoodCost`. **231 tests green** |
 | 1 Aug 2026 | C10 — `history.ts`. **THE ENGINE IS COMPLETE**: all ten files built, tests written before each. **253 tests green** |
 | 1 Aug 2026 | C11 — **golden pack wired**. `npm run test:copperpot` runs: 15 pass, 2 skipped pending owner, 2 todo. Fixtures byte-identical. **268 pass overall** |
-| 3 Aug 2026 | Phase 3 begun — `src/data`: client, port, rows, mappers, 9 repositories. Audit trigger migration **written, not run**. **336 pass, 2 skipped, 16 todo** |
-| | *Next: run the audit migration, then the integration tests — the audit guarantee is unverified until they pass* |
+| 3 Aug 2026 | Phase 3 begun — `src/data`: client, port, rows, mappers, 9 repositories. **336 pass, 2 skipped, 16 todo** |
+| 3 Aug 2026 | Audit trigger **applied and verified** — one row per changed field, nothing for a no-op. `changed_by` and RLS still need the integration tests |
+| | *Next: the remaining data tables, or Phase 4 UI. Integration tests need a signed-in session* |
 
 ---
 
@@ -342,7 +343,7 @@ Remaining: `purchase_state`, `prep_state`, `packing_state`, `service_templates`,
 `invoice_lines`, `ingredient_price_history`, `kitchens`, `kitchen_members` — tick-state and
 admin tables with no engine consumer yet.
 
-**The audit trail is a database trigger, not repository code.** Repository code cannot be
+**The audit trail is a database trigger, not repository code** — applied and verified 3 Aug. Repository code cannot be
 unbypassable: anything holding a client writes around it, and so does the SQL editor. The
 trigger in `20260803000100_job_change_audit.sql` fires inside the same transaction as the
 write, so there is no window in which a change lands unlogged. `jobRepository.update` therefore
@@ -401,11 +402,21 @@ agree. **23 tables.**
 | `20260731000300_job_dietaries_per_guest.sql` | `job_dietaries` − `guests`, + `guest_ref`, + `excludes_meat`, + allocation check constraint | Rules 16 and 12 — removes the summable count; the constraint enforces the allocated/unresolved union at the DB level |
 | `20260731000400_jobs_meat_eating_guests.sql` | `jobs` + `meat_eating_guests` | The BBQ resolution — owner-set rather than derived by subtraction |
 
-### Written 3 Aug 2026 — NOT YET RUN
+### Applied 3 Aug 2026
 
-⚠️ **`20260803000100_job_change_audit.sql` exists as SQL and has not been executed.**
-Until it is, **Rules 10 and 14 are unenforced**: nothing writes `job_changes`, because the
-repository deliberately does not.
+`20260803000100_job_change_audit.sql` ran in the dashboard SQL editor. Verified two ways:
+
+- **Structural** — `app_change_source`, `log_jobs_change` and `log_job_child_change` all exist.
+  The two trigger functions are `security definer`; `app_change_source` is not, correctly, since
+  it is a `stable` function that only reads a setting.
+- **Functional** — a transaction-wrapped smoke test inserted a job, changed `guests` 15→20 and
+  `notes` null→'changed', then repeated the `guests` update as a no-op, and rolled back. It
+  produced **exactly two rows**, one per changed field, and **nothing** for the no-op. That is
+  the behaviour that matters: the trail records changes, not writes.
+
+`changed_by` was null in that test because the SQL editor runs as the service role, where
+`auth.uid()` has no session. Populating it from a real signed-in user is still unproven — see
+Known gaps.
 
 | Migration | Change | Why |
 |---|---|---|
@@ -502,8 +513,10 @@ Things that are genuinely absent, so nobody wastes an hour looking for them.
 
 | Gap | Blocking? | Notes |
 |---|---|---|
-| **Audit trigger written but NOT RUN** | **yes — Rules 10 and 14** | `20260803000100_job_change_audit.sql` is the only thing that writes `job_changes`; the repository deliberately does not. Until it is applied, **no job change is logged at all**. Run it in the dashboard SQL editor |
-| **The audit guarantee is unverified** | **yes** | Even once applied, nothing in CI can prove the triggers fire — that needs `tests/integration/`, which requires live Supabase. Same for RLS scoping, which no repository duplicates by design |
+| ~~Audit trigger written but NOT RUN~~ | **closed 3 Aug** | Applied and verified: functions present, and a rolled-back smoke test produced exactly one row per changed field and nothing for a no-op update |
+| `changed_by` unproven through the app | **yes** | The smoke test ran in the SQL editor, where `auth.uid()` is null. That a real signed-in user lands in `changed_by` is still untested — it needs `tests/integration/` |
+| Child triggers not directly observed | no | `jobs_audit` is proven by the smoke test. `job_dishes_audit`, `job_dietaries_audit` and `job_extras_audit` were created by the same script but have not been fired; they need a job with a recipe to exercise |
+| **RLS scoping is unverified** | **yes** | No repository filters by `kitchen_id` — deliberately, so the policy is the single definition. The cost is that nothing in CI proves it works. Only `tests/integration/` can |
 | `source` is always `'ui'` | no | PostgREST runs each request in its own transaction, so a client-side `set_config` does not carry into the following statement. Writes attributable to `ask_sous` or `scan` need an RPC that sets the value and writes in one transaction. Rule 7's propose-and-confirm commit call is the natural place |
 | No UI | Phase 4 | `src/` outside `engine` and `data` is still the Vite starter page |
 | ~~A guest-count change does not move ingredients~~ | **closed 1 Aug** | `applyBuffetSplit` landed and is wired into `productionBuckets` and `jobFoodCost`. The impact preview now moves revenue, ingredients and food cost together. The `impact.test.ts` test that pinned the gap was rewritten to assert the corrected cascade |

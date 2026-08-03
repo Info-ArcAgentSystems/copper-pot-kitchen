@@ -16,13 +16,49 @@
  * at a database holding real owner data.
  */
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-const url = process.env['VITE_SUPABASE_URL'] ?? '';
-const key = process.env['VITE_SUPABASE_ANON_KEY'] ?? '';
-const email = process.env['CPK_TEST_EMAIL'] ?? '';
-const password = process.env['CPK_TEST_PASSWORD'] ?? '';
+/**
+ * Read `.env.local` directly.
+ *
+ * Vite only loads VITE_-prefixed variables into `process.env`, so `CPK_TEST_*`
+ * never arrive there — which is why this suite silently skipped even with the
+ * values sitting in the file.
+ *
+ * They must NOT be renamed with a VITE_ prefix to fix that. Vite INLINES
+ * VITE_-prefixed values into the client bundle at build time, so a password
+ * called `VITE_CPK_TEST_PASSWORD` would be shipped to every browser that loads
+ * the app. Reading the file here keeps the credentials test-only.
+ */
+function envFile(): Record<string, string> {
+  try {
+    const text = readFileSync(fileURLToPath(new URL('../../.env.local', import.meta.url)), 'utf8');
+    const out: Record<string, string> = {};
+
+    for (const line of text.split('\n')) {
+      if (line.trim() === '' || line.trim().startsWith('#') || !line.includes('=')) continue;
+      const [rawKey, ...rest] = line.split('=');
+      // Tolerate quotes rather than failing with something that reads like a
+      // wrong password.
+      out[(rawKey ?? '').trim()] = rest.join('=').trim().replace(/^['"]|['"]$/g, '');
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+const file = envFile();
+/** A real environment variable wins, so CI can override the file. */
+const from = (key: string): string => process.env[key] ?? file[key] ?? '';
+
+const url = from('VITE_SUPABASE_URL');
+const key = from('VITE_SUPABASE_ANON_KEY');
+const email = from('CPK_TEST_EMAIL');
+const password = from('CPK_TEST_PASSWORD');
 
 const configured = url !== '' && key !== '' && email !== '' && password !== '';
 const live = configured ? describe : describe.skip;

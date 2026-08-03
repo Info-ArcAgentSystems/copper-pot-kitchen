@@ -408,7 +408,9 @@ agree. **23 tables.**
 
 - **Structural** — `app_change_source`, `log_jobs_change` and `log_job_child_change` all exist.
   The two trigger functions are `security definer`; `app_change_source` is not, correctly, since
-  it is a `stable` function that only reads a setting.
+  it is a `stable` function that only reads a setting. All four triggers — `jobs_audit`,
+  `job_dishes_audit`, `job_dietaries_audit`, `job_extras_audit` — are present and `enabled` in
+  `pg_trigger`, so the script applied in full.
 - **Functional** — a transaction-wrapped smoke test inserted a job, changed `guests` 15→20 and
   `notes` null→'changed', then repeated the `guests` update as a no-op, and rolled back. It
   produced **exactly two rows**, one per changed field, and **nothing** for the no-op. That is
@@ -515,7 +517,7 @@ Things that are genuinely absent, so nobody wastes an hour looking for them.
 |---|---|---|
 | ~~Audit trigger written but NOT RUN~~ | **closed 3 Aug** | Applied and verified: functions present, and a rolled-back smoke test produced exactly one row per changed field and nothing for a no-op update |
 | `changed_by` unproven through the app | **yes** | The smoke test ran in the SQL editor, where `auth.uid()` is null. That a real signed-in user lands in `changed_by` is still untested — it needs `tests/integration/` |
-| Child triggers not directly observed | no | `jobs_audit` is proven by the smoke test. `job_dishes_audit`, `job_dietaries_audit` and `job_extras_audit` were created by the same script but have not been fired; they need a job with a recipe to exercise |
+| Child triggers created but never fired | no | All four triggers confirmed present and `enabled` in `pg_trigger`. `jobs_audit` is proven end to end by the smoke test; `job_dishes_audit`, `job_dietaries_audit` and `job_extras_audit` have not executed their function body, which needs a job with a real recipe |
 | **RLS scoping is unverified** | **yes** | No repository filters by `kitchen_id` — deliberately, so the policy is the single definition. The cost is that nothing in CI proves it works. Only `tests/integration/` can |
 | `source` is always `'ui'` | no | PostgREST runs each request in its own transaction, so a client-side `set_config` does not carry into the following statement. Writes attributable to `ask_sous` or `scan` need an RPC that sets the value and writes in one transaction. Rule 7's propose-and-confirm commit call is the natural place |
 | No UI | Phase 4 | `src/` outside `engine` and `data` is still the Vite starter page |

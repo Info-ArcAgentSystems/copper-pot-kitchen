@@ -14,7 +14,7 @@ Keep it honest. A stale architecture file is worse than none, because it gets tr
 
 | | |
 |---|---|
-| Current phase | Phase 4 — auth and shell built; screens next |
+| Current phase | Phase 4 — auth, shell and a green live suite. Screens next |
 | Last updated | 1 August 2026 |
 | Repo | `Info-ArcAgentSystems/copper-pot-kitchen` (private) |
 | Database | Supabase, schema + 4 migrations applied, 23 tables |
@@ -56,7 +56,8 @@ session reads to work out where things stand.
 | 3 Aug 2026 | Audit trigger **applied and verified** — one row per changed field, nothing for a no-op. `changed_by` and RLS still need the integration tests |
 | 3 Aug 2026 | Phase 4a — auth, shell, design tokens. `react-router-dom` added; Vite starter removed. Integration suite written: 17 live tests, **not yet run** |
 | 3 Aug 2026 | Env vars re-verified against the correct project after a brief mix-up. Schema probed live: 12 tables, per-guest `job_dietaries` with **no** `guests` column, conversion columns, `job_extras`. Four triggers enabled. No key ever committed |
-| | *Next: run `npx vitest run tests/integration` — needs `CPK_TEST_PASSWORD` in `.env.local`. Three Known gaps close or a real defect surfaces* |
+| 3 Aug 2026 | **Integration suite green — 18/18 against the live project.** RLS scoping, `changed_by`, and all three child triggers proven. Three Known gaps closed. A job-delete defect was found and fixed (`20260803000200`), and the database verified empty afterwards |
+| | *Next: Phase 4b — the CRUD screens, in batches* |
 
 ---
 
@@ -456,7 +457,21 @@ agree. **23 tables.**
 
 ### Applied 3 Aug 2026
 
-`20260803000100_job_change_audit.sql` ran in the dashboard SQL editor. Verified two ways:
+Two migrations. `20260803000100_job_change_audit.sql` added the audit triggers;
+`20260803000200_audit_allow_job_delete.sql` fixed a defect it introduced — see below.
+
+**The defect, and why it matters.** The child triggers made it impossible to delete a job that
+had any dish, dietary or extra: the cascade fired an `insert into job_changes` for a job already
+deleted in the same statement, and `job_changes_job_id_fkey` rejected it. A job with no children
+deleted fine, so it stayed hidden until the triggers ran end to end. `CLAUDE.md` §4 ships
+"Jobs — create, edit, delete (with confirm)", so it would have surfaced the first time the owner
+removed a mistaken booking. The fix guards the DELETE branch with an existence check on the
+parent job; Rules 10 and 14 are untouched, since every change to a *living* job is still logged.
+
+It was found because an integration-test cleanup step **verified its own work** instead of
+assuming it. The original cleanup swallowed errors and left rows behind silently.
+
+`20260803000100_job_change_audit.sql` was verified two ways:
 
 - **Structural** — `app_change_source`, `log_jobs_change` and `log_job_child_change` all exist.
   The two trigger functions are `security definer`; `app_change_source` is not, correctly, since
@@ -568,9 +583,9 @@ Things that are genuinely absent, so nobody wastes an hour looking for them.
 | Gap | Blocking? | Notes |
 |---|---|---|
 | ~~Audit trigger written but NOT RUN~~ | **closed 3 Aug** | Applied and verified: functions present, and a rolled-back smoke test produced exactly one row per changed field and nothing for a no-op update |
-| `changed_by` unproven through the app | **yes** | The smoke test ran in the SQL editor, where `auth.uid()` is null. `tests/integration/live.test.ts` now covers it but **has not been run** — it needs `.env.local` plus `CPK_TEST_EMAIL` and `CPK_TEST_PASSWORD` |
-| Child triggers created but never fired | no | All four confirmed present and `enabled`. `jobs_audit` is proven end to end; the three child triggers have tests written in `tests/integration/` but **not yet run** |
-| **RLS scoping is unverified** | **yes** | No repository filters by `kitchen_id` — deliberately, so the policy is the single definition. Three tests now cover it in `tests/integration/`, **not yet run**. This is the weakest link: if the policy is wrong, nothing else in the codebase would notice |
+| ~~`changed_by` unproven through the app~~ | **closed 3 Aug** | Proven live: `changed_by` equals the signed-in user's id, for both job and child changes |
+| ~~Child triggers created but never fired~~ | **closed 3 Aug** | All three execute: `job_dishes.added`, `job_dishes.removed` with the old value, `job_dietaries.added`, `job_extras.added` |
+| ~~RLS scoping is unverified~~ | **closed 3 Aug** | Proven live: a select with no `kitchen_id` filter returns only this kitchen's rows, an insert carrying another kitchen is rejected by the with-check policy, and the caller resolves exactly one distinct kitchen. The decision not to hand-filter `kitchen_id` is now tested, not assumed |
 | Bundle is 443 kB (128 kB gzip) | no | Almost all `@supabase/supabase-js`. Fine over wifi, noticeable on supermarket 4G. Worth measuring again before it grows |
 | `source` is always `'ui'` | no | PostgREST runs each request in its own transaction, so a client-side `set_config` does not carry into the following statement. Writes attributable to `ask_sous` or `scan` need an RPC that sets the value and writes in one transaction. Rule 7's propose-and-confirm commit call is the natural place |
 | No UI | Phase 4 | `src/` outside `engine` and `data` is still the Vite starter page |
@@ -642,6 +657,7 @@ the eight tapas dishes. Cheesecake needs confirming before it is treated as lock
 
 | Suite | Command | Covers | Status |
 |---|---|---|---|
+| Integration | `npx vitest run tests/integration` | RLS, audit triggers, job delete — live Supabase | **18 pass** (3 Aug). Needs `CPK_TEST_EMAIL`/`CPK_TEST_PASSWORD`; skipped without them |
 | Unit | `npm run test` | engine functions | **253 green** — every engine module, plus `purity` |
 | Golden | `npm run test:copperpot` | the owner's regression pack | **15 pass, 2 skipped, 2 todo** — read `tests/golden/PENDING_OWNER.md` before touching |
 | E2E | `npm run test:e2e` | workflows, desktop and mobile | not started |

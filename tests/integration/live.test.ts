@@ -66,7 +66,6 @@ const live = configured ? describe : describe.skip;
 let db: SupabaseClient;
 let userId = '';
 let kitchenId = '';
-const createdJobs: string[] = [];
 
 async function makeJob(fields: Record<string, unknown> = {}): Promise<string> {
   const { data, error } = await db
@@ -76,9 +75,7 @@ async function makeJob(fields: Record<string, unknown> = {}): Promise<string> {
     .single();
 
   if (error !== null) throw new Error(`could not create job: ${error.message}`);
-  const id = (data as { id: string }).id;
-  createdJobs.push(id);
-  return id;
+  return (data as { id: string }).id;
 }
 
 const changesFor = async (jobId: string): Promise<Record<string, unknown>[]> => {
@@ -106,12 +103,43 @@ beforeAll(async () => {
   if (kitchenId === '') throw new Error('signed-in user has no kitchen_members row');
 });
 
+/**
+ * Clean up by PATTERN, not by tracked ids.
+ *
+ * Three reasons, all learned the hard way on the first green run:
+ *
+ *   - One request, not one per job. Twelve sequential deletes at ~700ms each ran
+ *     past vitest's 10s hook timeout and stopped partway, leaving rows behind.
+ *   - Self-healing. A pattern delete also clears anything a previously failed run
+ *     abandoned, so leftovers never accumulate.
+ *   - Order. Jobs MUST go before recipes: `job_dishes.recipe_id` is
+ *     `on delete restrict`, so a recipe with a dish still pointing at it refuses
+ *     to delete. Deleting jobs first cascades those dishes away.
+ *
+ * Errors are surfaced rather than swallowed. A silent cleanup failure leaves data
+ * in the owner's database and reports success, which is the worst combination.
+ */
+async function cleanUp(): Promise<void> {
+  const jobs = await db.from('jobs').delete().eq('service_type', 'INTEGRATION TEST');
+  if (jobs.error !== null) throw new Error(`cleanup failed on jobs: ${jobs.error.message}`);
+
+  const recipes = await db.from('recipes').delete().like('name', 'INTEGRATION TEST%');
+  if (recipes.error !== null) {
+    throw new Error(`cleanup failed on recipes: ${recipes.error.message}`);
+  }
+
+  // Prove it, rather than assume it.
+  const left = await db.from('jobs').select('id').eq('service_type', 'INTEGRATION TEST');
+  if ((left.data ?? []).length > 0) {
+    throw new Error(`cleanup left ${(left.data ?? []).length} job(s) behind`);
+  }
+}
+
 afterAll(async () => {
   if (!configured) return;
-  // job_changes and children cascade from jobs.
-  for (const id of createdJobs) await db.from('jobs').delete().eq('id', id);
+  await cleanUp();
   await db.auth.signOut();
-});
+}, 30_000);
 
 live('RLS scoping', () => {
   it('returns only this kitchen’s rows, with no kitchen_id filter in the query', async () => {
@@ -225,9 +253,9 @@ live('audit triggers — children (armed, never fired until now)', () => {
     recipeId = (data as { id: string }).id;
   });
 
-  afterAll(async () => {
-    if (recipeId !== '') await db.from('recipes').delete().eq('id', recipeId);
-  });
+  // No afterAll here on purpose: deleting the recipe before the jobs are gone is
+  // blocked by job_dishes.recipe_id's `on delete restrict`. The file-level
+  // cleanUp() removes it after the jobs, in the right order.
 
   it('job_dishes_audit fires on insert', async () => {
     const jobId = await makeJob();
@@ -282,6 +310,27 @@ live('audit triggers — children (armed, never fired until now)', () => {
       .insert({ kitchen_id: kitchenId, job_id: jobId, recipe_id: recipeId, portions: 5 });
 
     expect((await changesFor(jobId))[0]?.['changed_by']).toBe(userId);
+  });
+});
+
+live('deleting a job', () => {
+  it('a job WITH children can be deleted at all', async () => {
+    // Regression guard. The child audit triggers originally made this impossible:
+    // the cascade fired an insert into job_changes for a job that had just been
+    // deleted, and job_changes_job_id_fkey rejected it. A job with no children
+    // deleted fine, so it only appeared once the triggers were exercised end to
+    // end. See 20260803000200_audit_allow_job_delete.sql.
+    const jobId = await makeJob();
+    await db
+      .from('job_dietaries')
+      .insert({ kitchen_id: kitchenId, job_id: jobId, diet_type: 'vegan',
+                guest_ref: 'g1', guests_unresolved: false });
+
+    const { error } = await db.from('jobs').delete().eq('id', jobId);
+    expect(error, 'a job with a dietary should be deletable').toBeNull();
+
+    const { data } = await db.from('jobs').select('id').eq('id', jobId);
+    expect(data ?? []).toHaveLength(0);
   });
 });
 

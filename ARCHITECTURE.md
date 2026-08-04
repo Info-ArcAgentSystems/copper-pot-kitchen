@@ -14,13 +14,13 @@ Keep it honest. A stale architecture file is worse than none, because it gets tr
 
 | | |
 |---|---|
-| Current phase | Phase 4 — auth, shell and a green live suite. Screens next |
-| Last updated | 1 August 2026 |
+| Current phase | Phase 4b — setup screens done. Recipes/ingredients next, then jobs |
+| Last updated | 3 August 2026 |
 | Repo | `Info-ArcAgentSystems/copper-pot-kitchen` (private) |
-| Database | Supabase, schema + 4 migrations applied, 23 tables |
-| Unit tests | **348 pass**, 17 skipped, 2 todo (`npm run test`) |
+| Database | Supabase, schema + 5 migrations applied, 23 tables |
+| Unit tests | **382 pass**, 2 skipped, 2 todo (`npm run test`) — 0.3s, no network |
 | Golden pack | **wired** — 15 pass, 2 skipped pending owner, 2 todo |
-| `npm run test:copperpot` | **passing** |
+| Integration | **22 pass** (`npm run test:integration`) — live Supabase, run deliberately |
 
 ---
 
@@ -57,7 +57,8 @@ session reads to work out where things stand.
 | 3 Aug 2026 | Phase 4a — auth, shell, design tokens. `react-router-dom` added; Vite starter removed. Integration suite written: 17 live tests, **not yet run** |
 | 3 Aug 2026 | Env vars re-verified against the correct project after a brief mix-up. Schema probed live: 12 tables, per-guest `job_dietaries` with **no** `guests` column, conversion columns, `job_extras`. Four triggers enabled. No key ever committed |
 | 3 Aug 2026 | **Integration suite green — 18/18 against the live project.** RLS scoping, `changed_by`, and all three child triggers proven. Three Known gaps closed. A job-delete defect was found and fixed (`20260803000200`), and the database verified empty afterwards |
-| | *Next: Phase 4b — the CRUD screens, in batches* |
+| 3 Aug 2026 | Phase 4b batch 1 — setup screens (customers, properties, suppliers, rate card, service templates) and the shared `src/ui` primitives. `service_templates` gained its row type, mapper and repository. **382 unit, 22 integration** |
+| | *Next: batch 2 — recipes and ingredients. Then jobs, with the impact preview* |
 
 ---
 

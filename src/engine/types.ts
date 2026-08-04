@@ -374,3 +374,22 @@ export interface UnresolvedDietary extends DietaryBase {
  * discouraged here, it has no operand.
  */
 export type JobDietary = AllocatedDietary | UnresolvedDietary;
+
+// ---------------------------------------------------------------------------
+// Service templates
+// ---------------------------------------------------------------------------
+
+export type ServiceTemplateId = Brand<string, 'ServiceTemplateId'>;
+
+/** Equipment or a task the owner packs for a given service type. */
+export type ServiceTemplateKind = 'equipment' | 'task';
+
+export interface ServiceTemplate {
+  readonly id: ServiceTemplateId;
+  readonly kitchenId: KitchenId;
+  /** Owner-defined free text, matched against a job's serviceType. */
+  readonly serviceType: string;
+  readonly item: string;
+  readonly kind: ServiceTemplateKind;
+  readonly position: number;
+}

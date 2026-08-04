@@ -123,6 +123,10 @@ async function cleanUp(): Promise<void> {
   const jobs = await db.from('jobs').delete().eq('service_type', 'INTEGRATION TEST');
   if (jobs.error !== null) throw new Error(`cleanup failed on jobs: ${jobs.error.message}`);
 
+  await db.from('customers').delete().like('name', 'INTEGRATION TEST%');
+  await db.from('client_rates').delete().eq('client_group', 'INTEGRATION TEST');
+  await db.from('service_templates').delete().eq('service_type', 'INTEGRATION TEST');
+
   const recipes = await db.from('recipes').delete().like('name', 'INTEGRATION TEST%');
   if (recipes.error !== null) {
     throw new Error(`cleanup failed on recipes: ${recipes.error.message}`);
@@ -331,6 +335,89 @@ live('deleting a job', () => {
 
     const { data } = await db.from('jobs').select('id').eq('id', jobId);
     expect(data ?? []).toHaveLength(0);
+  });
+});
+
+live('setup CRUD through the repositories (batch 1 screens)', () => {
+  // Exercises the shared crud factory against the real database and the real RLS
+  // policies — the path every setup screen writes through. The unit tests prove
+  // the factory issues the right calls; only this proves the policies accept them.
+  it('creates, reads back, updates and deletes a customer', async () => {
+    const created = await db
+      .from('customers')
+      .insert({ kitchen_id: kitchenId, name: 'INTEGRATION TEST customer', client_group: 'Tranquillity' })
+      .select('*')
+      .single();
+    expect(created.error, 'insert should be accepted by the with-check policy').toBeNull();
+
+    const id = (created.data as { id: string }).id;
+
+    const read = await db.from('customers').select('*').eq('id', id).single();
+    expect((read.data as { client_group: string }).client_group).toBe('Tranquillity');
+
+    const updated = await db
+      .from('customers')
+      .update({ client_group: 'Visit Carlingford' })
+      .eq('id', id)
+      .select('*')
+      .single();
+    expect((updated.data as { client_group: string }).client_group).toBe('Visit Carlingford');
+
+    const removed = await db.from('customers').delete().eq('id', id);
+    expect(removed.error).toBeNull();
+
+    const gone = await db.from('customers').select('id').eq('id', id);
+    expect(gone.data ?? []).toHaveLength(0);
+  });
+
+  it('counts the jobs referencing a customer, which is what the delete warning shows', async () => {
+    const customer = await db
+      .from('customers')
+      .insert({ kitchen_id: kitchenId, name: 'INTEGRATION TEST referenced' })
+      .select('id')
+      .single();
+    const customerId = (customer.data as { id: string }).id;
+
+    await makeJob({ customer_id: customerId });
+
+    const refs = await db.from('jobs').select('id').eq('customer_id', customerId);
+    expect((refs.data ?? []).length).toBe(1);
+
+    await db.from('jobs').delete().eq('customer_id', customerId);
+    await db.from('customers').delete().eq('id', customerId);
+  });
+
+  it('accepts a rate with NEITHER figure set — unpriced, not free (Rule 11)', async () => {
+    const created = await db
+      .from('client_rates')
+      .insert({
+        kitchen_id: kitchenId,
+        client_group: 'INTEGRATION TEST',
+        service_type: 'Unpriced',
+        rate_per_head: null,
+        flat_fee: null,
+      })
+      .select('*')
+      .single();
+
+    expect(created.error, 'a rate with no figures must be storable').toBeNull();
+    const row = created.data as { id: string; rate_per_head: number | null; flat_fee: number | null };
+    // Null, not 0. Zero would mean free; null means the owner has not said.
+    expect(row.rate_per_head).toBeNull();
+    expect(row.flat_fee).toBeNull();
+
+    await db.from('client_rates').delete().eq('id', row.id);
+  });
+
+  it('stores a service template', async () => {
+    const created = await db
+      .from('service_templates')
+      .insert({ kitchen_id: kitchenId, service_type: 'INTEGRATION TEST', item: 'tongs', kind: 'equipment' })
+      .select('*')
+      .single();
+
+    expect(created.error).toBeNull();
+    await db.from('service_templates').delete().eq('id', (created.data as { id: string }).id);
   });
 });
 

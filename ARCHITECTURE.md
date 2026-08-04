@@ -423,9 +423,36 @@ no rule allowed below it, tabular numerals, 16px inputs so iOS Safari does not z
 `:focus-visible` for every `:hover`, no webfont, `100dvh` rather than `100vh`, and safe-area
 insets at both ends.
 
-### `src/features` — screens · **not started**
+### `src/features` — screens · **in progress**
 
-`jobs` · `recipes` · `ingredients` · `shopping` · `prep` · `packing` · `money` · `setup` · `scan`
+| Area | Status |
+|---|---|
+| `setup` — customers, properties, suppliers, rate card, service templates | **done** — 3 Aug 2026 |
+| `recipes` · `ingredients` | not started |
+| `jobs` · `shopping` · `prep` · `packing` · `money` · `scan` | not started |
+
+**The shared primitives live in `src/ui` and were settled by this batch**, which is why the
+shallow screens came first: a mistake in them is cheap here and expensive once eight screens
+depend on it.
+
+- `form.ts` holds parsing, validation and formatting as PURE functions, so the behaviour that
+  matters is tested in plain Node with no DOM and no new dependency. Components stay thin.
+- `Field.tsx` wires `htmlFor` rather than wrapping the input, so tapping a label focuses the
+  control — a real difference one-handed.
+- `RecordScreen.tsx` is the list-empty-form shape all five use. There is no code path that
+  renders seeded content: an empty list renders `EmptyState`, and a row appears only if the
+  owner saved one (Rule 1).
+
+**Blank is null, never 0.** `parseMoney('')` returns null and `formatMoney(null)` renders
+"not set", never "€0.00". Zero euros is a real price meaning free; blank means the owner has
+not said, and under Rule 11 a job under an unpriced rate has null revenue rather than a zero
+total.
+
+**Deletes name their consequence.** `customers`, `properties` and `suppliers` are
+`on delete set null`, so anything referring to them survives and loses the reference — a job
+that loses its customer loses its client group and stops being priceable. The confirmation
+counts the references first and says "3 jobs refer to this customer" rather than "are you
+sure?".
 
 ### `src/sous` — Ask Sous · **not started**
 

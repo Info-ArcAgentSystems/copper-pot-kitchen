@@ -16,6 +16,12 @@ import { KitchenProvider } from './auth/KitchenContext';
 import { useKitchen } from './auth/kitchenState';
 import { RequireKitchen } from './auth/RequireKitchen';
 import { signOut } from './auth/session';
+import { Setup } from './features/setup/Setup';
+import { Customers } from './features/setup/Customers';
+import { Properties } from './features/setup/Properties';
+import { Suppliers } from './features/setup/Suppliers';
+import { RateCard } from './features/setup/RateCard';
+import { ServiceTemplates } from './features/setup/ServiceTemplates';
 
 const TABS = [
   { to: '/', label: 'Jobs' },
@@ -76,7 +82,12 @@ export default function App(): ReactNode {
             <Route path="/prep" element={<NotBuiltYet name="Prep" />} />
             <Route path="/shopping" element={<NotBuiltYet name="Shopping" />} />
             <Route path="/recipes" element={<NotBuiltYet name="Recipes" />} />
-            <Route path="/setup" element={<NotBuiltYet name="Setup" />} />
+            <Route path="/setup" element={<Setup />} />
+            <Route path="/setup/customers" element={<Customers />} />
+            <Route path="/setup/properties" element={<Properties />} />
+            <Route path="/setup/suppliers" element={<Suppliers />} />
+            <Route path="/setup/rates" element={<RateCard />} />
+            <Route path="/setup/templates" element={<ServiceTemplates />} />
           </Routes>
         </main>
         <TabBar />

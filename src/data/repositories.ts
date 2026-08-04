@@ -18,9 +18,12 @@
  */
 
 import type { Db } from './db';
+import { countReferences, crudRepository } from './crud';
 import {
   clientRateToDomain,
+  clientRateToRow,
   customerToDomain,
+  customerToRow,
   dietaryToRow,
   ingredientToDomain,
   jobDishToRow,
@@ -28,9 +31,13 @@ import {
   jobToDomain,
   jobToRow,
   propertyToDomain,
+  propertyToRow,
   recipeToDomain,
+  serviceTemplateToDomain,
+  serviceTemplateToRow,
   stockToDomain,
   supplierToDomain,
+  supplierToRow,
 } from './mappers';
 import type {
   ClientRateRow,
@@ -45,6 +52,7 @@ import type {
   RecipeIngredientRow,
   RecipeRow,
   RecipeUnquantifiedRow,
+  ServiceTemplateRow,
   StockRow,
   SupplierRow,
 } from './rows';
@@ -60,6 +68,7 @@ import type {
   Property,
   Recipe,
   RecipeId,
+  ServiceTemplate,
   StockLevel,
   Supplier,
 } from '../engine/types';
@@ -81,6 +90,7 @@ const T = {
   jobDietaries: 'job_dietaries',
   jobExtras: 'job_extras',
   jobChanges: 'job_changes',
+  serviceTemplates: 'service_templates',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -140,29 +150,54 @@ export const kitchenRepository = (db: Db) => ({
 // Simple aggregates
 // ---------------------------------------------------------------------------
 
-export const propertyRepository = (db: Db) => ({
-  async list(): Promise<Property[]> {
-    return (await db.selectAll(T.properties) as unknown as PropertyRow[]).map(propertyToDomain);
-  },
-});
+/**
+ * The five shallow setup tables, all on the shared factory.
+ *
+ * They read, write and delete identically, so five hand-written copies would be
+ * five places to fix a bug. Jobs and recipes stay hand-written: their aggregates
+ * span several tables and jobs carries audit semantics.
+ */
+export const propertyRepository = (db: Db) =>
+  crudRepository<Property, PropertyRow>(db, T.properties, propertyToDomain, propertyToRow);
 
-export const customerRepository = (db: Db) => ({
-  async list(): Promise<Customer[]> {
-    return (await db.selectAll(T.customers) as unknown as CustomerRow[]).map(customerToDomain);
-  },
-});
+export const customerRepository = (db: Db) =>
+  crudRepository<Customer, CustomerRow>(db, T.customers, customerToDomain, customerToRow);
 
-export const clientRateRepository = (db: Db) => ({
-  async list(): Promise<ClientRate[]> {
-    return (await db.selectAll(T.clientRates) as unknown as ClientRateRow[]).map(
-      clientRateToDomain,
-    );
-  },
-});
+export const clientRateRepository = (db: Db) =>
+  crudRepository<ClientRate, ClientRateRow>(
+    db, T.clientRates, clientRateToDomain, clientRateToRow,
+  );
 
-export const supplierRepository = (db: Db) => ({
-  async list(): Promise<Supplier[]> {
-    return (await db.selectAll(T.suppliers) as unknown as SupplierRow[]).map(supplierToDomain);
+export const supplierRepository = (db: Db) =>
+  crudRepository<Supplier, SupplierRow>(db, T.suppliers, supplierToDomain, supplierToRow);
+
+export const serviceTemplateRepository = (db: Db) =>
+  crudRepository<ServiceTemplate, ServiceTemplateRow>(
+    db, T.serviceTemplates, serviceTemplateToDomain, serviceTemplateToRow,
+  );
+
+/**
+ * What points at a record, counted BEFORE it is deleted.
+ *
+ * Deleting a customer, property or supplier is `on delete set null`, so anything
+ * referring to it silently loses the reference. A job that loses its customer has
+ * no client group, and under Rule 11 its revenue becomes null — it stops being
+ * priceable. The confirmation names that, so the count has to exist first.
+ */
+export const referenceCounts = (db: Db) => ({
+  async forCustomer(id: string) {
+    return [{ label: 'job', count: await countReferences(db, T.jobs, 'customer_id', id) }];
+  },
+  async forProperty(id: string) {
+    return [{ label: 'job', count: await countReferences(db, T.jobs, 'property_id', id) }];
+  },
+  async forSupplier(id: string) {
+    return [
+      {
+        label: 'ingredient',
+        count: await countReferences(db, T.ingredients, 'supplier_id', id),
+      },
+    ];
   },
 });
 

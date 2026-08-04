@@ -21,6 +21,9 @@
 import type {
   AllocatedDietary,
   Cents,
+  ServiceTemplate,
+  ServiceTemplateId,
+  ServiceTemplateKind,
   ClientRate,
   ClientRateId,
   Course,
@@ -63,6 +66,7 @@ import type {
 } from '../engine/types';
 import type {
   ClientRateRow,
+  ServiceTemplateRow,
   CustomerRow,
   IngredientRow,
   JobDietaryRow,
@@ -462,4 +466,26 @@ export const jobToRow = (j: Job): JobRow => ({
   status: j.status,
   notes: j.notes,
   ...pricingToRow(j.pricing),
+});
+
+// ---------------------------------------------------------------------------
+// Service templates
+// ---------------------------------------------------------------------------
+
+export const serviceTemplateToDomain = (r: ServiceTemplateRow): ServiceTemplate => ({
+  id: r.id as ServiceTemplateId,
+  kitchenId: r.kitchen_id as KitchenId,
+  serviceType: r.service_type,
+  item: r.item,
+  kind: r.kind as ServiceTemplateKind,
+  position: r.position,
+});
+
+export const serviceTemplateToRow = (t: ServiceTemplate): ServiceTemplateRow => ({
+  id: t.id,
+  kitchen_id: t.kitchenId,
+  service_type: t.serviceType,
+  item: t.item,
+  kind: t.kind,
+  position: t.position,
 });

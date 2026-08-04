@@ -175,3 +175,12 @@ export type JobChangeRow = {
   changed_at: string;
   source: string | null;
 }
+
+export type ServiceTemplateRow = {
+  id: string;
+  kitchen_id: string;
+  service_type: string;
+  item: string;
+  kind: string;
+  position: number;
+}

@@ -273,3 +273,30 @@ describe('scaleRecipe — Rule 8, unquantified is never zero', () => {
     expect(result.gaps.some((g) => g.detail.includes('herbs'))).toBe(true);
   });
 });
+
+describe('scaleRecipe — a recipe with nothing in it', () => {
+  it('flags an empty recipe rather than contributing silently nothing', () => {
+    // No lines and no gaps would read as "this dish needs no ingredients", and a
+    // shopping list would simply omit it. Silent under-ordering.
+    //
+    // save_recipe writes the header and its lines in one transaction, so this
+    // should be unreachable — this is the guard for when it is not.
+    const empty = makeRecipe('Empty', { components: [], unquantified: [] });
+    const result = scaleRecipe(empty, 10, noRecipes);
+
+    expect(result.lines).toEqual([]);
+    expect(result.gaps.map((g) => g.reason)).toContain('no_components');
+  });
+
+  it('does not flag a recipe that has only unquantified items', () => {
+    // "Check these yourself" is a real recipe, not an empty one.
+    const vague = makeRecipe('Tapas', {
+      components: [],
+      unquantified: [{ id: 'u1' as never, item: 'eight tapas dishes', reason: null }],
+    });
+    const result = scaleRecipe(vague, 10, noRecipes);
+
+    expect(result.gaps.map((g) => g.reason)).not.toContain('no_components');
+    expect(result.gaps.map((g) => g.reason)).toContain('named_unquantified');
+  });
+});

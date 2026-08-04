@@ -14,6 +14,8 @@ const SECTIONS = [
   { to: 'suppliers', label: 'Suppliers', blurb: 'Used to group the shopping list' },
   { to: 'rates', label: 'Rate card', blurb: 'Per-head and flat rates by client group' },
   { to: 'templates', label: 'Service templates', blurb: 'What to pack for each service type' },
+  { to: '/ingredients', label: 'Ingredients', blurb: 'Three units, pack size and price' },
+  { to: '/recipes', label: 'Recipes', blurb: 'Yields, components and sub-recipes' },
 ] as const;
 
 export function Setup(): ReactNode {

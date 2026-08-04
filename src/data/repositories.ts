@@ -26,6 +26,7 @@ import {
   customerToRow,
   dietaryToRow,
   ingredientToDomain,
+  ingredientToRow,
   jobDishToRow,
   jobExtraToRow,
   jobToDomain,
@@ -201,13 +202,10 @@ export const referenceCounts = (db: Db) => ({
   },
 });
 
-export const ingredientRepository = (db: Db) => ({
-  async list(): Promise<Ingredient[]> {
-    return (await db.selectAll(T.ingredients) as unknown as IngredientRow[]).map(
-      ingredientToDomain,
-    );
-  },
-});
+export const ingredientRepository = (db: Db) =>
+  crudRepository<Ingredient, IngredientRow>(
+    db, T.ingredients, ingredientToDomain, ingredientToRow,
+  );
 
 export const stockRepository = (db: Db) => ({
   async list(): Promise<StockLevel[]> {
@@ -255,6 +253,66 @@ export const recipeRepository = (db: Db) => ({
   async byId(id: RecipeId): Promise<Recipe | null> {
     const all = await this.list();
     return all.find((r) => r.id === id) ?? null;
+  },
+
+  /**
+   * Save a recipe and its lines through the `save_recipe` RPC.
+   *
+   * NOT a sequence of writes from here. A recipe spans three tables and
+   * supabase-js has no transactions, so delete-then-insert from the client can
+   * leave a recipe with NO components — which `scaleRecipe` would turn into
+   * silence rather than a gap. The function does all three writes in one
+   * transaction, and runs `security invoker` so RLS still applies.
+   *
+   * `kitchen_id` is resolved inside the function from `my_kitchen_id()`, not sent
+   * from here, so a client cannot write into another kitchen even by mistake.
+   */
+  async save(recipe: Recipe): Promise<RecipeId> {
+    const header = {
+      id: recipe.id === '' ? null : recipe.id,
+      name: recipe.name,
+      course: recipe.course,
+      yield_type: recipe.yieldType,
+      portions_per_batch: recipe.portionsPerBatch,
+      batch_unit: recipe.batchUnit,
+      confidence: recipe.confidence,
+      make_ahead_days: recipe.makeAheadDays,
+      same_day_only: recipe.sameDayOnly,
+      freezable: recipe.freezable,
+      onsite_finish: recipe.onsiteFinish,
+      method: recipe.method,
+      note: recipe.note,
+    };
+
+    const components = recipe.components.map((c, position) => ({
+      // The schema's XOR check: a line is an ingredient OR a sub-recipe, never
+      // both. The domain union already guarantees it; this preserves it.
+      ingredient_id: c.kind === 'ingredient' ? c.ingredientId : null,
+      sub_recipe_id: c.kind === 'sub_recipe' ? c.subRecipeId : null,
+      display_name: c.displayName,
+      // Rule 13: one number. There is no qty_min/qty_max here and never will be.
+      qty: c.qty,
+      unit: c.unit,
+      position,
+    }));
+
+    const unquantified = recipe.unquantified.map((u) => ({
+      item: u.item,
+      reason: u.reason,
+    }));
+
+    return (await db.rpc('save_recipe', {
+      p_recipe: header,
+      p_components: components,
+      p_unquantified: unquantified,
+    })) as RecipeId;
+  },
+
+  async remove(id: RecipeId): Promise<void> {
+    // Children cascade from recipes. A recipe used as a sub-recipe elsewhere is
+    // `on delete restrict`, so the database refuses rather than silently
+    // orphaning the parent — the screen counts references first and says so.
+    await db.deleteWhere(T.recipes, 'id', id);
   },
 });
 

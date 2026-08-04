@@ -11,7 +11,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import type { Db, Row } from '../../src/data/db';
+import type { Row } from '../../src/data/db';
+import { fakeDb } from './fakeDb';
 import {
   clientRateRepository,
   customerRepository,
@@ -25,47 +26,6 @@ import {
   supplierRepository,
 } from '../../src/data/repositories';
 import type { JobId, KitchenId, RecipeId } from '../../src/engine/types';
-
-interface Call {
-  op: string;
-  table: string;
-  column?: string;
-  value?: unknown;
-  payload?: unknown;
-}
-
-/** Records every call, and answers from a fixed set of tables. */
-function fakeDb(tables: Record<string, Row[]> = {}): Db & { calls: Call[] } {
-  const calls: Call[] = [];
-  const rows = (t: string): Row[] => tables[t] ?? [];
-
-  return {
-    calls,
-    async selectAll(table) {
-      calls.push({ op: 'selectAll', table });
-      return rows(table);
-    },
-    async selectWhere(table, column, value) {
-      calls.push({ op: 'selectWhere', table, column, value });
-      return rows(table).filter((r) => r[column] === value);
-    },
-    async selectWhereIn(table, column, values) {
-      calls.push({ op: 'selectWhereIn', table, column, value: values });
-      return rows(table).filter((r) => values.includes(r[column] as string));
-    },
-    async insert(table, newRows) {
-      calls.push({ op: 'insert', table, payload: newRows });
-      return [...newRows];
-    },
-    async update(table, id, patch) {
-      calls.push({ op: 'update', table, value: id, payload: patch });
-      return [patch];
-    },
-    async deleteWhere(table, column, value) {
-      calls.push({ op: 'delete', table, column, value });
-    },
-  };
-}
 
 const KITCHEN = 'k1' as KitchenId;
 

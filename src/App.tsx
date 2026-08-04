@@ -22,12 +22,14 @@ import { Properties } from './features/setup/Properties';
 import { Suppliers } from './features/setup/Suppliers';
 import { RateCard } from './features/setup/RateCard';
 import { ServiceTemplates } from './features/setup/ServiceTemplates';
+import { Ingredients } from './features/setup/Ingredients';
+import { Recipes } from './features/setup/Recipes';
 
 const TABS = [
   { to: '/', label: 'Jobs' },
   { to: '/prep', label: 'Prep' },
-  { to: '/shopping', label: 'Shopping' },
   { to: '/recipes', label: 'Recipes' },
+  { to: '/ingredients', label: 'Stock' },
   { to: '/setup', label: 'Setup' },
 ] as const;
 
@@ -81,7 +83,8 @@ export default function App(): ReactNode {
             <Route path="/" element={<NotBuiltYet name="Jobs" />} />
             <Route path="/prep" element={<NotBuiltYet name="Prep" />} />
             <Route path="/shopping" element={<NotBuiltYet name="Shopping" />} />
-            <Route path="/recipes" element={<NotBuiltYet name="Recipes" />} />
+            <Route path="/recipes" element={<Recipes />} />
+            <Route path="/ingredients" element={<Ingredients />} />
             <Route path="/setup" element={<Setup />} />
             <Route path="/setup/customers" element={<Customers />} />
             <Route path="/setup/properties" element={<Properties />} />

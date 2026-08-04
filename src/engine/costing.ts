@@ -34,6 +34,7 @@ export type MissingReason =
   | 'named_unquantified'
   | 'missing_sub_recipe'
   | 'no_portions_per_batch'
+  | 'no_components'
   | 'no_portions'
   | 'cycle'
   | 'no_rate'

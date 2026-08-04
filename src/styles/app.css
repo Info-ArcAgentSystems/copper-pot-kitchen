@@ -237,3 +237,62 @@ button.danger {
   color: var(--danger);
   font-weight: 600;
 }
+
+/* ---------------------------------------------------------------------------
+   Grouped fields. Used by Ingredients to keep the three unit systems visibly
+   apart (Rule 4) and by Recipes for its two line editors.
+   --------------------------------------------------------------------------- */
+
+fieldset.units {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  margin: 0 0 var(--space-4);
+}
+
+fieldset.units legend {
+  font-weight: 700;
+  padding: 0 var(--space-2);
+}
+
+/* A component or unquantified row inside a recipe. Boxed so it reads as one
+   thing on a narrow screen rather than a run of loose fields. */
+.line {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+  background: var(--bg);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  font-weight: 600;
+}
+
+.check input {
+  width: auto;
+  min-width: var(--touch-min);
+}
+
+/* The assumed-pack state: visible until the owner confirms it, because an
+   assumed pack size trusted silently is a wrong shopping quantity. */
+.unresolved-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+button.link {
+  min-height: auto;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  text-decoration: underline;
+  font-weight: 600;
+}

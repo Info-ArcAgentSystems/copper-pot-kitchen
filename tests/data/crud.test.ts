@@ -13,47 +13,10 @@
 import { describe, expect, it } from 'vitest';
 import { countReferences, crudRepository } from '../../src/data/crud';
 import type { Db, Row } from '../../src/data/db';
+import { fakeDb, type FakeDb } from './fakeDb';
 import { serviceTemplateToDomain, serviceTemplateToRow } from '../../src/data/mappers';
 import type { ServiceTemplateRow } from '../../src/data/rows';
 import type { KitchenId, ServiceTemplate } from '../../src/engine/types';
-
-interface Call {
-  op: string;
-  table: string;
-  column?: string;
-  value?: unknown;
-  payload?: unknown;
-}
-
-function fakeDb(rows: Row[] = []): Db & { calls: Call[] } {
-  const calls: Call[] = [];
-  return {
-    calls,
-    async selectAll(table) {
-      calls.push({ op: 'selectAll', table });
-      return rows;
-    },
-    async selectWhere(table, column, value) {
-      calls.push({ op: 'selectWhere', table, column, value });
-      return rows.filter((r) => r[column] === value);
-    },
-    async selectWhereIn(table, column, values) {
-      calls.push({ op: 'selectWhereIn', table, column, value: values });
-      return rows.filter((r) => values.includes(r[column] as string));
-    },
-    async insert(table, newRows) {
-      calls.push({ op: 'insert', table, payload: newRows });
-      return newRows.map((r) => ({ id: 'generated', ...r }));
-    },
-    async update(table, id, patch) {
-      calls.push({ op: 'update', table, value: id, payload: patch });
-      return [{ id, ...patch }];
-    },
-    async deleteWhere(table, column, value) {
-      calls.push({ op: 'delete', table, column, value });
-    },
-  };
-}
 
 const KITCHEN = 'k1' as KitchenId;
 
@@ -72,7 +35,7 @@ const templateRow: Row = {
  * Asserts the call happened rather than indexing into a possible undefined — a
  * missing insert should fail saying so, not with a TypeError from `[0]`.
  */
-function insertedRow(db: Db & { calls: Call[] }): Row {
+function insertedRow(db: FakeDb): Row {
   const call = db.calls.find((c) => c.op === 'insert');
   expect(call, 'no insert was issued').toBeDefined();
 
@@ -100,7 +63,7 @@ const template: ServiceTemplate = {
 
 describe('list', () => {
   it('returns domain types, not rows', async () => {
-    const [item] = await repo(fakeDb([templateRow])).list();
+    const [item] = await repo(fakeDb({ service_templates: [templateRow] })).list();
 
     expect(item?.serviceType).toBe('BBQ');
     expect(item).not.toHaveProperty('service_type');
@@ -136,7 +99,7 @@ describe('create', () => {
 describe('update', () => {
   it('patches neither the id nor the kitchen', async () => {
     // Moving a record between kitchens is not an edit.
-    const db = fakeDb([templateRow]);
+    const db = fakeDb({ service_templates: [templateRow] });
     await repo(db).update('t1', { ...template, item: 'long tongs' });
 
     const patch = db.calls.find((c) => c.op === 'update')?.payload as Row;
@@ -146,7 +109,7 @@ describe('update', () => {
   });
 
   it('targets the row by id', async () => {
-    const db = fakeDb([templateRow]);
+    const db = fakeDb({ service_templates: [templateRow] });
     await repo(db).update('t1', template);
 
     expect(db.calls.find((c) => c.op === 'update')?.value).toBe('t1');
@@ -155,7 +118,7 @@ describe('update', () => {
 
 describe('remove', () => {
   it('deletes by id', async () => {
-    const db = fakeDb([templateRow]);
+    const db = fakeDb({ service_templates: [templateRow] });
     await repo(db).remove('t1');
 
     const call = db.calls.find((c) => c.op === 'delete');
@@ -168,7 +131,7 @@ describe('scoping', () => {
   it('never FILTERS by kitchen_id, in any operation', async () => {
     // RLS scopes reads. A hand-written filter would be a second copy of the
     // policy, and would hide a broken one.
-    const db = fakeDb([templateRow]);
+    const db = fakeDb({ service_templates: [templateRow] });
     const r = repo(db);
 
     await r.list();
@@ -184,11 +147,13 @@ describe('scoping', () => {
 
 describe('countReferences', () => {
   it('counts rows pointing at an id', async () => {
-    const db = fakeDb([
-      { id: 'j1', customer_id: 'c1' },
-      { id: 'j2', customer_id: 'c1' },
-      { id: 'j3', customer_id: 'c2' },
-    ]);
+    const db = fakeDb({
+      jobs: [
+        { id: 'j1', customer_id: 'c1' },
+        { id: 'j2', customer_id: 'c1' },
+        { id: 'j3', customer_id: 'c2' },
+      ],
+    });
 
     expect(await countReferences(db, 'jobs', 'customer_id', 'c1')).toBe(2);
     expect(await countReferences(db, 'jobs', 'customer_id', 'c9')).toBe(0);

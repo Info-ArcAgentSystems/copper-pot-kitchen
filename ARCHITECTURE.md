@@ -14,11 +14,11 @@ Keep it honest. A stale architecture file is worse than none, because it gets tr
 
 | | |
 |---|---|
-| Current phase | Phase 4b — setup screens done. Recipes/ingredients next, then jobs |
+| Current phase | Phase 4b — setup, ingredients and recipes done. Jobs next |
 | Last updated | 3 August 2026 |
 | Repo | `Info-ArcAgentSystems/copper-pot-kitchen` (private) |
-| Database | Supabase, schema + 5 migrations applied, 23 tables |
-| Unit tests | **382 pass**, 2 skipped, 2 todo (`npm run test`) — 0.3s, no network |
+| Database | Supabase, schema + 5 applied, **1 written not run** (`20260803000300_save_recipe`) |
+| Unit tests | **396 pass**, 2 skipped, 2 todo (`npm run test`) — 0.3s, no network |
 | Golden pack | **wired** — 15 pass, 2 skipped pending owner, 2 todo |
 | Integration | **22 pass** (`npm run test:integration`) — live Supabase, run deliberately |
 
@@ -58,7 +58,8 @@ session reads to work out where things stand.
 | 3 Aug 2026 | Env vars re-verified against the correct project after a brief mix-up. Schema probed live: 12 tables, per-guest `job_dietaries` with **no** `guests` column, conversion columns, `job_extras`. Four triggers enabled. No key ever committed |
 | 3 Aug 2026 | **Integration suite green — 18/18 against the live project.** RLS scoping, `changed_by`, and all three child triggers proven. Three Known gaps closed. A job-delete defect was found and fixed (`20260803000200`), and the database verified empty afterwards |
 | 3 Aug 2026 | Phase 4b batch 1 — setup screens (customers, properties, suppliers, rate card, service templates) and the shared `src/ui` primitives. `service_templates` gained its row type, mapper and repository. **382 unit, 22 integration** |
-| | *Next: batch 2 — recipes and ingredients. Then jobs, with the impact preview* |
+| 3 Aug 2026 | Phase 4b batch 2 — ingredients and recipes. `save_recipe` RPC migration **written, not run**. `scaleRecipe` gained a `no_components` gap. **396 unit** |
+| | *Next: batch 3 — jobs, with the live impact preview on guest-count change* |
 
 ---
 
@@ -429,10 +430,33 @@ insets at both ends.
 | Area | Status |
 |---|---|
 | `setup` — customers, properties, suppliers, rate card, service templates | **done** — 3 Aug 2026 |
-| `recipes` · `ingredients` | not started |
+| `recipes` · `ingredients` | **done** — 3 Aug 2026 |
 | `jobs` · `shopping` · `prep` · `packing` · `money` · `scan` | not started |
 
-**The shared primitives live in `src/ui` and were settled by this batch**, which is why the
+**Ingredients keeps the three unit systems visibly apart.** The form has three labelled
+groups — "how recipes measure it", "how you count it", "how you buy it" — not one "unit" box.
+Collapsing them is the Rule 4 conflation the engine exists to avoid, and a form that invited it
+would undo the type-level separation at the point of entry. The conversion factor between the
+first two appears only when the pair is not dimensionally derivable (`g → kg` needs nothing;
+`each → kg` for eggs cannot be guessed), and its hint says that leaving it blank makes
+`units.ts` refuse rather than assume.
+
+**The assumed pack flag is shown until confirmed.** `pack_assumed` defaults true, so a new
+ingredient renders a visible "assumed — not confirmed" state with a control to confirm it. An
+assumed pack size trusted silently is a wrong shopping quantity.
+
+**A recipe saves through one RPC, not three writes.** `save_recipe` runs all three tables in a
+single transaction. Without it, delete-then-insert from the client could leave a recipe with no
+components — and `scaleRecipe` on a component-less recipe returned empty lines and *no gaps*,
+so it would have contributed silently nothing to a shopping list. `scaleRecipe` now also emits a
+`no_components` gap as a second line of defence. The function is `security invoker` on purpose,
+so RLS still applies, and it resolves `kitchen_id` from `my_kitchen_id()` rather than trusting
+the payload.
+
+**Unquantified components have no quantity control at all.** Not a blank input — the field does
+not exist, so a zero cannot be typed into it (Rule 8).
+
+**The shared primitives live in `src/ui` and were settled by batch 1**, which is why the
 shallow screens came first: a mistake in them is cheap here and expensive once eight screens
 depend on it.
 

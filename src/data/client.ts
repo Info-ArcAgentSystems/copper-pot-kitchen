@@ -86,5 +86,11 @@ export function supabaseDb(client: SupabaseClient = supabaseClient()): Db {
       const result = await client.from(table).delete().eq(column, value);
       if (result.error !== null) throw new DbError(table, 'delete', result.error.message);
     },
+
+    async rpc(fn, args) {
+      const result = await client.rpc(fn, args);
+      if (result.error !== null) throw new DbError(fn, 'rpc', result.error.message);
+      return result.data;
+    },
   };
 }

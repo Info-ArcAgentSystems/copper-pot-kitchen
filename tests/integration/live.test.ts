@@ -124,6 +124,7 @@ async function cleanUp(): Promise<void> {
   if (jobs.error !== null) throw new Error(`cleanup failed on jobs: ${jobs.error.message}`);
 
   await db.from('customers').delete().like('name', 'INTEGRATION TEST%');
+  await db.from('ingredients').delete().like('name', 'INTEGRATION TEST%');
   await db.from('client_rates').delete().eq('client_group', 'INTEGRATION TEST');
   await db.from('service_templates').delete().eq('service_type', 'INTEGRATION TEST');
 
@@ -418,6 +419,88 @@ live('setup CRUD through the repositories (batch 1 screens)', () => {
 
     expect(created.error).toBeNull();
     await db.from('service_templates').delete().eq('id', (created.data as { id: string }).id);
+  });
+});
+
+live('save_recipe RPC (batch 2)', () => {
+  // The unit tests pin the payload. Only this proves the function exists, runs
+  // `security invoker` so RLS applies, and lands all three tables atomically.
+  it('saves a recipe with a component and an unquantified item in one call', async () => {
+    const ingredient = await db
+      .from('ingredients')
+      .insert({ kitchen_id: kitchenId, name: 'INTEGRATION TEST mince', stock_unit: 'kg' })
+      .select('id')
+      .single();
+    expect(ingredient.error).toBeNull();
+    const ingredientId = (ingredient.data as { id: string }).id;
+
+    const saved = await db.rpc('save_recipe', {
+      p_recipe: {
+        id: null,
+        name: 'INTEGRATION TEST lasagne',
+        course: 'main',
+        yield_type: 'batch',
+        portions_per_batch: 9,
+        batch_unit: 'tray',
+        confidence: 'locked',
+        make_ahead_days: 1,
+        same_day_only: false,
+        freezable: true,
+        onsite_finish: false,
+        method: null,
+        note: null,
+      },
+      p_components: [
+        {
+          ingredient_id: ingredientId,
+          sub_recipe_id: null,
+          display_name: 'mince',
+          qty: 2,
+          unit: 'kg',
+          position: 0,
+        },
+      ],
+      p_unquantified: [{ item: 'seasoning', reason: 'never measured' }],
+    });
+
+    expect(saved.error, 'save_recipe should be callable by a signed-in owner').toBeNull();
+    const recipeId = saved.data as string;
+    expect(recipeId).toBeTruthy();
+
+    // All three tables landed.
+    const header = await db.from('recipes').select('*').eq('id', recipeId).single();
+    expect((header.data as { portions_per_batch: number }).portions_per_batch).toBe(9);
+
+    const components = await db.from('recipe_ingredients').select('*').eq('recipe_id', recipeId);
+    expect(components.data ?? []).toHaveLength(1);
+    expect((components.data?.[0] as { qty: string }).qty).toBe('2.0000');
+
+    const unq = await db.from('recipe_unquantified').select('*').eq('recipe_id', recipeId);
+    expect(unq.data ?? []).toHaveLength(1);
+
+    // A second save REPLACES the lines rather than appending.
+    await db.rpc('save_recipe', {
+      p_recipe: { id: recipeId, name: 'INTEGRATION TEST lasagne', yield_type: 'batch', portions_per_batch: 9 },
+      p_components: [],
+      p_unquantified: [],
+    });
+    const after = await db.from('recipe_ingredients').select('*').eq('recipe_id', recipeId);
+    expect(after.data ?? []).toHaveLength(0);
+
+    await db.from('recipes').delete().eq('id', recipeId);
+    await db.from('ingredients').delete().eq('id', ingredientId);
+  });
+
+  it('refuses a recipe belonging to another kitchen', async () => {
+    // The function resolves kitchen_id from my_kitchen_id(), so a forged id in
+    // the payload cannot redirect the write.
+    const { error } = await db.rpc('save_recipe', {
+      p_recipe: { id: '00000000-0000-0000-0000-000000000000', name: 'x', yield_type: 'per_person' },
+      p_components: [],
+      p_unquantified: [],
+    });
+
+    expect(error, 'editing a recipe outside this kitchen should fail').not.toBeNull();
   });
 });
 

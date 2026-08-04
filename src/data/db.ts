@@ -44,4 +44,13 @@ export interface Db {
   update(table: string, id: string, patch: Row): Promise<Row[]>;
 
   deleteWhere(table: string, column: string, value: string): Promise<void>;
+
+  /**
+   * Call a Postgres function.
+   *
+   * Used where a write must be atomic across several tables — a recipe spans
+   * three, and supabase-js has no transactions. The function runs `security
+   * invoker`, so RLS still applies exactly as it does to a direct write.
+   */
+  rpc(fn: string, args: Record<string, unknown>): Promise<unknown>;
 }

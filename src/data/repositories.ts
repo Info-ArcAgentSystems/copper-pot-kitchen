@@ -24,13 +24,12 @@ import {
   clientRateToRow,
   customerToDomain,
   customerToRow,
-  dietaryToRow,
   ingredientToDomain,
   ingredientToRow,
-  jobDishToRow,
-  jobExtraToRow,
   jobToDomain,
   jobToRow,
+  pricingToRow,
+  toEuros,
   propertyToDomain,
   propertyToRow,
   recipeToDomain,
@@ -62,9 +61,6 @@ import type {
   Customer,
   Ingredient,
   Job,
-  JobDietary,
-  JobDish,
-  JobExtra,
   JobId,
   Property,
   Recipe,
@@ -393,29 +389,78 @@ export const jobRepository = (db: Db) => ({
     return this.byId(id);
   },
 
-  /** Replace the menu. Removals and additions are both audited by the trigger. */
-  async replaceDishes(job: Job, dishes: readonly JobDish[]): Promise<void> {
-    await db.deleteWhere(T.jobDishes, 'job_id', job.id);
-    await db.insert(
-      T.jobDishes,
-      dishes.map((d) => jobDishToRow({ ...d, jobId: job.id }, job.kitchenId)),
-    );
+  /**
+   * Save a job and its dishes, dietaries and extras through `save_job`.
+   *
+   * One RPC, one transaction. Four separate round trips would leave a
+   * half-edited job on failure — but the worse consequence is the audit trail:
+   * the child triggers fire per statement, so a scattered save records one edit
+   * as several unrelated changes. Rules 10 and 14 want the trail to read like
+   * what actually happened.
+   *
+   * The triggers still fire inside the transaction, so nothing goes unlogged.
+   * `kitchen_id` is resolved by the function from `my_kitchen_id()`, never sent
+   * from here.
+   */
+  async save(job: Job): Promise<JobId> {
+    const header = {
+      id: job.id === '' ? null : job.id,
+      customer_id: job.customerId,
+      property_id: job.propertyId,
+      job_group: job.jobGroup,
+      service_date: job.serviceDate,
+      service_time: job.serviceTime,
+      service_type: job.serviceType,
+      guests: job.guests,
+      guests_confirmed: job.guestsConfirmed,
+      meat_eating_guests: job.meatEatingGuests,
+      status: job.status,
+      notes: job.notes,
+      ...pricingToRow(job.pricing),
+    };
+
+    const dishes = job.dishes.map((d, position) => ({
+      recipe_id: d.recipeId,
+      // Null is meaningful: applyBuffetSplit derives portions from the guest
+      // count. Zero would mean "make none of this dish".
+      portions: d.portions,
+      note: d.note,
+      position,
+    }));
+
+    // Rule 16: no count field exists on either variant, so none is sent. Two
+    // guests with the same requirement are two rows.
+    const dietaries = job.dietaries.map((x) => ({
+      diet_type: x.dietType,
+      severity: x.severity,
+      guest_ref: x.kind === 'allocated' ? x.guest : null,
+      excludes_meat: x.excludesMeat,
+      guests_unresolved: x.kind === 'unresolved',
+      // Rule 12: verbatim, never parsed.
+      unresolved_note: x.kind === 'unresolved' ? x.originalWording : null,
+      details: x.details,
+      assigned_recipe_id: x.assignedRecipeId,
+    }));
+
+    const extras = job.extras.map((e, position) => ({
+      label: e.label,
+      amount_each: toEuros(e.amountEach),
+      quantity: e.quantity,
+      position,
+    }));
+
+    return (await db.rpc('save_job', {
+      p_job: header,
+      p_dishes: dishes,
+      p_dietaries: dietaries,
+      p_extras: extras,
+    })) as JobId;
   },
 
-  async replaceDietaries(job: Job, dietaries: readonly JobDietary[]): Promise<void> {
-    await db.deleteWhere(T.jobDietaries, 'job_id', job.id);
-    await db.insert(
-      T.jobDietaries,
-      dietaries.map((d) => dietaryToRow({ ...d, jobId: job.id }, job.kitchenId)),
-    );
-  },
-
-  async replaceExtras(job: Job, extras: readonly JobExtra[]): Promise<void> {
-    await db.deleteWhere(T.jobExtras, 'job_id', job.id);
-    await db.insert(
-      T.jobExtras,
-      extras.map((e, i) => jobExtraToRow({ ...e, jobId: job.id }, job.kitchenId, i)),
-    );
+  async remove(id: JobId): Promise<void> {
+    // Children and job_changes cascade. The child audit triggers skip logging
+    // when the parent is going too — see 20260803000200.
+    await db.deleteWhere(T.jobs, 'id', id);
   },
 });
 

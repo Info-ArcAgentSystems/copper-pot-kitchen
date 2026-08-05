@@ -504,6 +504,143 @@ live('save_recipe RPC (batch 2)', () => {
   });
 });
 
+live('save_job RPC (batch 3)', () => {
+  // The unit tests pin the payload shape. Only this proves the function exists,
+  // runs `security invoker` so RLS applies and auth.uid() is the real user, and
+  // lands four tables atomically.
+  it('saves a job with a dish, an extra and BOTH dietary kinds in one call', async () => {
+    const recipe = await db.rpc('save_recipe', {
+      p_recipe: {
+        id: null,
+        name: 'INTEGRATION TEST curry',
+        yield_type: 'per_person',
+        confidence: 'locked',
+      },
+      p_components: [],
+      p_unquantified: [],
+    });
+    expect(recipe.error).toBeNull();
+    const recipeId = recipe.data as string;
+
+    const saved = await db.rpc('save_job', {
+      p_job: {
+        id: null,
+        service_type: 'INTEGRATION TEST',
+        service_date: '2026-07-22',
+        guests: 17,
+        guests_confirmed: false,
+        status: 'confirmed',
+        price_source: 'rate_card',
+      },
+      p_dishes: [{ recipe_id: recipeId, portions: null, note: null, position: 0 }],
+      p_dietaries: [
+        // Two guests, one requirement each — two rows, never a count of 2.
+        { diet_type: 'vegetarian', severity: 'moderate', guest_ref: 'g1', excludes_meat: true, guests_unresolved: false },
+        { diet_type: 'coeliac', severity: 'severe', guest_ref: 'g1', excludes_meat: false, guests_unresolved: false },
+        // And the Rule 12 kind: the owner's words, unparsed.
+        {
+          diet_type: 'vegetarian',
+          severity: 'moderate',
+          guests_unresolved: true,
+          unresolved_note: 'a few vegetarians',
+        },
+      ],
+      p_extras: [{ label: 'Steak surcharge', amount_each: 15, quantity: 4, position: 0 }],
+    });
+
+    expect(saved.error, 'save_job should be callable by a signed-in owner').toBeNull();
+    const jobId = saved.data as string;
+    expect(jobId).toBeTruthy();
+
+    const header = await db.from('jobs').select('*').eq('id', jobId).single();
+    expect((header.data as { guests: number }).guests).toBe(17);
+    // kitchen_id came from my_kitchen_id(), never from the payload.
+    expect((header.data as { kitchen_id: string }).kitchen_id).toBe(kitchenId);
+
+    const dishes = await db.from('job_dishes').select('*').eq('job_id', jobId);
+    expect(dishes.data ?? []).toHaveLength(1);
+    // Null portions survived as null. A zero would mean "make none of this dish".
+    expect((dishes.data?.[0] as { portions: number | null }).portions).toBeNull();
+
+    const dietaries = await db.from('job_dietaries').select('*').eq('job_id', jobId);
+    expect(dietaries.data ?? []).toHaveLength(3);
+
+    const unresolved = (dietaries.data ?? []).find(
+      (d) => (d as { guests_unresolved: boolean }).guests_unresolved,
+    );
+    expect((unresolved as { unresolved_note: string }).unresolved_note).toBe('a few vegetarians');
+
+    // Rule 16, at the storage layer: two rows share one guest ref, so a row count
+    // says 2 and the distinct guest refs say 1. Only the second is a headcount.
+    const refs = (dietaries.data ?? [])
+      .map((d) => (d as { guest_ref: string | null }).guest_ref)
+      .filter((r): r is string => r !== null);
+    expect(refs).toHaveLength(2);
+    expect(new Set(refs).size).toBe(1);
+
+    const extras = await db.from('job_extras').select('*').eq('job_id', jobId);
+    expect(extras.data ?? []).toHaveLength(1);
+    expect((extras.data?.[0] as { quantity: number }).quantity).toBe(4);
+
+    // A second save REPLACES the children rather than appending.
+    const again = await db.rpc('save_job', {
+      p_job: { id: jobId, service_type: 'INTEGRATION TEST', guests: 23, status: 'confirmed' },
+      p_dishes: [],
+      p_dietaries: [],
+      p_extras: [],
+    });
+    expect(again.error).toBeNull();
+    expect((await db.from('job_dishes').select('id').eq('job_id', jobId)).data ?? []).toHaveLength(0);
+
+    // And the guest change was logged by the trigger, inside the same transaction.
+    const changes = await changesFor(jobId);
+    expect(changes.some((c) => c['field'] === 'guests' && c['new_value'] === '23')).toBe(true);
+    expect(changes.every((c) => c['changed_by'] === userId)).toBe(true);
+
+    await db.from('jobs').delete().eq('id', jobId);
+    await db.from('recipes').delete().eq('id', recipeId);
+  });
+
+  it('refuses a job belonging to another kitchen', async () => {
+    const { error } = await db.rpc('save_job', {
+      p_job: { id: '00000000-0000-0000-0000-000000000000', service_type: 'INTEGRATION TEST' },
+      p_dishes: [],
+      p_dietaries: [],
+      p_extras: [],
+    });
+
+    expect(error, 'editing a job outside this kitchen should fail').not.toBeNull();
+  });
+
+  it('RULE 15: a cancelled job can still be corrected, and the correction is logged', async () => {
+    const created = await db.rpc('save_job', {
+      p_job: { id: null, service_type: 'INTEGRATION TEST', guests: 12, status: 'cancelled' },
+      p_dishes: [],
+      p_dietaries: [],
+      p_extras: [],
+    });
+    expect(created.error).toBeNull();
+    const jobId = created.data as string;
+
+    // Status is a state, not a lock — no path refuses this.
+    const corrected = await db.rpc('save_job', {
+      p_job: { id: jobId, service_type: 'INTEGRATION TEST', guests: 14, status: 'cancelled' },
+      p_dishes: [],
+      p_dietaries: [],
+      p_extras: [],
+    });
+    expect(corrected.error, 'a cancelled job must stay correctable').toBeNull();
+
+    const changes = await changesFor(jobId);
+    const guests = changes.filter((c) => c['field'] === 'guests');
+    expect(guests).toHaveLength(1);
+    expect(guests[0]?.['old_value']).toBe('12');
+    expect(guests[0]?.['new_value']).toBe('14');
+
+    await db.from('jobs').delete().eq('id', jobId);
+  });
+});
+
 live('the audit trail cannot be tampered with from the app', () => {
   it('a direct update outside any repository is STILL logged', async () => {
     // The point of using a trigger rather than repository code: this write does not

@@ -296,3 +296,81 @@ button.link {
   text-decoration: underline;
   font-weight: 600;
 }
+
+/* ---------------------------------------------------------------------------
+   The impact preview.
+
+   It sits inline in the job form, above the menu, because it answers a question
+   the owner is asking WHILE typing — "if I change 17 to 23, what moves?" — and
+   an answer he has to scroll to find is one he will not read.
+
+   Deliberately unstyled as an alert: this is information, not a warning. The
+   only coloured thing is a gap the change would OPEN, which is the one part that
+   needs a decision (Rule 8).
+   --------------------------------------------------------------------------- */
+
+.impact {
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  margin: 0 0 var(--space-4);
+  background: var(--surface);
+}
+
+.impact h2 {
+  font-size: 1rem;
+  margin: 0 0 var(--space-3);
+}
+
+.impact-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.impact-table th,
+.impact-table td {
+  padding: var(--space-2);
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.impact-table thead th {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+/* Quantities line up under each other so 2 -> 3 trays is read, not decoded. */
+.impact-table td.num {
+  text-align: right;
+  font-variant-numeric: var(--num);
+}
+
+/* Direction is emphasis only — never a calculation, and never the sole carrier
+   of meaning, since the before and after figures are both on the row. */
+.delta-up {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.delta-down {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.delta-same {
+  font-weight: 600;
+}
+
+.unresolved-block {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius);
+  background: var(--unresolved-bg);
+  color: var(--unresolved);
+}
+
+.unresolved-block ul {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+}

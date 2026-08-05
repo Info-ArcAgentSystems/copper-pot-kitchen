@@ -24,6 +24,7 @@ import { RateCard } from './features/setup/RateCard';
 import { ServiceTemplates } from './features/setup/ServiceTemplates';
 import { Ingredients } from './features/setup/Ingredients';
 import { Recipes } from './features/setup/Recipes';
+import { Jobs } from './features/jobs/Jobs';
 
 const TABS = [
   { to: '/', label: 'Jobs' },
@@ -80,7 +81,7 @@ export default function App(): ReactNode {
         <Header />
         <main className="app-main">
           <Routes>
-            <Route path="/" element={<NotBuiltYet name="Jobs" />} />
+            <Route path="/" element={<Jobs />} />
             <Route path="/prep" element={<NotBuiltYet name="Prep" />} />
             <Route path="/shopping" element={<NotBuiltYet name="Shopping" />} />
             <Route path="/recipes" element={<Recipes />} />

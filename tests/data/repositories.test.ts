@@ -215,16 +215,19 @@ describe('jobRepository', () => {
     expect(db.calls.some((c) => c.op === 'update')).toBe(false);
   });
 
-  it('replaces the menu by delete-then-insert, both of which the trigger audits', async () => {
+  it('saves through ONE rpc, not four table writes', async () => {
+    // The three replaceX methods are gone. Four round trips would leave a
+    // half-edited job on failure, and would scatter one edit across the audit
+    // trail as several unrelated changes.
     const db = withJob();
     const [job] = await jobRepository(db).list();
     if (job === undefined) throw new Error('no job');
 
-    await jobRepository(db).replaceDishes(job, []);
+    db.calls.length = 0;
+    await jobRepository(db).save(job);
 
-    const deletes = db.calls.filter((c) => c.op === 'delete' && c.table === 'job_dishes');
-    expect(deletes).toHaveLength(1);
-    expect(deletes[0]?.column).toBe('job_id');
+    expect(db.calls.filter((c) => c.op === 'rpc')).toHaveLength(1);
+    expect(db.calls.some((c) => c.op === 'insert' || c.op === 'delete')).toBe(false);
   });
 });
 

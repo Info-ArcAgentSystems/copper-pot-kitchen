@@ -14,13 +14,13 @@ Keep it honest. A stale architecture file is worse than none, because it gets tr
 
 | | |
 |---|---|
-| Current phase | Phase 4b — setup, ingredients and recipes done. Jobs next |
-| Last updated | 3 August 2026 |
+| Current phase | Phase 4b **complete** — setup, ingredients, recipes and jobs. Shopping/prep/packing next |
+| Last updated | 5 August 2026 |
 | Repo | `Info-ArcAgentSystems/copper-pot-kitchen` (private) |
-| Database | Supabase, schema + 5 applied, **1 written not run** (`20260803000300_save_recipe`) |
-| Unit tests | **396 pass**, 2 skipped, 2 todo (`npm run test`) — 0.3s, no network |
+| Database | Supabase, schema + 5 applied, **3 written not run** (`20260803000300_save_recipe`, `20260803000400_save_job`, `20260805000100_job_dishes_portions_nullable`) |
+| Unit tests | **434 pass**, 2 skipped, 2 todo (`npm run test`) — 0.4s, no network |
 | Golden pack | **wired** — 15 pass, 2 skipped pending owner, 2 todo |
-| Integration | **22 pass** (`npm run test:integration`) — live Supabase, run deliberately |
+| Integration | **22 pass**, +3 written for `save_job` and unrun (all three pending migrations block them) |
 
 ---
 
@@ -59,7 +59,8 @@ session reads to work out where things stand.
 | 3 Aug 2026 | **Integration suite green — 18/18 against the live project.** RLS scoping, `changed_by`, and all three child triggers proven. Three Known gaps closed. A job-delete defect was found and fixed (`20260803000200`), and the database verified empty afterwards |
 | 3 Aug 2026 | Phase 4b batch 1 — setup screens (customers, properties, suppliers, rate card, service templates) and the shared `src/ui` primitives. `service_templates` gained its row type, mapper and repository. **382 unit, 22 integration** |
 | 3 Aug 2026 | Phase 4b batch 2 — ingredients and recipes. `save_recipe` RPC migration **written, not run**. `scaleRecipe` gained a `no_components` gap. **396 unit** |
-| | *Next: batch 3 — jobs, with the live impact preview on guest-count change* |
+| 5 Aug 2026 | Phase 4b batch 3 — **the jobs screen and the live impact preview**, the §4 feature the whole cascade was built for. `save_job` RPC migration **written, not run**; the three `replaceX` repository methods removed in its favour. **434 unit** |
+| | *Next: apply the three pending migrations, then shopping — the first derived screen* |
 
 ---
 
@@ -431,7 +432,8 @@ insets at both ends.
 |---|---|
 | `setup` — customers, properties, suppliers, rate card, service templates | **done** — 3 Aug 2026 |
 | `recipes` · `ingredients` | **done** — 3 Aug 2026 |
-| `jobs` · `shopping` · `prep` · `packing` · `money` · `scan` | not started |
+| `jobs` — including the live impact preview | **done** — 5 Aug 2026 |
+| `shopping` · `prep` · `packing` · `money` · `scan` | not started |
 
 **Ingredients keeps the three unit systems visibly apart.** The form has three labelled
 groups — "how recipes measure it", "how you count it", "how you buy it" — not one "unit" box.
@@ -455,6 +457,44 @@ the payload.
 
 **Unquantified components have no quantity control at all.** Not a blank input — the field does
 not exist, so a zero cannot be typed into it (Rule 8).
+
+**The impact preview computes nothing.** `ImpactPreview.tsx` calls `changeImpact` and formats
+the result; `impactSummary.ts` formats and nothing else. Every figure on it comes from two full
+engine runs diffed against each other, per Rule 5 — a preview that did its own arithmetic would
+be exactly the second calculation path `changeImpact` exists to prevent, and it would drift on
+the one screen the owner uses to decide.
+
+It is synchronous. Jobs, recipes and ingredients load once when the form opens; every keystroke
+re-runs a pure function with no network. That is what makes it live rather than laggy, and it
+is only possible because the engine has no I/O.
+
+Two behaviours in it were worth tests of their own:
+
+- **A money delta from unknown is not an increase.** Revenue that was null and becomes €360
+  reads "was unknown, now €360", never "+€360". `MoneyDelta` carries both sides for this, and
+  its `delta` is null whenever either side is (Rule 8).
+- **A guest change that moves no food says why.** Ingredients follow the guest count only when a
+  dish has `portions: null`, so `applyBuffetSplit` derives them; with portions typed in, the
+  owner's numbers win and guests move revenue alone. That is correct, but silence would read as
+  a broken preview, so the preview states which case applies.
+
+**A job saves through one RPC, not four writes.** `save_job` writes the header and replaces
+dishes, dietaries and extras in a single transaction. The atomicity matters, but the audit
+matters more: the child triggers fire per statement, so four round trips would record one edit
+as several unrelated changes in `job_changes`. The three `replaceDishes` / `replaceDietaries` /
+`replaceExtras` methods were removed rather than kept alongside it — two write paths is one too
+many. `security invoker` again, so RLS applies and `auth.uid()` inside the triggers is still the
+real user.
+
+**The job form has no count input for dietaries anywhere.** Each requirement is either allocated
+to one named guest, or unresolved carrying the owner's original wording verbatim. Two guests
+with the same requirement are two rows; one guest with two requirements shares a guest ref. That
+is what makes the Rule 16 sum have no operand at the form, on the wire and in the table — not
+just in the TypeScript types.
+
+**Status is not a lock (Rule 15).** `delivered`, `invoiced`, `paid` and `cancelled` all stay
+fully editable, and the form says so rather than disabling the fields. An invoice arrives late
+and a guest count is misremembered; the correction is logged by the trigger like any other.
 
 **The shared primitives live in `src/ui` and were settled by batch 1**, which is why the
 shallow screens came first: a mistake in them is cheap here and expensive once eight screens
@@ -556,7 +596,7 @@ Known gaps.
 |---|---|
 | `recipe_ingredients` — drop `qty_min`, `qty_max` | Rule 13: no range type. Harmless meanwhile — `types.ts` does not map them |
 | `jobs` — reconsider `price` / `price_source` | `JobPricing` needs only the override amount; the engine recomputes the rate-card figure |
-| `job_dishes.portions` — allow null | Currently `not null default 0`. Rule 8 wants null for "not yet allocated" |
+| ~~`job_dishes.portions` — allow null~~ | **Written 5 Aug** as `20260805000100`, not run. Promoted from nice-to-have to blocker: `not null default 0` turns "let the guest count decide" into "make none of this dish", which disables the impact cascade at the column level |
 
 **Tables in place (23):** `kitchens`, `kitchen_members`, `properties`, `customers`,
 `client_rates`, `suppliers`, `ingredients`, `ingredient_price_history`, `stock`, `recipes`,
@@ -647,7 +687,7 @@ Things that are genuinely absent, so nobody wastes an hour looking for them.
 | ~~RLS scoping is unverified~~ | **closed 3 Aug** | Proven live: a select with no `kitchen_id` filter returns only this kitchen's rows, an insert carrying another kitchen is rejected by the with-check policy, and the caller resolves exactly one distinct kitchen. The decision not to hand-filter `kitchen_id` is now tested, not assumed |
 | Bundle is 443 kB (128 kB gzip) | no | Almost all `@supabase/supabase-js`. Fine over wifi, noticeable on supermarket 4G. Worth measuring again before it grows |
 | `source` is always `'ui'` | no | PostgREST runs each request in its own transaction, so a client-side `set_config` does not carry into the following statement. Writes attributable to `ask_sous` or `scan` need an RPC that sets the value and writes in one transaction. Rule 7's propose-and-confirm commit call is the natural place |
-| No UI | Phase 4 | `src/` outside `engine` and `data` is still the Vite starter page |
+| **Three migrations written, not run** | **yes** | `20260803000300_save_recipe`, `20260803000400_save_job`, `20260805000100_job_dishes_portions_nullable`. Nothing on the recipe or job screens can be saved live until all three are applied, and the last one is what makes a guest-count change move food at all |
 | ~~A guest-count change does not move ingredients~~ | **closed 1 Aug** | `applyBuffetSplit` landed and is wired into `productionBuckets` and `jobFoodCost`. The impact preview now moves revenue, ingredients and food cost together. The `impact.test.ts` test that pinned the gap was rewritten to assert the corrected cascade |
 | `anomalyScan` false-positives on sides | no | It flags any menu with mains and no side, because keying off the service type would put owner-defined text ("BBQ") in `src/` and breach Rule 1. A precise version needs an owner-configured "service types that require sides" table, which does not exist. It is a report, not a blocked action |
 | `prioritisePrep` ordering is a guess | no | Prep date → slack → size → name. Only Paul knows how he actually sequences a prep day. Put it to him with the other open items |

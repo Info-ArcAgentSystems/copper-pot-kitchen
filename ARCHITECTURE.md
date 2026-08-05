@@ -17,10 +17,10 @@ Keep it honest. A stale architecture file is worse than none, because it gets tr
 | Current phase | Phase 4b **complete** — setup, ingredients, recipes and jobs. Shopping/prep/packing next |
 | Last updated | 5 August 2026 |
 | Repo | `Info-ArcAgentSystems/copper-pot-kitchen` (private) |
-| Database | Supabase, schema + 5 applied, **3 written not run** (`20260803000300_save_recipe`, `20260803000400_save_job`, `20260805000100_job_dishes_portions_nullable`) |
+| Database | Supabase, schema + 8 migrations, **all applied** (5 Aug) |
 | Unit tests | **434 pass**, 2 skipped, 2 todo (`npm run test`) — 0.4s, no network |
 | Golden pack | **wired** — 15 pass, 2 skipped pending owner, 2 todo |
-| Integration | **22 pass**, +3 written for `save_job` and unrun (all three pending migrations block them) |
+| Integration | **27 pass** (`npm run test:integration`) — live Supabase, run deliberately |
 
 ---
 
@@ -59,8 +59,9 @@ session reads to work out where things stand.
 | 3 Aug 2026 | **Integration suite green — 18/18 against the live project.** RLS scoping, `changed_by`, and all three child triggers proven. Three Known gaps closed. A job-delete defect was found and fixed (`20260803000200`), and the database verified empty afterwards |
 | 3 Aug 2026 | Phase 4b batch 1 — setup screens (customers, properties, suppliers, rate card, service templates) and the shared `src/ui` primitives. `service_templates` gained its row type, mapper and repository. **382 unit, 22 integration** |
 | 3 Aug 2026 | Phase 4b batch 2 — ingredients and recipes. `save_recipe` RPC migration **written, not run**. `scaleRecipe` gained a `no_components` gap. **396 unit** |
-| 5 Aug 2026 | Phase 4b batch 3 — **the jobs screen and the live impact preview**, the §4 feature the whole cascade was built for. `save_job` RPC migration **written, not run**; the three `replaceX` repository methods removed in its favour. **434 unit** |
-| | *Next: apply the three pending migrations, then shopping — the first derived screen* |
+| 5 Aug 2026 | Phase 4b batch 3 — **the jobs screen and the live impact preview**, the §4 feature the whole cascade was built for. `save_job` RPC migration written; the three `replaceX` repository methods removed in its favour. **434 unit** |
+| 5 Aug 2026 | **All three pending migrations applied. Integration 27/27, green on two consecutive runs.** Two defects found by running tests that had only ever been written: PostgREST returns `numeric` as a number, not a string, and the suite's cleanup deleted ingredients before recipes across an `on delete restrict` edge, swallowing the error and orphaning a row |
+| | *Next: shopping — the first derived screen (Rule 6)* |
 
 ---
 
@@ -596,7 +597,7 @@ Known gaps.
 |---|---|
 | `recipe_ingredients` — drop `qty_min`, `qty_max` | Rule 13: no range type. Harmless meanwhile — `types.ts` does not map them |
 | `jobs` — reconsider `price` / `price_source` | `JobPricing` needs only the override amount; the engine recomputes the rate-card figure |
-| ~~`job_dishes.portions` — allow null~~ | **Written 5 Aug** as `20260805000100`, not run. Promoted from nice-to-have to blocker: `not null default 0` turns "let the guest count decide" into "make none of this dish", which disables the impact cascade at the column level |
+| ~~`job_dishes.portions` — allow null~~ | **Applied 5 Aug** as `20260805000100`. Promoted from nice-to-have to blocker first: `not null default 0` turned "let the guest count decide" into "make none of this dish", disabling the impact cascade at the column level. A null now round-trips, proven live |
 
 **Tables in place (23):** `kitchens`, `kitchen_members`, `properties`, `customers`,
 `client_rates`, `suppliers`, `ingredients`, `ingredient_price_history`, `stock`, `recipes`,
@@ -687,11 +688,11 @@ Things that are genuinely absent, so nobody wastes an hour looking for them.
 | ~~RLS scoping is unverified~~ | **closed 3 Aug** | Proven live: a select with no `kitchen_id` filter returns only this kitchen's rows, an insert carrying another kitchen is rejected by the with-check policy, and the caller resolves exactly one distinct kitchen. The decision not to hand-filter `kitchen_id` is now tested, not assumed |
 | Bundle is 443 kB (128 kB gzip) | no | Almost all `@supabase/supabase-js`. Fine over wifi, noticeable on supermarket 4G. Worth measuring again before it grows |
 | `source` is always `'ui'` | no | PostgREST runs each request in its own transaction, so a client-side `set_config` does not carry into the following statement. Writes attributable to `ask_sous` or `scan` need an RPC that sets the value and writes in one transaction. Rule 7's propose-and-confirm commit call is the natural place |
-| **Three migrations written, not run** | **yes** | `20260803000300_save_recipe`, `20260803000400_save_job`, `20260805000100_job_dishes_portions_nullable`. Nothing on the recipe or job screens can be saved live until all three are applied, and the last one is what makes a guest-count change move food at all |
+| ~~Three migrations written, not run~~ | **closed 5 Aug** | All three applied and proven live: `save_recipe` lands three tables in one call, `save_job` lands four and refuses a forged kitchen, and `job_dishes.portions` now accepts null so a dish can scale with the guest count. **27/27 integration, green twice in a row** |
 | ~~A guest-count change does not move ingredients~~ | **closed 1 Aug** | `applyBuffetSplit` landed and is wired into `productionBuckets` and `jobFoodCost`. The impact preview now moves revenue, ingredients and food cost together. The `impact.test.ts` test that pinned the gap was rewritten to assert the corrected cascade |
 | `anomalyScan` false-positives on sides | no | It flags any menu with mains and no side, because keying off the service type would put owner-defined text ("BBQ") in `src/` and breach Rule 1. A precise version needs an owner-configured "service types that require sides" table, which does not exist. It is a report, not a blocked action |
 | `prioritisePrep` ordering is a guess | no | Prep date → slack → size → name. Only Paul knows how he actually sequences a prep day. Put it to him with the other open items |
-| Golden pack not wired | Phase 2 | fixtures are in `tests/fixtures/`; `tests/golden/` runner not written |
+| ~~Golden pack not wired~~ | closed 1 Aug | `npm run test:copperpot` runs it: 15 pass, 2 skipped pending owner, 2 todo |
 | The "33 tests" figure is unexplained | no | Counted every way, nothing in the pack is 33: 6 deterministic, 4 system-behaviour, 39 leaf assertions, 30 fixture entities. The dataset calls itself v2 while `ENGINEER_README` calls it v3. Likely describes an earlier or larger pack. Recorded in `PENDING_OWNER.md` §5, not reconciled by inventing cases |
 | ~~`tests/` not covered by typecheck~~ | closed | `tsconfig.test.json` added 31 Jul, referenced from the root config. No DOM lib, so a test needing a browser global fails to compile |
 | ~~No engine import boundary enforced~~ | closed | Enforced by `tests/engine/purity.test.ts`, **not** by oxlint — oxlint 1.75 has no `no-restricted-imports`. A test is stronger here: it asserts the real rule ("imports nothing outside `src/engine`", including Node builtins) and was verified to fail on a planted `react` import |
@@ -756,8 +757,8 @@ the eight tapas dishes. Cheesecake needs confirming before it is treated as lock
 
 | Suite | Command | Covers | Status |
 |---|---|---|---|
-| Integration | `npm run test:integration` | RLS, audit triggers, job delete — live Supabase | **18 pass** (3 Aug). Needs `CPK_TEST_EMAIL`/`CPK_TEST_PASSWORD` |
-| Unit | `npm run test` | engine functions | **253 green** — every engine module, plus `purity` |
+| Integration | `npm run test:integration` | RLS, audit triggers, job delete, `save_recipe`, `save_job` — live Supabase | **27 pass** (5 Aug). Needs `CPK_TEST_EMAIL`/`CPK_TEST_PASSWORD` |
+| Unit | `npm run test` | engine, data, ui | **434 green**, 2 skipped, 2 todo — every engine module, plus `purity`, mappers, repositories and the pure form/impact formatting |
 | Golden | `npm run test:copperpot` | the owner's regression pack | **15 pass, 2 skipped, 2 todo** — read `tests/golden/PENDING_OWNER.md` before touching |
 | E2E | `npm run test:e2e` | workflows, desktop and mobile | not started |
 
@@ -767,3 +768,6 @@ fixture id, so the reason a test exists survives the person who wrote it.
 | Fixture id | Why the test exists |
 |---|---|
 | `CALC-NUCELLA-BBQ-SPLIT` | BBQ sides were scaling to meat eaters instead of all guests. 27 guests, 22 meat eaters, must produce 27 baps and 2700 g of potatoes. |
+| `job_dishes.portions` nullable | `not null default 0` turned "let the guest count decide" into "make none of this dish", silently disabling the impact cascade at the column level. The live `save_job` test asserts a null round-trips. |
+| integration cleanup ordering | Ingredients were deleted before recipes across an `on delete restrict` edge and the error was swallowed, orphaning a row that broke the NEXT run on a unique constraint — a failure that looks nothing like its cause. Cleanup now runs parents-first at both ends of the suite and verifies ingredients as well as jobs. |
+| `recipe_ingredients.qty` type | An assertion written but never run guessed PostgREST returns `numeric` as the string `'2.0000'`. It returns a number. The test now asserts `typeof === 'number'`, because the engine multiplies this value and a string would concatenate. |

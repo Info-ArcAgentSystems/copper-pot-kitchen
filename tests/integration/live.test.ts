@@ -101,42 +101,67 @@ beforeAll(async () => {
   if (membership.error !== null) throw new Error(membership.error.message);
   kitchenId = (membership.data?.[0] as { kitchen_id: string } | undefined)?.kitchen_id ?? '';
   if (kitchenId === '') throw new Error('signed-in user has no kitchen_members row');
-});
+
+  // Clean at BOTH ends, not just the end. A run that dies hard — a crash, a
+  // ctrl-C, a hook timeout — never reaches afterAll, and the next run then fails
+  // on a leftover rather than on anything it did itself. That is precisely how the
+  // orphaned ingredient above presented.
+  await cleanUp();
+}, 30_000);
 
 /**
  * Clean up by PATTERN, not by tracked ids.
  *
- * Three reasons, all learned the hard way on the first green run:
+ * Four reasons, all learned the hard way on a run that went red:
  *
  *   - One request, not one per job. Twelve sequential deletes at ~700ms each ran
  *     past vitest's 10s hook timeout and stopped partway, leaving rows behind.
  *   - Self-healing. A pattern delete also clears anything a previously failed run
  *     abandoned, so leftovers never accumulate.
- *   - Order. Jobs MUST go before recipes: `job_dishes.recipe_id` is
- *     `on delete restrict`, so a recipe with a dish still pointing at it refuses
- *     to delete. Deleting jobs first cascades those dishes away.
+ *   - ORDER, which is the whole difficulty. Two `on delete restrict` edges point
+ *     backwards, so parents must go first and free their children:
  *
- * Errors are surfaced rather than swallowed. A silent cleanup failure leaves data
- * in the owner's database and reports success, which is the worst combination.
+ *         jobs         first — `job_dishes.recipe_id` restricts, so a recipe with
+ *                      a dish pointing at it refuses to delete
+ *         recipes      next  — `recipe_ingredients.ingredient_id` restricts, so an
+ *                      ingredient with a recipe line pointing at it refuses too
+ *         ingredients  last
+ *
+ *     Ingredients used to be deleted BEFORE recipes, and the resulting error was
+ *     swallowed. The orphan then survived to break the following run on the unique
+ *     (kitchen_id, name) constraint — a failure that looks nothing like its cause.
+ *   - Errors are surfaced, never swallowed. A silent cleanup failure leaves data in
+ *     the owner's database and reports success, the worst of both.
  */
 async function cleanUp(): Promise<void> {
-  const jobs = await db.from('jobs').delete().eq('service_type', 'INTEGRATION TEST');
-  if (jobs.error !== null) throw new Error(`cleanup failed on jobs: ${jobs.error.message}`);
+  const step = async (label: string, run: PromiseLike<{ error: { message: string } | null }>) => {
+    const { error } = await run;
+    if (error !== null) throw new Error(`cleanup failed on ${label}: ${error.message}`);
+  };
 
-  await db.from('customers').delete().like('name', 'INTEGRATION TEST%');
-  await db.from('ingredients').delete().like('name', 'INTEGRATION TEST%');
-  await db.from('client_rates').delete().eq('client_group', 'INTEGRATION TEST');
-  await db.from('service_templates').delete().eq('service_type', 'INTEGRATION TEST');
+  await step('jobs', db.from('jobs').delete().eq('service_type', 'INTEGRATION TEST'));
+  await step('recipes', db.from('recipes').delete().like('name', 'INTEGRATION TEST%'));
+  await step('ingredients', db.from('ingredients').delete().like('name', 'INTEGRATION TEST%'));
+  await step('customers', db.from('customers').delete().like('name', 'INTEGRATION TEST%'));
+  await step('client_rates', db.from('client_rates').delete().eq('client_group', 'INTEGRATION TEST'));
+  await step(
+    'service_templates',
+    db.from('service_templates').delete().eq('service_type', 'INTEGRATION TEST'),
+  );
 
-  const recipes = await db.from('recipes').delete().like('name', 'INTEGRATION TEST%');
-  if (recipes.error !== null) {
-    throw new Error(`cleanup failed on recipes: ${recipes.error.message}`);
+  // Prove it, rather than assume it. Ingredients are checked as well as jobs now,
+  // because an ingredient is exactly what survived last time.
+  const jobsLeft = await db.from('jobs').select('id').eq('service_type', 'INTEGRATION TEST');
+  if ((jobsLeft.data ?? []).length > 0) {
+    throw new Error(`cleanup left ${(jobsLeft.data ?? []).length} job(s) behind`);
   }
 
-  // Prove it, rather than assume it.
-  const left = await db.from('jobs').select('id').eq('service_type', 'INTEGRATION TEST');
-  if ((left.data ?? []).length > 0) {
-    throw new Error(`cleanup left ${(left.data ?? []).length} job(s) behind`);
+  const ingredientsLeft = await db
+    .from('ingredients')
+    .select('id')
+    .like('name', 'INTEGRATION TEST%');
+  if ((ingredientsLeft.data ?? []).length > 0) {
+    throw new Error(`cleanup left ${(ingredientsLeft.data ?? []).length} ingredient(s) behind`);
   }
 }
 
@@ -473,7 +498,15 @@ live('save_recipe RPC (batch 2)', () => {
 
     const components = await db.from('recipe_ingredients').select('*').eq('recipe_id', recipeId);
     expect(components.data ?? []).toHaveLength(1);
-    expect((components.data?.[0] as { qty: string }).qty).toBe('2.0000');
+
+    // `numeric(12,4)` comes back as a JSON NUMBER, not the string '2.0000' this
+    // assertion originally guessed at. Worth pinning rather than loosening: the
+    // engine multiplies this value, and `RecipeIngredientRow.qty` is typed
+    // `number | null` with the mapper passing it straight through — so a string
+    // here would be a silent '2' * 10 concatenation waiting to happen.
+    const qty = (components.data?.[0] as { qty: unknown }).qty;
+    expect(typeof qty, 'qty must arrive as a number the engine can multiply').toBe('number');
+    expect(qty).toBe(2);
 
     const unq = await db.from('recipe_unquantified').select('*').eq('recipe_id', recipeId);
     expect(unq.data ?? []).toHaveLength(1);

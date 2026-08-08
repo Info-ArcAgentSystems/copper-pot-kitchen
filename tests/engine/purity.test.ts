@@ -53,10 +53,26 @@ describe('engine purity', () => {
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/\/\/.*$/gm, '');
 
-    for (const forbidden of ['window', 'document', 'localStorage', 'fetch(', 'supabase']) {
-      expect(withoutComments.includes(forbidden), `${file} references ${forbidden}`).toBe(
-        false,
-      );
+    // Matched on WORD BOUNDARIES, not as substrings.
+    //
+    // A bare substring check fired on `windowFrom` in the PurchaseState type —
+    // `window_from` is the schema's own word for a shopping window, and it is not
+    // a browser global. Same imprecision as the earlier version of this file that
+    // flagged the comment explaining the rule it enforces.
+    //
+    // `\bwindow\b` still catches `window.location`, because the boundary after
+    // "window" is the dot; it does not catch `windowFrom`, where "w" and "F" are
+    // both word characters and there is no boundary between them.
+    const forbidden: [string, RegExp][] = [
+      ['window', /\bwindow\b/],
+      ['document', /\bdocument\b/],
+      ['localStorage', /\blocalStorage\b/],
+      ['fetch(', /\bfetch\s*\(/],
+      ['supabase', /supabase/i],
+    ];
+
+    for (const [name, pattern] of forbidden) {
+      expect(pattern.test(withoutComments), `${file} references ${name}`).toBe(false);
     }
   });
 });

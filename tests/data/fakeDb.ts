@@ -49,6 +49,13 @@ export function fakeDb(
       calls.push({ op: 'insert', table, payload: newRows });
       return newRows.map((r) => ({ id: 'generated', ...r }));
     },
+    async upsert(table, newRows, onConflict) {
+      // `onConflict` goes in `value`, not `column`: the no-kitchen_id guard reads
+      // `column` as "a filter this call scopes by", and a conflict target is not
+      // that. `purchase_state`'s target legitimately NAMES kitchen_id.
+      calls.push({ op: 'upsert', table, value: onConflict, payload: newRows });
+      return newRows as Row[];
+    },
     async update(table, id, patch) {
       calls.push({ op: 'update', table, value: id, payload: patch });
       return [{ id, ...patch }];

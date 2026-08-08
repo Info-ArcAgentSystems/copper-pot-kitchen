@@ -674,6 +674,105 @@ live('save_job RPC (batch 3)', () => {
   });
 });
 
+live('purchase_state — Rule 6 (batch 4c)', () => {
+  // The unit tests pin the upsert payload. Only this proves the constraint is
+  // really there and that the conflict target matches it — the difference between
+  // updating a tick and silently creating a second one.
+  const FROM = '2026-08-10';
+  const TO = '2026-08-17';
+
+  const makeIngredient = async (): Promise<string> => {
+    const { data, error } = await db
+      .from('ingredients')
+      .insert({ kitchen_id: kitchenId, name: 'INTEGRATION TEST mince', stock_unit: 'kg' })
+      .select('id')
+      .single();
+    if (error !== null) throw new Error(`could not create ingredient: ${error.message}`);
+    return (data as { id: string }).id;
+  };
+
+  it('THE ONE THAT MATTERS: re-ticking UPDATES rather than duplicating', async () => {
+    const ingredientId = await makeIngredient();
+
+    const upsert = (qty: number, done: boolean) =>
+      db
+        .from('purchase_state')
+        .upsert(
+          {
+            kitchen_id: kitchenId,
+            ingredient_id: ingredientId,
+            window_from: FROM,
+            window_to: TO,
+            qty_bought: qty,
+            unit: 'kg',
+            done,
+          },
+          { onConflict: 'kitchen_id,ingredient_id,window_from,window_to' },
+        )
+        .select('*');
+
+    const first = await upsert(2, false);
+    expect(first.error).toBeNull();
+
+    const second = await upsert(3, true);
+    expect(second.error, 'the conflict target must match the unique constraint').toBeNull();
+
+    // ONE row, not two. A duplicate would be subtracted from the requirement
+    // twice, producing a list that under-buys while looking correct.
+    const rows = await db
+      .from('purchase_state')
+      .select('*')
+      .eq('ingredient_id', ingredientId);
+
+    expect(rows.data ?? []).toHaveLength(1);
+    expect((rows.data?.[0] as { qty_bought: number }).qty_bought).toBe(3);
+    expect((rows.data?.[0] as { done: boolean }).done).toBe(true);
+
+    await db.from('purchase_state').delete().eq('ingredient_id', ingredientId);
+    await db.from('ingredients').delete().eq('id', ingredientId);
+  });
+
+  it('a different WINDOW is a different tick, not an update of this one', async () => {
+    // "Bought 2 kg for this weekend" is not "bought 2 kg for next weekend". The
+    // window is part of the row's identity, which is why it is in the unique key.
+    const ingredientId = await makeIngredient();
+
+    const write = (to: string, qty: number) =>
+      db.from('purchase_state').upsert(
+        {
+          kitchen_id: kitchenId,
+          ingredient_id: ingredientId,
+          window_from: FROM,
+          window_to: to,
+          qty_bought: qty,
+          unit: 'kg',
+          done: false,
+        },
+        { onConflict: 'kitchen_id,ingredient_id,window_from,window_to' },
+      );
+
+    expect((await write(TO, 2)).error).toBeNull();
+    expect((await write('2026-08-24', 5)).error).toBeNull();
+
+    const rows = await db.from('purchase_state').select('*').eq('ingredient_id', ingredientId);
+    expect(rows.data ?? []).toHaveLength(2);
+
+    await db.from('purchase_state').delete().eq('ingredient_id', ingredientId);
+    await db.from('ingredients').delete().eq('id', ingredientId);
+  });
+
+  it('RLS scopes it, and rejects a row naming another kitchen', async () => {
+    const { error } = await db.from('purchase_state').insert({
+      kitchen_id: '00000000-0000-0000-0000-000000000000',
+      ingredient_id: '00000000-0000-0000-0000-000000000000',
+      window_from: FROM,
+      window_to: TO,
+    });
+
+    expect(error, 'the with-check policy should have refused this').not.toBeNull();
+  });
+});
+
 live('the audit trail cannot be tampered with from the app', () => {
   it('a direct update outside any repository is STILL logged', async () => {
     // The point of using a trigger rather than repository code: this write does not

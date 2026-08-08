@@ -25,9 +25,11 @@ import { ServiceTemplates } from './features/setup/ServiceTemplates';
 import { Ingredients } from './features/setup/Ingredients';
 import { Recipes } from './features/setup/Recipes';
 import { Jobs } from './features/jobs/Jobs';
+import { Shopping } from './features/shopping/Shopping';
 
 const TABS = [
   { to: '/', label: 'Jobs' },
+  { to: '/shopping', label: 'Shopping' },
   { to: '/prep', label: 'Prep' },
   { to: '/recipes', label: 'Recipes' },
   { to: '/ingredients', label: 'Stock' },
@@ -83,7 +85,7 @@ export default function App(): ReactNode {
           <Routes>
             <Route path="/" element={<Jobs />} />
             <Route path="/prep" element={<NotBuiltYet name="Prep" />} />
-            <Route path="/shopping" element={<NotBuiltYet name="Shopping" />} />
+            <Route path="/shopping" element={<Shopping />} />
             <Route path="/recipes" element={<Recipes />} />
             <Route path="/ingredients" element={<Ingredients />} />
             <Route path="/setup" element={<Setup />} />

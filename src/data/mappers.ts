@@ -49,6 +49,8 @@ import type {
   KitchenId,
   Property,
   PropertyId,
+  PurchaseState,
+  PurchaseStateId,
   PurchaseUnit,
   Recipe,
   RecipeComponent,
@@ -77,6 +79,7 @@ import type {
   RecipeIngredientRow,
   RecipeRow,
   RecipeUnquantifiedRow,
+  PurchaseStateRow,
   StockRow,
   SupplierRow,
 } from './rows';
@@ -488,4 +491,23 @@ export const serviceTemplateToRow = (t: ServiceTemplate): ServiceTemplateRow => 
   item: t.item,
   kind: t.kind,
   position: t.position,
+});
+
+// ---------------------------------------------------------------------------
+// Purchase state — Rule 6's single exception
+// ---------------------------------------------------------------------------
+
+export const purchaseStateToDomain = (r: PurchaseStateRow): PurchaseState => ({
+  id: r.id as PurchaseStateId,
+  kitchenId: r.kitchen_id as KitchenId,
+  ingredientId: r.ingredient_id as IngredientId,
+  windowFrom: r.window_from as IsoDate,
+  windowTo: r.window_to as IsoDate,
+  // The unit is nullable in the schema but meaningless without one, so it falls
+  // back to the ingredient's own stock unit at the point of use rather than being
+  // guessed here. `qty_bought` defaults to 0 in the column, and 0 bought is a real
+  // statement — it is not the "unknown" that Rule 8 protects.
+  qtyBought: { value: r.qty_bought, unit: (r.unit ?? '') as StockUnit },
+  done: r.done,
+  updatedAt: r.updated_at as IsoTimestamp,
 });

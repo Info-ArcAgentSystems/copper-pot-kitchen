@@ -32,6 +32,7 @@ import {
   toEuros,
   propertyToDomain,
   propertyToRow,
+  purchaseStateToDomain,
   recipeToDomain,
   serviceTemplateToDomain,
   serviceTemplateToRow,
@@ -49,6 +50,7 @@ import type {
   JobExtraRow,
   JobRow,
   PropertyRow,
+  PurchaseStateRow,
   RecipeIngredientRow,
   RecipeRow,
   RecipeUnquantifiedRow,
@@ -60,13 +62,18 @@ import type {
   ClientRate,
   Customer,
   Ingredient,
+  IngredientId,
+  IsoDate,
   Job,
   JobId,
+  KitchenId,
   Property,
+  PurchaseState,
   Recipe,
   RecipeId,
   ServiceTemplate,
   StockLevel,
+  StockUnit,
   Supplier,
 } from '../engine/types';
 
@@ -88,6 +95,7 @@ const T = {
   jobExtras: 'job_extras',
   jobChanges: 'job_changes',
   serviceTemplates: 'service_templates',
+  purchaseState: 'purchase_state',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -503,5 +511,77 @@ export const jobChangeRepository = (db: Db) => ({
         source: r.source,
       }))
       .sort((a, b) => (a.changedAt < b.changedAt ? 1 : -1));
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Purchase state — the ONLY write the shopping screen makes
+// ---------------------------------------------------------------------------
+
+/**
+ * Rule 6: shopping is derived, never stored. Only the owner's ticks persist, and
+ * this is the whole of that.
+ *
+ * Note what is absent. There is no `saveList`, no `saveLine`, no name, quantity,
+ * pack count or supplier — nothing that could let a computed list be written down
+ * and then go stale. The list is recomputed from jobs on every view, which is what
+ * makes a guest-count change on Tuesday alter Wednesday's shopping without anyone
+ * asking it to.
+ *
+ * `tests/ui/derived.test.ts` fails if the shopping feature ever writes anywhere else.
+ */
+export const purchaseStateRepository = (db: Db) => ({
+  /**
+   * The ticks for one window.
+   *
+   * Filtered by `window_from`/`window_to`, which is identity rather than scoping —
+   * a tick means "bought for THESE dates". Not a kitchen filter: RLS does that.
+   */
+  async forWindow(from: IsoDate, to: IsoDate): Promise<PurchaseState[]> {
+    const rows = (await db.selectWhere(
+      T.purchaseState,
+      'window_from',
+      from,
+    )) as unknown as PurchaseStateRow[];
+
+    return rows.filter((r) => r.window_to === to).map(purchaseStateToDomain);
+  },
+
+  /**
+   * Record what he has bought, or tick the line off.
+   *
+   * An upsert on the natural key, not an insert: tapping the same item twice is
+   * ordinary, and read-then-write would race its own stale read into a duplicate
+   * key on the second tap.
+   *
+   * `kitchen_id` IS written — the RLS with-check policy requires the row to name
+   * the caller's kitchen — but nothing here filters by it.
+   */
+  async setBought(
+    kitchenId: KitchenId,
+    ingredientId: IngredientId,
+    from: IsoDate,
+    to: IsoDate,
+    state: { qtyBought: number; unit: StockUnit | null; done: boolean },
+  ): Promise<void> {
+    await db.upsert(
+      T.purchaseState,
+      [
+        {
+          kitchen_id: kitchenId,
+          ingredient_id: ingredientId,
+          window_from: from,
+          window_to: to,
+          qty_bought: state.qtyBought,
+          unit: state.unit,
+          done: state.done,
+          updated_at: new Date().toISOString(),
+        },
+      ],
+      // Must match the unique constraint exactly. Naming fewer columns inserts a
+      // duplicate rather than updating, and the duplicate would be subtracted
+      // twice from the outstanding figure.
+      'kitchen_id,ingredient_id,window_from,window_to',
+    );
   },
 });

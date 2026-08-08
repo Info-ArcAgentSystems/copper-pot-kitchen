@@ -41,6 +41,20 @@ export interface Db {
 
   insert(table: string, rows: readonly Row[]): Promise<Row[]>;
 
+  /**
+   * Insert, or update the row that collides on `onConflict`.
+   *
+   * Exists for `purchase_state`, whose unique key is
+   * `(kitchen_id, ingredient_id, window_from, window_to)`. Ticking an item off is
+   * "set the state for this ingredient in this window", which is naturally an
+   * upsert: read-then-insert-or-update would race its own stale read into a
+   * constraint violation on the second tap.
+   *
+   * `onConflict` names the constraint's columns. Passing the wrong ones inserts a
+   * duplicate rather than updating, which is why the repository tests assert it.
+   */
+  upsert(table: string, rows: readonly Row[], onConflict: string): Promise<Row[]>;
+
   update(table: string, id: string, patch: Row): Promise<Row[]>;
 
   deleteWhere(table: string, column: string, value: string): Promise<void>;

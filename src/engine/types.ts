@@ -393,3 +393,35 @@ export interface ServiceTemplate {
   readonly kind: ServiceTemplateKind;
   readonly position: number;
 }
+
+// ---------------------------------------------------------------------------
+// Rule 6 — the only stored part of a derived list
+// ---------------------------------------------------------------------------
+
+export type PurchaseStateId = Brand<string, 'PurchaseStateId'>;
+
+/**
+ * The owner's tick against one ingredient, for one shopping window.
+ *
+ * Rule 6: shopping, prep and packing lists are DERIVED, never stored. This is the
+ * exception the rule names — his ticks — and it is deliberately the smallest thing
+ * that could be persisted. There is no line here: no name, no required quantity,
+ * no pack count, no supplier. Every one of those is recomputed from jobs on each
+ * view, so none of them can go stale.
+ *
+ * If a future change adds a quantity or a name to this record, the list has begun
+ * to be stored and the cascade has stopped being automatic. `tests/ui/derived.test.ts`
+ * is what notices.
+ */
+export interface PurchaseState {
+  readonly id: PurchaseStateId;
+  readonly kitchenId: KitchenId;
+  readonly ingredientId: IngredientId;
+  /** Part of the identity, not a filter — see the row type. */
+  readonly windowFrom: IsoDate;
+  readonly windowTo: IsoDate;
+  /** What he has already bought. Feeds `outstandingShopping` as a subtraction. */
+  readonly qtyBought: StockQuantity;
+  readonly done: boolean;
+  readonly updatedAt: IsoTimestamp;
+}

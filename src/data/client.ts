@@ -74,6 +74,15 @@ export function supabaseDb(client: SupabaseClient = supabaseClient()): Db {
       return rows(table, 'insert', await client.from(table).insert(newRows).select('*'));
     },
 
+    async upsert(table, newRows, onConflict) {
+      if (newRows.length === 0) return [];
+      return rows(
+        table,
+        'upsert',
+        await client.from(table).upsert(newRows, { onConflict }).select('*'),
+      );
+    },
+
     async update(table, id, patch) {
       return rows(
         table,

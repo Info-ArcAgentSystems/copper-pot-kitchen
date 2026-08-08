@@ -184,3 +184,22 @@ export type ServiceTemplateRow = {
   kind: string;
   position: number;
 }
+
+/**
+ * The ONLY thing about a shopping list that is stored (Rule 6).
+ *
+ * Identity is (kitchen_id, ingredient_id, window_from, window_to) — a tick belongs
+ * to a date window, not to an ingredient. "Bought 2 kg for this weekend" is not
+ * "bought 2 kg for next weekend", so the window is part of what the row means.
+ */
+export type PurchaseStateRow = {
+  id: string;
+  kitchen_id: string;
+  ingredient_id: string;
+  window_from: string;
+  window_to: string;
+  qty_bought: number;
+  unit: string | null;
+  done: boolean;
+  updated_at: string;
+}

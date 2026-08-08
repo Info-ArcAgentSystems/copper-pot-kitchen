@@ -374,3 +374,91 @@ button.link {
   margin: var(--space-2) 0 0;
   padding-left: var(--space-5);
 }
+
+/* ---------------------------------------------------------------------------
+   Shopping.
+
+   Read one-handed, in a supermarket, while holding a trolley. So the line leads
+   with the thing that goes IN the trolley — "2 × 1 kg" — at the largest size on
+   the row, and the workings sit underneath in a size you only read if you doubt
+   the number.
+   --------------------------------------------------------------------------- */
+
+.supplier-group {
+  margin-bottom: var(--space-5);
+}
+
+.supplier-group h2 {
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  border-bottom: 2px solid var(--border);
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.shop-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+/* The whole row is the target, not just the box. A 44px checkbox is still a
+   small thing to hit with a thumb while carrying something. */
+.shop-line .check {
+  margin: 0;
+  min-height: var(--touch-min);
+  gap: var(--space-3);
+}
+
+.shop-line .buy {
+  font-size: 1.125rem;
+  font-weight: 700;
+  font-variant-numeric: var(--num);
+  white-space: nowrap;
+}
+
+.shop-name {
+  font-weight: 600;
+}
+
+.shop-line .workings {
+  font-size: 0.8125rem;
+  font-variant-numeric: var(--num);
+  padding-left: calc(var(--touch-min) + var(--space-3));
+}
+
+/* Ticked off. Faded rather than removed — he can see what he has already got, and
+   untick it if he was wrong. */
+.shop-line.done .buy,
+.shop-line.done .shop-name {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+
+.needs-fixing {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.needs-fixing h2,
+.unresolved-block h2 {
+  font-size: 1rem;
+  margin: 0 0 var(--space-2);
+}
+
+.needs-fixing ul,
+.unresolved-block ul {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+}
+
+.needs-fixing li,
+.unresolved-block li {
+  margin-bottom: var(--space-2);
+}

@@ -425,3 +425,25 @@ export interface PurchaseState {
   readonly done: boolean;
   readonly updatedAt: IsoTimestamp;
 }
+
+/**
+ * The owner's tick against one recipe, on one prep day.
+ *
+ * Rule 6 again, and the same discipline as [PurchaseState]: this is deliberately
+ * the smallest thing that could be stored. No batch count, no portions, no
+ * surplus, no allocation — every one of those is recomputed by `productionBuckets`
+ * on each view, so none of them can go stale.
+ *
+ * A quantity appearing on this record would mean the plan had begun to be stored.
+ * `tests/ui/derived.test.ts` is what notices.
+ */
+export interface PrepState {
+  readonly id: PrepStateId;
+  readonly kitchenId: KitchenId;
+  readonly recipeId: RecipeId;
+  readonly prepDate: IsoDate;
+  readonly done: boolean;
+  readonly updatedAt: IsoTimestamp;
+}
+
+export type PrepStateId = Brand<string, 'PrepStateId'>;

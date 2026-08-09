@@ -32,6 +32,7 @@ import {
   toEuros,
   propertyToDomain,
   propertyToRow,
+  prepStateToDomain,
   purchaseStateToDomain,
   recipeToDomain,
   serviceTemplateToDomain,
@@ -50,6 +51,7 @@ import type {
   JobExtraRow,
   JobRow,
   PropertyRow,
+  PrepStateRow,
   PurchaseStateRow,
   RecipeIngredientRow,
   RecipeRow,
@@ -68,6 +70,7 @@ import type {
   JobId,
   KitchenId,
   Property,
+  PrepState,
   PurchaseState,
   Recipe,
   RecipeId,
@@ -96,6 +99,7 @@ const T = {
   jobChanges: 'job_changes',
   serviceTemplates: 'service_templates',
   purchaseState: 'purchase_state',
+  prepState: 'prep_state',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -582,6 +586,70 @@ export const purchaseStateRepository = (db: Db) => ({
       // duplicate rather than updating, and the duplicate would be subtracted
       // twice from the outstanding figure.
       'kitchen_id,ingredient_id,window_from,window_to',
+    );
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Prep state — the ONLY write the prep screen makes
+// ---------------------------------------------------------------------------
+
+/**
+ * Rule 6 for the second time. The prep plan is derived from jobs on every view;
+ * only the tick persists.
+ *
+ * Note what is absent, exactly as in [purchaseStateRepository]: no batch count, no
+ * portions, no surplus, no per-job allocation. Those are recomputed by
+ * `productionBuckets`, which is what makes a guest-count change move the tray
+ * count without anyone asking it to.
+ */
+export const prepStateRepository = (db: Db) => ({
+  /**
+   * The ticks whose prep date falls in a range.
+   *
+   * `prep_date` is identity, not scoping — RLS does the scoping. The range is
+   * filtered in memory because the port deliberately has no comparison operators:
+   * adding `gte`/`lte` for one screen would widen the surface that repositories
+   * can express, and a kitchen's prep history is small.
+   */
+  async forRange(from: IsoDate, to: IsoDate): Promise<PrepState[]> {
+    const rows = (await db.selectAll(T.prepState)) as unknown as PrepStateRow[];
+
+    return rows
+      .filter((r) => r.prep_date >= from && r.prep_date <= to)
+      .map(prepStateToDomain);
+  },
+
+  /**
+   * Tick a recipe off for a day, or untick it.
+   *
+   * Upsert on the natural key: ticking the same line twice is ordinary, and
+   * read-then-write would race its own stale read into a duplicate.
+   *
+   * `kitchen_id` is WRITTEN, because the RLS with-check policy requires the row to
+   * name the caller's kitchen. Nothing here filters by it.
+   */
+  async setDone(
+    kitchenId: KitchenId,
+    recipeId: RecipeId,
+    prepDate: IsoDate,
+    done: boolean,
+  ): Promise<void> {
+    await db.upsert(
+      T.prepState,
+      [
+        {
+          kitchen_id: kitchenId,
+          recipe_id: recipeId,
+          prep_date: prepDate,
+          done,
+          updated_at: new Date().toISOString(),
+        },
+      ],
+      // Must match the unique constraint exactly. Naming fewer columns would insert
+      // a duplicate instead of updating, and the line would then show two ticks
+      // that disagree.
+      'kitchen_id,recipe_id,prep_date',
     );
   },
 });

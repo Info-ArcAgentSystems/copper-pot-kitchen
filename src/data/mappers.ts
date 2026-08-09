@@ -49,6 +49,8 @@ import type {
   KitchenId,
   Property,
   PropertyId,
+  PrepState,
+  PrepStateId,
   PurchaseState,
   PurchaseStateId,
   PurchaseUnit,
@@ -79,6 +81,7 @@ import type {
   RecipeIngredientRow,
   RecipeRow,
   RecipeUnquantifiedRow,
+  PrepStateRow,
   PurchaseStateRow,
   StockRow,
   SupplierRow,
@@ -508,6 +511,15 @@ export const purchaseStateToDomain = (r: PurchaseStateRow): PurchaseState => ({
   // guessed here. `qty_bought` defaults to 0 in the column, and 0 bought is a real
   // statement — it is not the "unknown" that Rule 8 protects.
   qtyBought: { value: r.qty_bought, unit: (r.unit ?? '') as StockUnit },
+  done: r.done,
+  updatedAt: r.updated_at as IsoTimestamp,
+});
+
+export const prepStateToDomain = (r: PrepStateRow): PrepState => ({
+  id: r.id as PrepStateId,
+  kitchenId: r.kitchen_id as KitchenId,
+  recipeId: r.recipe_id as RecipeId,
+  prepDate: r.prep_date as IsoDate,
   done: r.done,
   updatedAt: r.updated_at as IsoTimestamp,
 });

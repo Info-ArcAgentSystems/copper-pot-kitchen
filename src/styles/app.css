@@ -462,3 +462,95 @@ button.link {
 .unresolved-block li {
   margin-bottom: var(--space-2);
 }
+
+/* ---------------------------------------------------------------------------
+   Prep.
+
+   Read in a kitchen, at a bench, while doing something else with the other hand.
+   So the line leads with the thing being made — "5 trays" — and the per-job split
+   sits underneath, indented, because that is the second question not the first.
+   --------------------------------------------------------------------------- */
+
+.prep-day {
+  margin-bottom: var(--space-5);
+}
+
+.prep-day h2 {
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  border-bottom: 2px solid var(--border);
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.prep-day .today {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.prep-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.prep-line .check {
+  margin: 0;
+  min-height: var(--touch-min);
+  gap: var(--space-3);
+}
+
+.prep-line .batch {
+  font-size: 1.125rem;
+  font-weight: 700;
+  font-variant-numeric: var(--num);
+  white-space: nowrap;
+}
+
+.prep-name {
+  font-weight: 600;
+}
+
+.prep-total {
+  font-size: 0.8125rem;
+  font-variant-numeric: var(--num);
+  padding-left: calc(var(--touch-min) + var(--space-3));
+}
+
+/* Surplus is information, not a warning — 6 spare portions is a normal outcome of
+   rounding up to whole trays, and colouring it red would make every other line
+   look like a problem. */
+.surplus {
+  color: var(--warning);
+}
+
+.allocations {
+  list-style: none;
+  margin: var(--space-1) 0 0;
+  padding-left: calc(var(--touch-min) + var(--space-3));
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.allocations li {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+}
+
+.allocations .num {
+  font-variant-numeric: var(--num);
+  font-weight: 600;
+  min-width: 2.5em;
+  text-align: right;
+}
+
+.prep-line.done .batch,
+.prep-line.done .prep-name {
+  text-decoration: line-through;
+  opacity: 0.55;
+}

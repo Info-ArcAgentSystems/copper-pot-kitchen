@@ -26,6 +26,7 @@ import { Ingredients } from './features/setup/Ingredients';
 import { Recipes } from './features/setup/Recipes';
 import { Jobs } from './features/jobs/Jobs';
 import { Shopping } from './features/shopping/Shopping';
+import { Prep } from './features/prep/Prep';
 
 const TABS = [
   { to: '/', label: 'Jobs' },
@@ -35,15 +36,6 @@ const TABS = [
   { to: '/ingredients', label: 'Stock' },
   { to: '/setup', label: 'Setup' },
 ] as const;
-
-function NotBuiltYet({ name }: { name: string }): ReactNode {
-  return (
-    <div className="empty">
-      <h2>{name}</h2>
-      <p className="muted">This screen is not built yet.</p>
-    </div>
-  );
-}
 
 function Header(): ReactNode {
   const { state } = useKitchen();
@@ -84,7 +76,7 @@ export default function App(): ReactNode {
         <main className="app-main">
           <Routes>
             <Route path="/" element={<Jobs />} />
-            <Route path="/prep" element={<NotBuiltYet name="Prep" />} />
+            <Route path="/prep" element={<Prep />} />
             <Route path="/shopping" element={<Shopping />} />
             <Route path="/recipes" element={<Recipes />} />
             <Route path="/ingredients" element={<Ingredients />} />

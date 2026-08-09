@@ -773,6 +773,81 @@ live('purchase_state — Rule 6 (batch 4c)', () => {
   });
 });
 
+live('prep_state — Rule 6 (batch 4d)', () => {
+  const DAY = '2026-08-17';
+
+  const makeRecipe = async (): Promise<string> => {
+    const { data, error } = await db.rpc('save_recipe', {
+      p_recipe: {
+        id: null,
+        name: 'INTEGRATION TEST lasagne',
+        yield_type: 'batch',
+        portions_per_batch: 9,
+        confidence: 'locked',
+      },
+      p_components: [],
+      p_unquantified: [],
+    });
+    if (error !== null) throw new Error(`could not create recipe: ${error.message}`);
+    return data as string;
+  };
+
+  it('re-ticking UPDATES rather than duplicating', async () => {
+    const recipeId = await makeRecipe();
+
+    const tick = (done: boolean) =>
+      db
+        .from('prep_state')
+        .upsert(
+          { kitchen_id: kitchenId, recipe_id: recipeId, prep_date: DAY, done },
+          { onConflict: 'kitchen_id,recipe_id,prep_date' },
+        )
+        .select('*');
+
+    expect((await tick(true)).error).toBeNull();
+    expect((await tick(false)).error, 'the conflict target must match the constraint').toBeNull();
+
+    const rows = await db.from('prep_state').select('*').eq('recipe_id', recipeId);
+
+    // ONE row. Two would show a line ticked and unticked at the same time.
+    expect(rows.data ?? []).toHaveLength(1);
+    expect((rows.data?.[0] as { done: boolean }).done).toBe(false);
+
+    await db.from('prep_state').delete().eq('recipe_id', recipeId);
+    await db.from('recipes').delete().eq('id', recipeId);
+  });
+
+  it('the same recipe on a DIFFERENT DAY is a separate tick', async () => {
+    // Two prep days is two pieces of work. One tick must not strike both through.
+    const recipeId = await makeRecipe();
+
+    const tick = (day: string) =>
+      db.from('prep_state').upsert(
+        { kitchen_id: kitchenId, recipe_id: recipeId, prep_date: day, done: true },
+        { onConflict: 'kitchen_id,recipe_id,prep_date' },
+      );
+
+    expect((await tick(DAY)).error).toBeNull();
+    expect((await tick('2026-08-18')).error).toBeNull();
+
+    const rows = await db.from('prep_state').select('*').eq('recipe_id', recipeId);
+    expect(rows.data ?? []).toHaveLength(2);
+
+    await db.from('prep_state').delete().eq('recipe_id', recipeId);
+    await db.from('recipes').delete().eq('id', recipeId);
+  });
+
+  it('RLS rejects a tick naming another kitchen', async () => {
+    const { error } = await db.from('prep_state').insert({
+      kitchen_id: '00000000-0000-0000-0000-000000000000',
+      recipe_id: '00000000-0000-0000-0000-000000000000',
+      prep_date: DAY,
+    });
+
+    expect(error, 'the with-check policy should have refused this').not.toBeNull();
+  });
+});
+
 live('the audit trail cannot be tampered with from the app', () => {
   it('a direct update outside any repository is STILL logged', async () => {
     // The point of using a trigger rather than repository code: this write does not

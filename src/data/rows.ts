@@ -203,3 +203,23 @@ export type PurchaseStateRow = {
   done: boolean;
   updated_at: string;
 }
+
+/**
+ * The prep equivalent of `PurchaseStateRow`, and simpler.
+ *
+ * Identity is (kitchen_id, recipe_id, prep_date) — NO window. A prep tick belongs
+ * to a recipe on a day, so moving the screen's date range does not change which
+ * ticks apply. Shopping needs a window because "bought for this weekend" is a
+ * different fact from "bought for next"; "made the lasagne on the 17th" is not.
+ *
+ * Per RECIPE per day, not per job. One tray feeding three jobs is one tick —
+ * ticking it three times would mean he made it three times.
+ */
+export type PrepStateRow = {
+  id: string;
+  kitchen_id: string;
+  recipe_id: string;
+  prep_date: string;
+  done: boolean;
+  updated_at: string;
+}

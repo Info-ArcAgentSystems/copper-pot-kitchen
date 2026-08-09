@@ -554,3 +554,64 @@ button.link {
   text-decoration: line-through;
   opacity: 0.55;
 }
+
+/* ---------------------------------------------------------------------------
+   Packing.
+
+   One block per job, because each is packed into its own boxes and driven to its
+   own address. Nothing here is added up across jobs, and the layout says so: the
+   job heading is the loudest thing on the screen, not the item names.
+   --------------------------------------------------------------------------- */
+
+.pack-job {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.pack-job h2 {
+  font-size: 1.0625rem;
+  margin: 0 0 var(--space-2);
+}
+
+.pack-section {
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin: var(--space-3) 0 var(--space-1);
+}
+
+.pack-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.pack-line .check {
+  margin: 0;
+  min-height: var(--touch-min);
+  gap: var(--space-3);
+}
+
+/* Fixed width so the names line up whether or not a line has a portions figure —
+   equipment has none, and a ragged left edge makes the list harder to scan. */
+.pack-qty {
+  font-variant-numeric: var(--num);
+  font-weight: 700;
+  min-width: 2.5em;
+  text-align: right;
+}
+
+.pack-name {
+  font-weight: 600;
+}
+
+.pack-line.done .pack-qty,
+.pack-line.done .pack-name {
+  text-decoration: line-through;
+  opacity: 0.55;
+}

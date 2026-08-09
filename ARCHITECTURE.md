@@ -14,13 +14,13 @@ Keep it honest. A stale architecture file is worse than none, because it gets tr
 
 | | |
 |---|---|
-| Current phase | Phase 4d — **prep shipped**. Both derived screens done; packing, money and scan remain |
+| Current phase | Phase 4e — **all three derived screens shipped**. Money, scan, dashboard and Ask Sous remain |
 | Last updated | 9 August 2026 |
 | Repo | `Info-ArcAgentSystems/copper-pot-kitchen` (private) |
 | Database | Supabase, schema + 8 migrations, **all applied** (5 Aug) |
-| Unit tests | **547 pass**, 2 skipped, 2 todo (`npm run test`) — 0.4s, no network |
+| Unit tests | **597 pass**, 2 skipped, 2 todo (`npm run test`) — 0.5s, no network |
 | Golden pack | **wired** — 15 pass, 2 skipped pending owner, 2 todo |
-| Integration | **33 pass** (`npm run test:integration`) — live Supabase, run deliberately |
+| Integration | **36 pass** (`npm run test:integration`) — live Supabase, run deliberately. Occasionally flaky under network latency, see Known gaps |
 
 ---
 
@@ -64,7 +64,8 @@ session reads to work out where things stand.
 | 8 Aug 2026 | Phase 4c — **the shopping screen, the first DERIVED one (Rule 6)**. The list is recomputed from jobs on every view; only `purchase_state` ticks persist. `Db` port gained `upsert`; `purchase_state` gained its row type, mapper and repository. `tests/ui/derived.test.ts` guards the rule and was verified by planting a cached figure. **497 unit, 30 integration** |
 | 8 Aug 2026 | Two engine files contained a literal NUL as a composite-key separator, which made `file` report them as binary and **grep skip them silently** — `prepDateFor` was unfindable. Replaced with `\u0000`; behaviour identical, 255 engine tests unmoved |
 | 9 Aug 2026 | Phase 4d — **the prep screen**, the second derived one. Grouped by prep date with `prioritisePrep` ordering, batch counts with surplus, and the per-job allocation. `prep_state` gained its row type, mapper and repository. Gap routing extracted to `src/ui/gapRouting.ts` and shared with Shopping. `tests/ui/derived.test.ts` generalised over both features and re-verified by inversion in prep. **547 unit, 33 integration** |
-| | *Next: packing — the third derived screen (`packing_state`), then money and scan* |
+| 9 Aug 2026 | Phase 4e — **the packing screen**, the last derived one and the only one that does NOT consolidate: each job is packed and delivered separately. Tick keyed as `food:<recipeId>` / `equipment:<templateId>` because `packing_state.item` is free text. `tests/ui/derived.test.ts` now covers all three features. **597 unit, 36 integration** |
+| | *Next: money — revenue, food cost and margin per job and per range* |
 
 ---
 
@@ -760,8 +761,8 @@ the eight tapas dishes. Cheesecake needs confirming before it is treated as lock
 
 | Suite | Command | Covers | Status |
 |---|---|---|---|
-| Integration | `npm run test:integration` | RLS, audit triggers, job delete, `save_recipe`, `save_job`, `purchase_state`, `prep_state` — live Supabase | **33 pass** (9 Aug). Needs `CPK_TEST_EMAIL`/`CPK_TEST_PASSWORD` |
-| Unit | `npm run test` | engine, data, ui | **547 green**, 2 skipped, 2 todo — every engine module, plus `purity`, mappers, repositories, the pure form/impact/shopping formatting, and the Rule 6 derived guard |
+| Integration | `npm run test:integration` | RLS, audit triggers, job delete, `save_recipe`, `save_job`, and all three tick tables — live Supabase | **36 pass** (9 Aug). Needs `CPK_TEST_EMAIL`/`CPK_TEST_PASSWORD` |
+| Unit | `npm run test` | engine, data, ui | **597 green**, 2 skipped, 2 todo — every engine module, plus `purity`, mappers, repositories, the pure form/impact/shopping formatting, and the Rule 6 derived guard |
 | Golden | `npm run test:copperpot` | the owner's regression pack | **15 pass, 2 skipped, 2 todo** — read `tests/golden/PENDING_OWNER.md` before touching |
 | E2E | `npm run test:e2e` | workflows, desktop and mobile | not started |
 
@@ -773,6 +774,10 @@ fixture id, so the reason a test exists survives the person who wrote it.
 | `CALC-NUCELLA-BBQ-SPLIT` | BBQ sides were scaling to meat eaters instead of all guests. 27 guests, 22 meat eaters, must produce 27 baps and 2700 g of potatoes. |
 | `job_dishes.portions` nullable | `not null default 0` turned "let the guest count decide" into "make none of this dish", silently disabling the impact cascade at the column level. The live `save_job` test asserts a null round-trips. |
 | integration cleanup ordering | Ingredients were deleted before recipes across an `on delete restrict` edge and the error was swallowed, orphaning a row that broke the NEXT run on a unique constraint — a failure that looks nothing like its cause. Cleanup now runs parents-first at both ends of the suite and verifies ingredients as well as jobs. |
+| Integration suite is latency-flaky | no | Observed 9 Aug: three consecutive runs gave 36 pass (46s), 1 fail (148s), 36 pass (49s). The failure was a 30s test timeout in a run that was ~3x slower overall; per-test timings are normally 0.4–2.3s. It is round-trip latency, not a defect, and it is NOT concurrency — the slow run had the database to itself. The timeout is deliberately NOT raised: 30s is already ample for 2–4 sequential requests, and raising it would mask a real hang. Re-run before believing a single red |
+| Packing does NOT consolidate | Shopping and Prep roll up across jobs; packing must not, because each job goes into its own boxes and its own van run. Three jobs needing lasagne are three lists, not one line of 39 portions. The headline test asserts two jobs needing the same recipe stay two lines. |
+| `packing_state` tick key | The column is free text and unique on (kitchen, job, item). A bare label would collapse a recipe named "Chafing dish" and an equipment item of the same name into ONE tick, and orphan every tick on a rename. Keyed `food:<recipeId>` / `equipment:<templateId>` instead, built in one place so read and write cannot diverge. |
+| Empty service template ≠ nothing to pack | Rule 1 ships the app with no templates, so an empty equipment section is the NORMAL early state and reads as "no equipment needed". The screen states which it is, and points at Setup. |
 | Prep filters DAYS, not jobs | Prep happens before service (`prepDateFor` = service date − make_ahead_days), so filtering jobs by service date would silently lose prep days falling inside the window for jobs served just outside it — the work he most needs warning about. The screen filters the engine's output days instead. |
 | Rule 6 derived guard | A stored shopping list would keep every other test green while quietly killing the cascade — the list would stop following the jobs, and the first sign would be food bought for a guest count that changed a week earlier. `tests/ui/derived.test.ts` source-inspects the feature; verified by planting a cached figure and watching it go red. |
 | engine purity word boundaries | The no-browser-globals guard matched `window` as a SUBSTRING and fired on `PurchaseState.windowFrom`, which is the schema's own word. Now matched on word boundaries, re-verified against `window.location`, `document.title`, `fetch(` and `localStorage`. |

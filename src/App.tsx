@@ -27,11 +27,13 @@ import { Recipes } from './features/setup/Recipes';
 import { Jobs } from './features/jobs/Jobs';
 import { Shopping } from './features/shopping/Shopping';
 import { Prep } from './features/prep/Prep';
+import { Packing } from './features/packing/Packing';
 
 const TABS = [
   { to: '/', label: 'Jobs' },
   { to: '/shopping', label: 'Shopping' },
   { to: '/prep', label: 'Prep' },
+  { to: '/packing', label: 'Packing' },
   { to: '/recipes', label: 'Recipes' },
   { to: '/ingredients', label: 'Stock' },
   { to: '/setup', label: 'Setup' },
@@ -78,6 +80,7 @@ export default function App(): ReactNode {
             <Route path="/" element={<Jobs />} />
             <Route path="/prep" element={<Prep />} />
             <Route path="/shopping" element={<Shopping />} />
+            <Route path="/packing" element={<Packing />} />
             <Route path="/recipes" element={<Recipes />} />
             <Route path="/ingredients" element={<Ingredients />} />
             <Route path="/setup" element={<Setup />} />

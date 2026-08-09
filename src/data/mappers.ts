@@ -49,6 +49,8 @@ import type {
   KitchenId,
   Property,
   PropertyId,
+  PackingState,
+  PackingStateId,
   PrepState,
   PrepStateId,
   PurchaseState,
@@ -81,6 +83,7 @@ import type {
   RecipeIngredientRow,
   RecipeRow,
   RecipeUnquantifiedRow,
+  PackingStateRow,
   PrepStateRow,
   PurchaseStateRow,
   StockRow,
@@ -522,4 +525,14 @@ export const prepStateToDomain = (r: PrepStateRow): PrepState => ({
   prepDate: r.prep_date as IsoDate,
   done: r.done,
   updatedAt: r.updated_at as IsoTimestamp,
+});
+
+export const packingStateToDomain = (r: PackingStateRow): PackingState => ({
+  id: r.id as PackingStateId,
+  kitchenId: r.kitchen_id as KitchenId,
+  jobId: r.job_id as JobId,
+  // The column is called `item`; the domain calls it `itemKey`, because what is
+  // stored is a stable key and not the label the owner reads.
+  itemKey: r.item,
+  done: r.done,
 });

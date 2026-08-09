@@ -848,6 +848,57 @@ live('prep_state — Rule 6 (batch 4d)', () => {
   });
 });
 
+live('packing_state — Rule 6 (batch 4e)', () => {
+  it('re-ticking UPDATES rather than duplicating', async () => {
+    const jobId = await makeJob({ guests: 12 });
+    const key = 'food:00000000-0000-0000-0000-000000000001';
+
+    const tick = (done: boolean) =>
+      db
+        .from('packing_state')
+        .upsert(
+          { kitchen_id: kitchenId, job_id: jobId, item: key, done },
+          { onConflict: 'kitchen_id,job_id,item' },
+        )
+        .select('*');
+
+    expect((await tick(true)).error).toBeNull();
+    expect((await tick(false)).error, 'the conflict target must match the constraint').toBeNull();
+
+    const rows = await db.from('packing_state').select('*').eq('job_id', jobId);
+    expect(rows.data ?? []).toHaveLength(1);
+    expect((rows.data?.[0] as { done: boolean }).done).toBe(false);
+  });
+
+  it('the namespaced key keeps food and equipment apart', async () => {
+    // The collision the key exists to prevent: a recipe and an equipment item can
+    // legitimately share a name. Two keys, two rows, two independent ticks.
+    const jobId = await makeJob({ guests: 12 });
+
+    const write = (item: string) =>
+      db.from('packing_state').upsert(
+        { kitchen_id: kitchenId, job_id: jobId, item, done: true },
+        { onConflict: 'kitchen_id,job_id,item' },
+      );
+
+    expect((await write('food:chafing')).error).toBeNull();
+    expect((await write('equipment:chafing')).error).toBeNull();
+
+    const rows = await db.from('packing_state').select('*').eq('job_id', jobId);
+    expect(rows.data ?? []).toHaveLength(2);
+  });
+
+  it('RLS rejects a tick naming another kitchen', async () => {
+    const { error } = await db.from('packing_state').insert({
+      kitchen_id: '00000000-0000-0000-0000-000000000000',
+      job_id: '00000000-0000-0000-0000-000000000000',
+      item: 'food:x',
+    });
+
+    expect(error, 'the with-check policy should have refused this').not.toBeNull();
+  });
+});
+
 live('the audit trail cannot be tampered with from the app', () => {
   it('a direct update outside any repository is STILL logged', async () => {
     // The point of using a trigger rather than repository code: this write does not

@@ -447,3 +447,24 @@ export interface PrepState {
 }
 
 export type PrepStateId = Brand<string, 'PrepStateId'>;
+
+export type PackingStateId = Brand<string, 'PackingStateId'>;
+
+/**
+ * The owner's tick against one line of one job's packing list.
+ *
+ * Rule 6 for the third time, and per JOB rather than consolidated — each job is
+ * packed into its own boxes and driven to its own address. There is deliberately
+ * no quantity here and no label: the portions come from `applyBuffetSplit` and the
+ * equipment from `service_templates`, recomputed on every view.
+ *
+ * `itemKey` is a stable namespaced key, not the text on screen. See
+ * [PackingStateRow] for why.
+ */
+export interface PackingState {
+  readonly id: PackingStateId;
+  readonly kitchenId: KitchenId;
+  readonly jobId: JobId;
+  readonly itemKey: string;
+  readonly done: boolean;
+}

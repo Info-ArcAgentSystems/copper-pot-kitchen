@@ -46,6 +46,17 @@ const DERIVED = [
     engine: ['productionBuckets', 'prepPlanByDay'],
     view: 'prepView.ts',
   },
+  {
+    feature: 'packing',
+    tickTable: 'packing_state',
+    // Shares a method NAME with prep. They are different repositories, so the
+    // entanglement check below compares tick TABLES rather than method names —
+    // otherwise it would fire on a coincidence of naming rather than on anything
+    // actually wrong.
+    write: 'setDone',
+    engine: ['applyBuffetSplit'],
+    view: 'packingView.ts',
+  },
 ] as const;
 
 /** Persisting methods. None of these belongs on a screen with no record to save. */
@@ -68,9 +79,12 @@ const sourcesOf = (feature: string): { file: string; code: string }[] => {
     .map((file) => ({ file, code: strip(readFileSync(join(dir, file), 'utf8')) }));
 };
 
+const viewSource = (view: string): string =>
+  strip(readFileSync(fileURLToPath(new URL(`../../src/ui/${view}`, import.meta.url)), 'utf8'));
+
 describe.each(DERIVED)(
   'the $feature feature stores nothing but the tick',
-  ({ feature, tickTable, write, engine }) => {
+  ({ feature, tickTable, write, engine, view }) => {
     const sources = () => sourcesOf(feature);
 
     it('has files to check', () => {
@@ -89,18 +103,23 @@ describe.each(DERIVED)(
       }
     });
 
-    it(`writes through ${write} and nothing else`, () => {
+    it(`writes through ${write} on its own repository`, () => {
       const all = sources()
         .map((s) => s.code)
         .join('\n');
 
       expect(all, `${feature} must tick through ${write}`).toContain(write);
 
-      // And not through the OTHER feature's tick method, which would mean the two
-      // screens had become entangled.
+      // Entanglement is checked by REPOSITORY, not by method name: prep and
+      // packing both call `setDone` on different repositories, and comparing
+      // names would fire on that coincidence rather than on anything wrong.
+      const ownRepository = `${feature === 'shopping' ? 'purchase' : feature}StateRepository`;
+      expect(all, `${feature} must use ${ownRepository}`).toContain(ownRepository);
+
       for (const other of DERIVED) {
         if (other.feature === feature) continue;
-        expect(all, `${feature} calls ${other.write}`).not.toContain(other.write);
+        const otherRepository = `${other.feature === 'shopping' ? 'purchase' : other.feature}StateRepository`;
+        expect(all, `${feature} uses ${otherRepository}`).not.toContain(otherRepository);
       }
     });
 
@@ -130,9 +149,11 @@ describe.each(DERIVED)(
     });
 
     it('recomputes from the engine rather than rendering something stored', () => {
-      const all = sources()
-        .map((s) => s.code)
-        .join('\n');
+      // The feature AND its view-model together. The derivation legitimately spans
+      // both — Shopping and Prep call the engine in the component, Packing does it
+      // in `packingView.ts` — and what matters is that the list comes from the
+      // engine somewhere on that path, not which of the two files holds the call.
+      const all = [...sources().map((s) => s.code), viewSource(view)].join('\n');
 
       // Without this, a screen could satisfy every "writes nothing" assertion above
       // by rendering a stored or hardcoded list and writing nothing at all.

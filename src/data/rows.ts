@@ -223,3 +223,22 @@ export type PrepStateRow = {
   done: boolean;
   updated_at: string;
 }
+
+/**
+ * The third and last tick table.
+ *
+ * Identity is (kitchen_id, job_id, item) where `item` is FREE TEXT. That is the
+ * sharp edge on this screen: a tick is stored against a string, so the string has
+ * to be a stable key rather than the visible label.
+ *
+ * `packingView.ts` writes it as `food:<recipeId>` or `equipment:<templateId>`.
+ * Using the label would collapse a recipe named "Chafing dish" and an equipment
+ * item of the same name into ONE tick, and would orphan every tick on a rename.
+ */
+export type PackingStateRow = {
+  id: string;
+  kitchen_id: string;
+  job_id: string;
+  item: string;
+  done: boolean;
+}

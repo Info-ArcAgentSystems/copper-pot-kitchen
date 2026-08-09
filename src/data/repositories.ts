@@ -32,6 +32,7 @@ import {
   toEuros,
   propertyToDomain,
   propertyToRow,
+  packingStateToDomain,
   prepStateToDomain,
   purchaseStateToDomain,
   recipeToDomain,
@@ -51,6 +52,7 @@ import type {
   JobExtraRow,
   JobRow,
   PropertyRow,
+  PackingStateRow,
   PrepStateRow,
   PurchaseStateRow,
   RecipeIngredientRow,
@@ -70,6 +72,7 @@ import type {
   JobId,
   KitchenId,
   Property,
+  PackingState,
   PrepState,
   PurchaseState,
   Recipe,
@@ -100,6 +103,7 @@ const T = {
   serviceTemplates: 'service_templates',
   purchaseState: 'purchase_state',
   prepState: 'prep_state',
+  packingState: 'packing_state',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -650,6 +654,58 @@ export const prepStateRepository = (db: Db) => ({
       // a duplicate instead of updating, and the line would then show two ticks
       // that disagree.
       'kitchen_id,recipe_id,prep_date',
+    );
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Packing state — the ONLY write the packing screen makes
+// ---------------------------------------------------------------------------
+
+/**
+ * Rule 6, third and last. The packing list is derived from the job's menu and the
+ * owner's service templates on every view; only the tick persists.
+ *
+ * Per JOB, with no consolidation — unlike Shopping and Prep, which exist to roll
+ * up across jobs. Each job is packed and delivered separately, so two jobs needing
+ * the same dish are two lines and two ticks.
+ */
+export const packingStateRepository = (db: Db) => ({
+  /**
+   * Ticks for a set of jobs, in one read rather than one per job.
+   *
+   * Returns nothing for an empty list without touching the database — an `in ()`
+   * with no values is a query that can only return nothing.
+   */
+  async forJobs(jobIds: readonly JobId[]): Promise<PackingState[]> {
+    if (jobIds.length === 0) return [];
+
+    const rows = (await db.selectWhereIn(
+      T.packingState,
+      'job_id',
+      jobIds,
+    )) as unknown as PackingStateRow[];
+
+    return rows.map(packingStateToDomain);
+  },
+
+  /**
+   * Tick one line of one job's list.
+   *
+   * `itemKey` is the namespaced key built by `packingView.ts`, never the visible
+   * label. Both the read and the write go through the same builder, because a
+   * mismatch between them would make every tick appear to do nothing at all.
+   */
+  async setDone(
+    kitchenId: KitchenId,
+    jobId: JobId,
+    itemKey: string,
+    done: boolean,
+  ): Promise<void> {
+    await db.upsert(
+      T.packingState,
+      [{ kitchen_id: kitchenId, job_id: jobId, item: itemKey, done }],
+      'kitchen_id,job_id,item',
     );
   },
 });

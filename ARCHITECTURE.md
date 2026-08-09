@@ -14,11 +14,11 @@ Keep it honest. A stale architecture file is worse than none, because it gets tr
 
 | | |
 |---|---|
-| Current phase | Phase 4e — **all three derived screens shipped**. Money, scan, dashboard and Ask Sous remain |
+| Current phase | Phase 4f — **money shipped**. Scan, dashboard and Ask Sous remain |
 | Last updated | 9 August 2026 |
 | Repo | `Info-ArcAgentSystems/copper-pot-kitchen` (private) |
 | Database | Supabase, schema + 8 migrations, **all applied** (5 Aug) |
-| Unit tests | **597 pass**, 2 skipped, 2 todo (`npm run test`) — 0.5s, no network |
+| Unit tests | **650 pass**, 2 skipped, 2 todo (`npm run test`) — 0.5s, no network |
 | Golden pack | **wired** — 15 pass, 2 skipped pending owner, 2 todo |
 | Integration | **36 pass** (`npm run test:integration`) — live Supabase, run deliberately. Occasionally flaky under network latency, see Known gaps |
 
@@ -65,7 +65,8 @@ session reads to work out where things stand.
 | 8 Aug 2026 | Two engine files contained a literal NUL as a composite-key separator, which made `file` report them as binary and **grep skip them silently** — `prepDateFor` was unfindable. Replaced with `\u0000`; behaviour identical, 255 engine tests unmoved |
 | 9 Aug 2026 | Phase 4d — **the prep screen**, the second derived one. Grouped by prep date with `prioritisePrep` ordering, batch counts with surplus, and the per-job allocation. `prep_state` gained its row type, mapper and repository. Gap routing extracted to `src/ui/gapRouting.ts` and shared with Shopping. `tests/ui/derived.test.ts` generalised over both features and re-verified by inversion in prep. **547 unit, 33 integration** |
 | 9 Aug 2026 | Phase 4e — **the packing screen**, the last derived one and the only one that does NOT consolidate: each job is packed and delivered separately. Tick keyed as `food:<recipeId>` / `equipment:<templateId>` because `packing_state.item` is free text. `tests/ui/derived.test.ts` now covers all three features. **597 unit, 36 integration** |
-| | *Next: money — revenue, food cost and margin per job and per range* |
+| 9 Aug 2026 | Phase 4f — **the money screen**. `rangeMoney` added to `costing.ts` (the only new engine code; a range figure is arithmetic and view-models are forbidden it). `gapRouting` gained `routeMissing` over the separate 15-member `MissingReason` union. **NO margin percentage** — basis is an open owner question, and a test forbids one being added quietly. **650 unit, 36 integration** |
+| | *Next: scan, dashboard, or Ask Sous* |
 
 ---
 
@@ -151,7 +152,7 @@ Mark each as `not started` / `in progress` / `done`, and keep the description ac
 | `scaling.ts` | `scaleRecipe`, `portionsToUnits` | **done** — 31 Jul 2026 |
 | `production.ts` | `prepDateFor`, `productionBuckets`, `prepPlanByDay`, `prioritisePrep` | **done** — 1 Aug 2026 |
 | `shopping.ts` | `requirementsForRange`, `toPurchaseUnits`, `outstandingShopping` | **done** — 1 Aug 2026 |
-| `costing.ts` | `recipeFoodCost`, `recipePortionCost`, `jobFoodCost`, `jobRevenue`, `jobMargin` | **done** — 1 Aug 2026 |
+| `costing.ts` | `recipeFoodCost`, `recipePortionCost`, `jobFoodCost`, `jobRevenue`, `jobMargin`, `rangeMoney` | **done** — `rangeMoney` added 9 Aug 2026 |
 | `rules.ts` | `applyBuffetSplit`, `meatEatingGuests` | **done** — 1 Aug 2026 |
 | `checks.ts` | `allergenScan`, `dietaryCrossCheck`, `readinessCheck`, `anomalyScan` | **done** — 1 Aug 2026 |
 | `impact.ts` | `changeImpact` | **done** — 1 Aug 2026 |
@@ -705,6 +706,11 @@ Things that are genuinely absent, so nobody wastes an hour looking for them.
 
 Awaiting owner decisions (see Part 5 of the setup guide):
 
+- **Margin basis — % of price or % of cost?** Raised 9 Aug at the money screen. The absolute
+  margin is shown; no percentage is displayed and a test forbids one being added until this is
+  answered. Ask alongside the `prioritisePrep` ordering and the Tranquillity BBQ rate, so it is
+  one conversation rather than three.
+
 - **Tranquillity BBQ rate** — history says €20pp, rate card has no entry. **This now blocks a
   golden test.** `FIN-REVENUE-WEEKEND-17-19` expects €2068, which sums exactly from eight jobs,
   but `HIST-2026-07-18-TRANQUILLITY-BBQ` (16 guests, €320) has no applicable rate. Under Rule 11
@@ -762,7 +768,7 @@ the eight tapas dishes. Cheesecake needs confirming before it is treated as lock
 | Suite | Command | Covers | Status |
 |---|---|---|---|
 | Integration | `npm run test:integration` | RLS, audit triggers, job delete, `save_recipe`, `save_job`, and all three tick tables — live Supabase | **36 pass** (9 Aug). Needs `CPK_TEST_EMAIL`/`CPK_TEST_PASSWORD` |
-| Unit | `npm run test` | engine, data, ui | **597 green**, 2 skipped, 2 todo — every engine module, plus `purity`, mappers, repositories, the pure form/impact/shopping formatting, and the Rule 6 derived guard |
+| Unit | `npm run test` | engine, data, ui | **650 green**, 2 skipped, 2 todo — every engine module, plus `purity`, mappers, repositories, the pure form/impact/shopping formatting, and the Rule 6 derived guard |
 | Golden | `npm run test:copperpot` | the owner's regression pack | **15 pass, 2 skipped, 2 todo** — read `tests/golden/PENDING_OWNER.md` before touching |
 | E2E | `npm run test:e2e` | workflows, desktop and mobile | not started |
 
@@ -774,7 +780,10 @@ fixture id, so the reason a test exists survives the person who wrote it.
 | `CALC-NUCELLA-BBQ-SPLIT` | BBQ sides were scaling to meat eaters instead of all guests. 27 guests, 22 meat eaters, must produce 27 baps and 2700 g of potatoes. |
 | `job_dishes.portions` nullable | `not null default 0` turned "let the guest count decide" into "make none of this dish", silently disabling the impact cascade at the column level. The live `save_job` test asserts a null round-trips. |
 | integration cleanup ordering | Ingredients were deleted before recipes across an `on delete restrict` edge and the error was swallowed, orphaning a row that broke the NEXT run on a unique constraint — a failure that looks nothing like its cause. Cleanup now runs parents-first at both ends of the suite and verifies ingredients as well as jobs. |
+| Eight bottom tabs is too many | no | Jobs, Shopping, Prep, Packing, Money, Recipes, Stock, Setup. At 375px that is ~47px each, so the bar now scrolls horizontally to keep labels readable. Scrolling is a mitigation, not a fix — a bottom bar wants five or fewer, and this needs an information-architecture decision rather than another tab |
 | Integration suite is latency-flaky | no | Observed 9 Aug: three consecutive runs gave 36 pass (46s), 1 fail (148s), 36 pass (49s). The failure was a 30s test timeout in a run that was ~3x slower overall; per-test timings are normally 0.4–2.3s. It is round-trip latency, not a defect, and it is NOT concurrency — the slow run had the database to itself. The timeout is deliberately NOT raised: 30s is already ample for 2–4 sequential requests, and raising it would mask a real hang. Re-run before believing a single red |
+| Margin percentage is absent BY DESIGN | The basis (% of price vs % of cost) is unanswered, and the two differ substantially at catering margins. The screen shows the absolute figure and says the percentage is waiting on the owner. `tests/ui/moneyView.test.ts` fails on a percent sign, a division by revenue or cost, or a `*100` in the money feature — verified by planting one, which tripped three assertions. Without that guard a future session adds a percentage in thirty seconds and nobody notices which basis it chose. |
+| A range total over a subset must say so | `rangeMoney` totals only the jobs it could value and reports the count it could not. The trap: summing revenue over one set of jobs and cost over a different set, then subtracting — the result belongs to no actual set of jobs. Margin therefore totals only jobs where BOTH figures are known. |
 | Packing does NOT consolidate | Shopping and Prep roll up across jobs; packing must not, because each job goes into its own boxes and its own van run. Three jobs needing lasagne are three lists, not one line of 39 portions. The headline test asserts two jobs needing the same recipe stay two lines. |
 | `packing_state` tick key | The column is free text and unique on (kitchen, job, item). A bare label would collapse a recipe named "Chafing dish" and an equipment item of the same name into ONE tick, and orphan every tick on a rename. Keyed `food:<recipeId>` / `equipment:<templateId>` instead, built in one place so read and write cannot diverge. |
 | Empty service template ≠ nothing to pack | Rule 1 ships the app with no templates, so an empty equipment section is the NORMAL early state and reads as "no equipment needed". The screen states which it is, and points at Setup. |

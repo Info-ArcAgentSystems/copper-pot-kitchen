@@ -435,3 +435,160 @@ export function jobMargin(
     missing: [...revenue.missing, ...foodCost.missing],
   };
 }
+
+// ---------------------------------------------------------------------------
+// rangeMoney
+// ---------------------------------------------------------------------------
+
+/**
+ * A total plus the counts that qualify it.
+ *
+ * The two counts are named per figure — `priced`/`unpriced`, `costed`/`uncosted`,
+ * `withMargin`/`withoutMargin` — because "3 jobs unpriced" reads at a glance where
+ * "3 excluded" makes the reader go looking for what was excluded from what.
+ */
+interface Totalled {
+  /**
+   * Summed over the jobs that could be valued. Null when NONE could — never 0,
+   * because zero is a real total meaning "earned nothing" (Rule 8).
+   */
+  readonly total: Cents | null;
+  readonly counted: number;
+  readonly excluded: number;
+}
+
+export interface RevenueTotal {
+  readonly total: Cents | null;
+  readonly priced: number;
+  readonly unpriced: number;
+}
+
+export interface CostTotal {
+  readonly total: Cents | null;
+  readonly costed: number;
+  readonly uncosted: number;
+}
+
+export interface MarginTotal {
+  readonly total: Cents | null;
+  readonly withMargin: number;
+  readonly withoutMargin: number;
+}
+
+export interface RangeMoneyResult {
+  /** Every job looked at, cancelled ones included (Rule 15). */
+  readonly jobs: number;
+  readonly revenue: RevenueTotal;
+  readonly foodCost: CostTotal;
+  /**
+   * Over jobs where BOTH revenue and cost are known.
+   *
+   * Not `revenue.total − foodCost.total`: those two are summed over different
+   * subsets whenever any job is priceable but not costable, so subtracting them
+   * would produce a figure belonging to no actual set of jobs.
+   */
+  readonly margin: MarginTotal;
+  /** What the cancellations would have been worth. Never mixed into the above. */
+  readonly cancelled: { readonly jobs: number; readonly revenue: RevenueTotal };
+  /** De-duplicated: twenty jobs missing one rate is one thing to fix. */
+  readonly missing: readonly MissingInput[];
+}
+
+/**
+ * Total a set of nullable figures, keeping the excluded count visible.
+ *
+ * The bargain this strikes: refusing to show anything because one job of twenty is
+ * unpriced would make the screen useless, so a subtotal is allowed — but only
+ * alongside the count of what it leaves out. A subtotal presented as a total is
+ * exactly what Rule 11 forbids.
+ */
+function aggregate(values: readonly (Cents | null)[]): Totalled {
+  const known = values.filter((v): v is Cents => v !== null);
+
+  return {
+    total: known.length === 0 ? null : (known.reduce((sum, v) => sum + (v as number), 0) as Cents),
+    counted: known.length,
+    excluded: values.length - known.length,
+  };
+}
+
+const asRevenue = (t: Totalled): RevenueTotal => ({
+  total: t.total,
+  priced: t.counted,
+  unpriced: t.excluded,
+});
+
+const asCost = (t: Totalled): CostTotal => ({
+  total: t.total,
+  costed: t.counted,
+  uncosted: t.excluded,
+});
+
+const asMargin = (t: Totalled): MarginTotal => ({
+  total: t.total,
+  withMargin: t.counted,
+  withoutMargin: t.excluded,
+});
+
+/**
+ * Revenue, food cost and margin across a range of jobs.
+ *
+ * Every figure comes from `jobMargin`, which is itself `jobRevenue` and
+ * `jobFoodCost` — so a range total cannot disagree with the per-job rows shown
+ * beside it. Rule 5: one implementation of each step.
+ *
+ * Deliberately NOT a percentage. Whether margin is a percentage of price or of
+ * cost is an open owner question, and the two differ substantially at catering
+ * margins. Picking one here would put a number in front of the owner that he never
+ * chose. See ARCHITECTURE.md, awaiting-owner.
+ */
+export function rangeMoney(
+  jobs: readonly Job[],
+  customers: readonly Customer[],
+  rates: readonly ClientRate[],
+  recipes: readonly Recipe[],
+  ingredients: readonly Ingredient[],
+): RangeMoneyResult {
+  const customerById = new Map(customers.map((c) => [c.id, c]));
+
+  const valued = jobs.map((job) => ({
+    job,
+    result: jobMargin(
+      job,
+      job.customerId === null ? undefined : customerById.get(job.customerId),
+      rates,
+      recipes,
+      ingredients,
+    ),
+  }));
+
+  // Rule 15 keeps cancelled jobs in the system; it does not mean counting them as
+  // money earned. They are valued separately so the loss stays visible.
+  const earned = valued.filter((v) => v.job.status !== 'cancelled');
+  const cancelled = valued.filter((v) => v.job.status === 'cancelled');
+
+  const seen = new Set<string>();
+  const missing: MissingInput[] = [];
+  for (const { result } of valued) {
+    for (const m of result.missing) {
+      const key = `${m.reason} ${m.detail}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      missing.push(m);
+    }
+  }
+
+  return {
+    jobs: jobs.length,
+    revenue: asRevenue(aggregate(earned.map((v) => v.result.revenue))),
+    foodCost: asCost(aggregate(earned.map((v) => v.result.foodCost))),
+    // `jobMargin` already returns null unless both sides are known, so filtering
+    // on it is what keeps the margin total over one coherent set of jobs.
+    margin: asMargin(aggregate(earned.map((v) => v.result.margin))),
+    cancelled: {
+      jobs: cancelled.length,
+      revenue: asRevenue(aggregate(cancelled.map((v) => v.result.revenue))),
+    },
+    missing,
+  };
+}

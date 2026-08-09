@@ -192,3 +192,32 @@ describe.each(DERIVED)('$view keeps no arithmetic of its own', ({ view }) => {
     expect(code).not.toMatch(/capacity[^\n]*-[^\n]*(required|portions)/);
   });
 });
+
+/**
+ * Money is stronger than the three derived screens: it writes NOTHING at all, not
+ * even a tick. So it gets its own, blunter assertion rather than being bent into
+ * the DERIVED table above, which assumes a tick table and a write method.
+ */
+describe('the money feature writes nothing whatsoever', () => {
+  const sources = sourcesOf('money');
+
+  it('has files to check', () => {
+    expect(sources.length).toBeGreaterThan(0);
+  });
+
+  it.each([...RECORD_WRITES, '.setDone(', '.setBought(', 'db.insert', 'db.upsert', 'db.rpc'])(
+    'calls no %s',
+    (forbidden) => {
+      for (const { file, code } of sources) {
+        expect(code, `${file} calls ${forbidden} — money is read-only`).not.toContain(forbidden);
+      }
+    },
+  );
+
+  it('derives its figures from the engine', () => {
+    const all = [...sources.map((s) => s.code), viewSource('moneyView.ts')].join('\n');
+
+    expect(all, 'per-job figures must come from jobMargin').toContain('jobMargin');
+    expect(all, 'range totals must come from rangeMoney').toContain('rangeMoney');
+  });
+});

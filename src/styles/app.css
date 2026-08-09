@@ -36,10 +36,22 @@
   border-top: 1px solid var(--border);
   background: var(--surface);
   padding-bottom: env(safe-area-inset-bottom);
+  /* Eight tabs at flex:1 gives ~47px each on a 375px screen, which clips the
+     longer labels. Scrolling keeps every label readable instead. Eight is already
+     too many for a bottom bar and wants a proper information-architecture
+     decision — noted in ARCHITECTURE.md rather than solved as a side effect of
+     adding Money. */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .tabs a {
-  flex: 1;
+  flex: 1 0 auto;
+  min-width: 4.5rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -614,4 +626,85 @@ button.link {
 .pack-line.done .pack-name {
   text-decoration: line-through;
   opacity: 0.55;
+}
+
+/* ---------------------------------------------------------------------------
+   Money.
+
+   The only screen where the absence of a number is the important part. So a
+   stated absence is set in the same size and weight as a figure — shrinking it
+   to a caption would make "not known yet" read as a footnote rather than as the
+   answer.
+   --------------------------------------------------------------------------- */
+
+.money-summary {
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  margin-bottom: var(--space-4);
+  background: var(--surface);
+}
+
+.money-summary h2 {
+  font-size: 1rem;
+  margin: 0 0 var(--space-3);
+}
+
+.money-row {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.money-row h3 {
+  font-size: 0.9375rem;
+  margin: 0 0 var(--space-2);
+}
+
+/* A loss is marked, but not alarmed. Selling one job at a loss is a decision he
+   may have made deliberately; the screen reports it rather than scolding. */
+.money-row.loss {
+  border-left: 4px solid var(--warning);
+}
+
+.money-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin: 0;
+}
+
+.money-figures > div {
+  min-width: 7rem;
+}
+
+.money-figures dt {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.money-figures dd {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  font-variant-numeric: var(--num);
+}
+
+.money-figures dd.note {
+  font-size: 0.75rem;
+  font-weight: 400;
+  max-width: 22rem;
+}
+
+.blockers {
+  margin: var(--space-3) 0 0;
+  padding-left: var(--space-5);
+  font-size: 0.875rem;
+}
+
+.blockers li {
+  margin-bottom: var(--space-1);
 }

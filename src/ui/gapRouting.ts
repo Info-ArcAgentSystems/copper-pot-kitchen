@@ -17,6 +17,7 @@
  * silently omitted and never rendered as zero.
  */
 
+import type { MissingInput, MissingReason } from '../engine/costing';
 import type { RequirementGap } from '../engine/shopping';
 
 export interface CheckYourself {
@@ -26,7 +27,12 @@ export interface CheckYourself {
 
 export interface Flag {
   readonly label: string;
-  readonly where: 'Recipes' | 'Ingredients' | 'Jobs';
+  /**
+   * 'Rate card' is here for the money screen only: an unpriced job is fixed in
+   * Setup rather than on the job, and sending him to the wrong screen is worse
+   * than sending him nowhere.
+   */
+  readonly where: 'Recipes' | 'Ingredients' | 'Jobs' | 'Rate card';
 }
 
 export interface RoutedGaps {
@@ -79,6 +85,73 @@ export function routeGaps(gaps: readonly RequirementGap[]): RoutedGaps {
       });
     } else {
       needsFixing.push({ label: gap.detail, where: destination });
+    }
+  }
+
+  return { checkYourself, needsFixing };
+}
+
+// ---------------------------------------------------------------------------
+// The money screen's blockers
+// ---------------------------------------------------------------------------
+
+/**
+ * `MissingReason` is a DIFFERENT union from `RequirementGap['reason']`.
+ *
+ * They overlap heavily, but costing can fail for four reasons shopping never
+ * encounters — an unpriced ingredient, an unpriced extra, no applicable rate, and
+ * no guest count. Forcing one map to serve both would mean either a partial map
+ * with a `default:` branch, or a union nobody can reason about. Two total maps is
+ * the honest shape.
+ */
+const MISSING_ROUTING: Record<MissingReason, Flag['where'] | 'check'> = {
+  // The engine cannot put a number on it. Nothing is wrong with the records.
+  unquantified: 'check',
+  named_unquantified: 'check',
+
+  // A price or a conversion is absent.
+  unpriced_ingredient: 'Ingredients',
+  no_pack_size: 'Ingredients',
+  missing_ingredient: 'Ingredients',
+  unresolved_conversion: 'Ingredients',
+
+  // The recipe itself is incomplete.
+  missing_recipe: 'Recipes',
+  missing_sub_recipe: 'Recipes',
+  no_components: 'Recipes',
+  no_portions_per_batch: 'Recipes',
+  cycle: 'Recipes',
+
+  // Something about this job.
+  no_portions: 'Jobs',
+  no_guest_count: 'Jobs',
+  unpriced_extra: 'Jobs',
+
+  // Rule 11: no rate for (client group, service type). Fixed in Setup, not on the
+  // job — unless he means to override the price, which is a job-level decision.
+  no_rate: 'Rate card',
+};
+
+/** Why a money figure could not be produced, and where to go about it. */
+export function routeMissing(missing: readonly MissingInput[]): RoutedGaps {
+  const checkYourself: CheckYourself[] = [];
+  const needsFixing: Flag[] = [];
+  const seen = new Set<string>();
+
+  for (const item of missing) {
+    const key = `${item.reason} ${item.detail}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const destination = MISSING_ROUTING[item.reason];
+
+    if (destination === 'check') {
+      checkYourself.push({
+        label: item.detail,
+        why: 'No quantity is recorded for this, so it cannot be costed. Judge it yourself.',
+      });
+    } else {
+      needsFixing.push({ label: item.detail, where: destination });
     }
   }
 

@@ -17,10 +17,10 @@ Keep it honest. A stale architecture file is worse than none, because it gets tr
 | Current phase | Phase 5 — **backup, restore and clear-all shipped**. Scan, dashboard and Ask Sous remain |
 | Last updated | 9 August 2026 |
 | Repo | `Info-ArcAgentSystems/copper-pot-kitchen` (private) |
-| Database | Supabase, schema + 9 migrations. **`20260809000100_backup` written, NOT RUN** — backup/restore/clear cannot work live until it is applied |
+| Database | Supabase, schema + 9 migrations, **all applied** (9 Aug) |
 | Unit tests | **715 pass**, 2 skipped, 2 todo (`npm run test`) — 0.5s, no network |
 | Golden pack | **wired** — 15 pass, 2 skipped pending owner, 2 todo |
-| Integration | **36 pass, 3 blocked** on the pending backup migration. Live Supabase, run deliberately. Occasionally flaky under latency, see Known gaps |
+| Integration | **39 pass** (`npm run test:integration`) — live Supabase, run deliberately. Occasionally flaky under latency, see Known gaps |
 
 ---
 
@@ -67,7 +67,8 @@ session reads to work out where things stand.
 | 9 Aug 2026 | Phase 4e — **the packing screen**, the last derived one and the only one that does NOT consolidate: each job is packed and delivered separately. Tick keyed as `food:<recipeId>` / `equipment:<templateId>` because `packing_state.item` is free text. `tests/ui/derived.test.ts` now covers all three features. **597 unit, 36 integration** |
 | 9 Aug 2026 | Phase 4f — **the money screen**. `rangeMoney` added to `costing.ts` (the only new engine code; a range figure is arithmetic and view-models are forbidden it). `gapRouting` gained `routeMissing` over the separate 15-member `MissingReason` union. **NO margin percentage** — basis is an open owner question, and a test forbids one being added quietly. **650 unit, 36 integration** |
 | 9 Aug 2026 | Phase 5 — **backup, restore and clear-all**. Raw-row export with a coverage guard that reads `schema.sql`; `clear_kitchen` and `import_kitchen` RPCs **written, not run**. `job_changes` exported but never imported. **715 unit; 3 integration tests blocked on the migration** |
-| | *Next: apply `20260809000100_backup`, then scan, dashboard, or Ask Sous* |
+| 9 Aug 2026 | **Backup migration applied. Integration 39/39, green twice.** A leftover supplier from the new tests broke the first run: `cleanUp` never covered `suppliers`, the same gap that orphaned an ingredient in August. Cleanup now covers suppliers and properties and verifies both |
+| | *Next: scan, dashboard, or Ask Sous* |
 
 ---
 
@@ -768,7 +769,7 @@ the eight tapas dishes. Cheesecake needs confirming before it is treated as lock
 
 | Suite | Command | Covers | Status |
 |---|---|---|---|
-| Integration | `npm run test:integration` | RLS, audit triggers, job delete, `save_recipe`, `save_job`, and all three tick tables — live Supabase | **36 pass** (9 Aug). Needs `CPK_TEST_EMAIL`/`CPK_TEST_PASSWORD` |
+| Integration | `npm run test:integration` | RLS, audit triggers, job delete, `save_recipe`, `save_job`, three tick tables, backup/restore/clear — live Supabase | **39 pass** (9 Aug). Needs `CPK_TEST_EMAIL`/`CPK_TEST_PASSWORD`. **`clear_kitchen` deletes the whole signed-in kitchen** — never point this at real owner data |
 | Unit | `npm run test` | engine, data, ui | **715 green**, 2 skipped, 2 todo — every engine module, plus `purity`, mappers, repositories, the pure form/impact/shopping formatting, and the Rule 6 derived guard |
 | Golden | `npm run test:copperpot` | the owner's regression pack | **15 pass, 2 skipped, 2 todo** — read `tests/golden/PENDING_OWNER.md` before touching |
 | E2E | `npm run test:e2e` | workflows, desktop and mobile | not started |
@@ -780,8 +781,9 @@ fixture id, so the reason a test exists survives the person who wrote it.
 |---|---|
 | `CALC-NUCELLA-BBQ-SPLIT` | BBQ sides were scaling to meat eaters instead of all guests. 27 guests, 22 meat eaters, must produce 27 baps and 2700 g of potatoes. |
 | `job_dishes.portions` nullable | `not null default 0` turned "let the guest count decide" into "make none of this dish", silently disabling the impact cascade at the column level. The live `save_job` test asserts a null round-trips. |
+| integration cleanup coverage | The backup tests created suppliers, which `cleanUp` did not delete. The leftover then broke the NEXT run on the unique (kitchen_id, name) constraint — identical in shape to the orphaned ingredient, and identical in cause: a test created data the cleanup did not know about. Cleanup now covers suppliers and properties and verifies suppliers are gone, alongside jobs and ingredients. |
 | integration cleanup ordering | Ingredients were deleted before recipes across an `on delete restrict` edge and the error was swallowed, orphaning a row that broke the NEXT run on a unique constraint — a failure that looks nothing like its cause. Cleanup now runs parents-first at both ends of the suite and verifies ingredients as well as jobs. |
-| **`20260809000100_backup` not applied** | **yes** | `clear_kitchen` and `import_kitchen`. Backup EXPORT works without it — it is a read — but restore and clear-all do not, and three integration tests fail on the missing functions rather than skipping. Apply before relying on the safety net |
+| ~~`20260809000100_backup` not applied~~ | **closed 9 Aug** | Applied and proven live: a full export → clear → restore round trip returns every row, a payload naming an unknown table is refused **before** anything is deleted, and a forged `kitchen_id` in the file is overwritten with the caller's. **39/39, green on two consecutive runs** |
 | Stale-backup reminder is per device | no | The last-backup fingerprint lives in `localStorage`, so exporting on the phone leaves a laptop still reminding. Stated on screen. A `kitchens.last_backup_at` column would fix it but is a migration for a reminder |
 | Eight bottom tabs is too many | no | Jobs, Shopping, Prep, Packing, Money, Recipes, Stock, Setup. At 375px that is ~47px each, so the bar now scrolls horizontally to keep labels readable. Scrolling is a mitigation, not a fix — a bottom bar wants five or fewer, and this needs an information-architecture decision rather than another tab |
 | Integration suite is latency-flaky | no | Observed 9 Aug: three consecutive runs gave 36 pass (46s), 1 fail (148s), 36 pass (49s). The failure was a 30s test timeout in a run that was ~3x slower overall; per-test timings are normally 0.4–2.3s. It is round-trip latency, not a defect, and it is NOT concurrency — the slow run had the database to itself. The timeout is deliberately NOT raised: 30s is already ample for 2–4 sequential requests, and raising it would mask a real hang. Re-run before believing a single red |

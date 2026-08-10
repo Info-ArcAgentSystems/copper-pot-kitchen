@@ -148,6 +148,16 @@ async function cleanUp(): Promise<void> {
     'service_templates',
     db.from('service_templates').delete().eq('service_type', 'INTEGRATION TEST'),
   );
+  // Suppliers AFTER ingredients: `ingredients.supplier_id` is `on delete set
+  // null`, so the order is not forced, but deleting the referrer first keeps the
+  // sequence readable as parent-to-child throughout.
+  //
+  // These were missing until the backup tests started creating suppliers, and the
+  // leftover then broke the NEXT run on the unique (kitchen_id, name) constraint —
+  // the same failure the orphaned ingredient produced, for the same reason: a test
+  // created data the cleanup did not know about.
+  await step('suppliers', db.from('suppliers').delete().like('name', 'INTEGRATION TEST%'));
+  await step('properties', db.from('properties').delete().like('name', 'INTEGRATION TEST%'));
 
   // Prove it, rather than assume it. Ingredients are checked as well as jobs now,
   // because an ingredient is exactly what survived last time.
@@ -162,6 +172,14 @@ async function cleanUp(): Promise<void> {
     .like('name', 'INTEGRATION TEST%');
   if ((ingredientsLeft.data ?? []).length > 0) {
     throw new Error(`cleanup left ${(ingredientsLeft.data ?? []).length} ingredient(s) behind`);
+  }
+
+  const suppliersLeft = await db
+    .from('suppliers')
+    .select('id')
+    .like('name', 'INTEGRATION TEST%');
+  if ((suppliersLeft.data ?? []).length > 0) {
+    throw new Error(`cleanup left ${(suppliersLeft.data ?? []).length} supplier(s) behind`);
   }
 }
 

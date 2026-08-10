@@ -22,6 +22,7 @@ import { Properties } from './features/setup/Properties';
 import { Suppliers } from './features/setup/Suppliers';
 import { RateCard } from './features/setup/RateCard';
 import { ServiceTemplates } from './features/setup/ServiceTemplates';
+import { BackupScreen } from './features/setup/Backup';
 import { Ingredients } from './features/setup/Ingredients';
 import { Recipes } from './features/setup/Recipes';
 import { Jobs } from './features/jobs/Jobs';
@@ -92,6 +93,7 @@ export default function App(): ReactNode {
             <Route path="/setup/suppliers" element={<Suppliers />} />
             <Route path="/setup/rates" element={<RateCard />} />
             <Route path="/setup/templates" element={<ServiceTemplates />} />
+            <Route path="/setup/backup" element={<BackupScreen />} />
           </Routes>
         </main>
         <TabBar />

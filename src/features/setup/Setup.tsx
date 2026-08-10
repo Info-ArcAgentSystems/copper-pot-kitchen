@@ -16,6 +16,7 @@ const SECTIONS = [
   { to: 'templates', label: 'Service templates', blurb: 'What to pack for each service type' },
   { to: '/ingredients', label: 'Ingredients', blurb: 'Three units, pack size and price' },
   { to: '/recipes', label: 'Recipes', blurb: 'Yields, components and sub-recipes' },
+  { to: 'backup', label: 'Backup', blurb: 'Save everything to a file, restore it, or start again' },
 ] as const;
 
 export function Setup(): ReactNode {

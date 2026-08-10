@@ -708,3 +708,37 @@ button.link {
 .blockers li {
   margin-bottom: var(--space-1);
 }
+
+/* ---------------------------------------------------------------------------
+   Backup.
+
+   The text area is the guarantee, not a detail: when the download is blocked and
+   the clipboard refused, this is the only copy of his kitchen he can reach. So it
+   is monospaced, tall enough to look substantial, and selectable rather than
+   tucked behind a disclosure.
+   --------------------------------------------------------------------------- */
+
+.backup-text {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+}
+
+section.units h2 {
+  font-size: 1rem;
+  margin: 0 0 var(--space-2);
+}
+
+/* The destructive block reads as one, rather than as another section with a
+   red button in it. */
+section.danger-zone {
+  border-color: var(--danger);
+}
+
+section.danger-zone h2 {
+  color: var(--danger);
+}

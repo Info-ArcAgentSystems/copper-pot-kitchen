@@ -899,6 +899,115 @@ live('packing_state — Rule 6 (batch 4e)', () => {
   });
 });
 
+live('backup, restore and clear (Phase 5)', () => {
+  /**
+   * THE ONLY INTEGRATION TEST THAT DESTROYS AND RESTORES.
+   *
+   * `clear_kitchen()` deletes EVERYTHING for the signed-in kitchen, not just the
+   * INTEGRATION TEST rows. README.md already says not to point this suite at a
+   * database holding real owner data; this test is the reason that warning has
+   * teeth.
+   *
+   * It protects itself: it exports first, and restores that export at the end, so
+   * a kitchen that did hold data gets it back. But a failure between the two would
+   * still leave it cleared, so the warning stands rather than being softened.
+   */
+  it('exports, clears and restores without losing anything', async () => {
+    const supplierName = 'INTEGRATION TEST supplier';
+    const created = await db
+      .from('suppliers')
+      .insert({ kitchen_id: kitchenId, name: supplierName })
+      .select('id')
+      .single();
+    expect(created.error).toBeNull();
+
+    // Export everything as it stands.
+    const before: Record<string, unknown[]> = {};
+    for (const table of ['suppliers', 'customers', 'ingredients', 'recipes', 'jobs']) {
+      const read = await db.from(table).select('*');
+      expect(read.error, `could not read ${table}`).toBeNull();
+      before[table] = read.data ?? [];
+    }
+
+    expect((before['suppliers'] ?? []).some((r) => (r as { name: string }).name === supplierName)).toBe(true);
+
+    // Clear.
+    const cleared = await db.rpc('clear_kitchen');
+    expect(cleared.error, 'clear_kitchen should be callable by the owner').toBeNull();
+
+    const afterClear = await db.from('suppliers').select('id');
+    expect(afterClear.data ?? []).toHaveLength(0);
+
+    // Restore what was there.
+    const restored = await db.rpc('import_kitchen', { p_backup: before });
+    expect(restored.error, 'import_kitchen should accept its own export').toBeNull();
+
+    const afterRestore = await db.from('suppliers').select('*');
+    expect(
+      (afterRestore.data ?? []).some((r) => (r as { name: string }).name === supplierName),
+      'the supplier should have come back',
+    ).toBe(true);
+
+    // And the counts match what went in.
+    for (const table of ['customers', 'ingredients', 'recipes', 'jobs']) {
+      const read = await db.from(table).select('id');
+      expect((read.data ?? []).length, `${table} count changed across the round trip`).toBe(
+        (before[table] ?? []).length,
+      );
+    }
+
+    await db.from('suppliers').delete().eq('name', supplierName);
+  }, 60_000);
+
+  it('REFUSES a backup naming a table it does not know, before deleting anything', async () => {
+    // The important refusal: validation happens before the clear, so a bad file
+    // cannot empty the kitchen on its way to failing.
+    const supplierName = 'INTEGRATION TEST survivor';
+    await db.from('suppliers').insert({ kitchen_id: kitchenId, name: supplierName });
+
+    const { error } = await db.rpc('import_kitchen', {
+      p_backup: { invented_table: [{ id: 'x' }] },
+    });
+
+    // Asserting the REASON, not merely that something failed. "not null" alone
+    // passes when the function does not exist at all — a vacuous green that would
+    // report this guard as working before the migration had even been applied.
+    expect(error, 'an unknown table should be refused').not.toBeNull();
+    expect(
+      error?.message ?? '',
+      'must fail because of the unknown table, not because the function is missing',
+    ).toContain('invented_table');
+
+    // And the kitchen is untouched.
+    const still = await db.from('suppliers').select('id').eq('name', supplierName);
+    expect(still.data ?? [], 'the clear must not have run').toHaveLength(1);
+
+    await db.from('suppliers').delete().eq('name', supplierName);
+  });
+
+  it('forces kitchen_id to the caller, ignoring what the file says', async () => {
+    // An edited or foreign backup must not be able to redirect the write.
+    const { error } = await db.rpc('import_kitchen', {
+      p_backup: {
+        suppliers: [
+          {
+            id: '00000000-0000-0000-0000-0000000000ff',
+            kitchen_id: '00000000-0000-0000-0000-000000000000',
+            name: 'INTEGRATION TEST forged',
+          },
+        ],
+      },
+    });
+    expect(error).toBeNull();
+
+    const written = await db.from('suppliers').select('*').eq('name', 'INTEGRATION TEST forged');
+    expect(written.data ?? []).toHaveLength(1);
+    expect((written.data?.[0] as { kitchen_id: string }).kitchen_id).toBe(kitchenId);
+
+    await db.from('suppliers').delete().eq('name', 'INTEGRATION TEST forged');
+  });
+});
+
 live('the audit trail cannot be tampered with from the app', () => {
   it('a direct update outside any repository is STILL logged', async () => {
     // The point of using a trigger rather than repository code: this write does not

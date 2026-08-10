@@ -17,7 +17,7 @@
  * The trigger is the guarantee; these functions are the ergonomics.
  */
 
-import type { Db } from './db';
+import type { Db, Row } from './db';
 import { countReferences, crudRepository } from './crud';
 import {
   clientRateToDomain,
@@ -707,5 +707,46 @@ export const packingStateRepository = (db: Db) => ({
       [{ kitchen_id: kitchenId, job_id: jobId, item: itemKey, done }],
       'kitchen_id,job_id,item',
     );
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Backup, restore and clear-all
+// ---------------------------------------------------------------------------
+
+/**
+ * Reads RAW ROWS, not domain objects.
+ *
+ * The domain types are a deliberate narrowing of the schema —
+ * `ingredient_price_history` has no domain type at all, and every future column
+ * starts life unmapped. A backup assembled from domain objects would silently drop
+ * whatever nobody has got round to modelling, invisibly, in the file, until a
+ * restore. So this layer stays as close to the rows as the port allows.
+ *
+ * No `kitchen_id` filter: RLS scopes the read, exactly as everywhere else.
+ */
+export const backupRepository = (db: Db) => ({
+  async readAll(tables: readonly string[]): Promise<Record<string, Row[]>> {
+    const out: Record<string, Row[]> = {};
+    // Sequential rather than parallel: a backup runs rarely, and twenty
+    // simultaneous requests is how a phone on a supermarket connection produces a
+    // half-read file with no error.
+    for (const table of tables) {
+      out[table] = await db.selectAll(table);
+    }
+    return out;
+  },
+
+  /**
+   * Restore. One transaction inside the database — a failure rolls back to what
+   * was there before, which is the entire point of having it as a function.
+   */
+  async importAll(tables: Record<string, readonly Row[]>): Promise<unknown> {
+    return db.rpc('import_kitchen', { p_backup: tables });
+  },
+
+  /** Destroys everything in the kitchen. Returns what it destroyed. */
+  async clearAll(): Promise<unknown> {
+    return db.rpc('clear_kitchen', {});
   },
 });

@@ -219,9 +219,64 @@ export const ingredientRepository = (db: Db) =>
     db, T.ingredients, ingredientToDomain, ingredientToRow,
   );
 
+/**
+ * On-hand stock.
+ *
+ * This is the middle term of `outstandingShopping`'s `required − stock −
+ * purchased`. Until now the repository could only read, and nothing wrote — so
+ * the subtraction ran against an empty set and the term silently vanished,
+ * ordering things already on the shelf.
+ *
+ * THE RULE 8 DISTINCTION, and it is the whole design:
+ *
+ *   no row      "I have not counted this"
+ *   qty 0       "I counted, there is none"
+ *   qty 2.5     "2.5 on hand"
+ *
+ * Clearing the figure DELETES the row rather than writing 0. Both would make the
+ * shopping list order the full amount, so the bug would be invisible — but they
+ * are different statements, and the day a report needs to know which was meant,
+ * a stored 0 cannot be told from an uncounted shelf.
+ */
 export const stockRepository = (db: Db) => ({
   async list(): Promise<StockLevel[]> {
     return (await db.selectAll(T.stock) as unknown as StockRow[]).map(stockToDomain);
+  },
+
+  /**
+   * Record what is on hand.
+   *
+   * `unit` is passed by the caller from the INGREDIENT's own stock unit, never
+   * chosen on the form. Rule 4 is the rule most likely to break here, and a unit
+   * picker beside a quantity is how 2 kg becomes 2 g.
+   *
+   * An upsert on the natural key: counting the same shelf twice is ordinary, and
+   * read-then-write would race its own stale read into a duplicate.
+   */
+  async setOnHand(
+    kitchenId: KitchenId,
+    ingredientId: IngredientId,
+    qty: number,
+    unit: StockUnit,
+  ): Promise<void> {
+    await db.upsert(
+      T.stock,
+      [
+        {
+          kitchen_id: kitchenId,
+          ingredient_id: ingredientId,
+          qty,
+          unit,
+          counted_at: new Date().toISOString(),
+        },
+      ],
+      'kitchen_id,ingredient_id',
+    );
+  },
+
+  /** Back to "not counted". Deliberately a delete, not a zero — see above. */
+  async clearOnHand(ingredientId: IngredientId): Promise<void> {
+    await db.deleteWhere(T.stock, 'ingredient_id', ingredientId);
   },
 });
 

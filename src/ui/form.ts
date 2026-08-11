@@ -101,6 +101,28 @@ export function parseCount(input: string): CountParse {
   return { value, error: null };
 }
 
+/**
+ * A measured quantity — 2.5 kg of mince, 0.75 l of stock.
+ *
+ * Distinct from `parseCount`, which requires a whole number because you cannot
+ * have 2.5 eggs in a pack. Stock on a shelf is genuinely fractional, so rejecting
+ * decimals here would force the owner to round, and a rounded stock figure feeds
+ * straight into `required − stock − purchased`.
+ *
+ * Blank is null, NOT zero (Rule 8). For stock the two are different statements:
+ * null is "I have not counted this" and 0 is "I counted, there is none".
+ */
+export function parseQuantity(input: string): CountParse {
+  const trimmed = input.trim();
+  if (trimmed === '') return { value: null, error: null };
+
+  const value = Number(trimmed);
+  if (!Number.isFinite(value)) return { value: null, error: 'Enter a number, or leave blank' };
+  if (value < 0) return { value: null, error: 'Cannot be negative' };
+
+  return { value, error: null };
+}
+
 // ---------------------------------------------------------------------------
 // Sorting
 // ---------------------------------------------------------------------------

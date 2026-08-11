@@ -18,6 +18,7 @@ import { useState, type ReactNode } from 'react';
 import { supabaseDb } from '../../data/client';
 import {
   ingredientRepository,
+  stockRepository,
   supplierRepository,
 } from '../../data/repositories';
 import { ChoiceField, Field } from '../../ui/Field';
@@ -29,6 +30,7 @@ import {
   moneyValue,
   parseCount,
   parseMoney,
+  parseQuantity,
   parseText,
   requireText,
   textValue,
@@ -55,7 +57,15 @@ const needsFactor = (recipeUnit: string, stockUnit: string): boolean => {
 };
 
 export function Ingredients(): ReactNode {
-  const repo = ingredientRepository(supabaseDb());
+  const db = supabaseDb();
+  const repo = ingredientRepository(db);
+  // Read once for the list so the on-hand figure is scannable down the column —
+  // a stock-take means walking the shelves, not opening forty records.
+  const stock = useAsync(() => stockRepository(db).list(), []);
+  const onHandFor = (id: IngredientId) =>
+    stock.state.status === 'ready'
+      ? stock.state.data.find((s) => s.ingredientId === id)
+      : undefined;
 
   return (
     <RecordScreen<Ingredient>
@@ -75,6 +85,13 @@ export function Ingredients(): ReactNode {
                 ? 'no pack size'
                 : `${i.pack.size} ${i.pack.unit} pack${i.pack.assumed ? ' (assumed)' : ''}`,
               formatMoney(i.pricePerPack, 'unpriced'),
+              // Rule 8 on the list too: not counted reads differently from none.
+              (() => {
+                const held = onHandFor(i.id);
+                return held === undefined
+                  ? 'not counted'
+                  : `${held.onHand.value} ${held.onHand.unit} on hand`;
+              })(),
             ]
               .filter((x) => x !== null)
               .join(' · ')}
@@ -123,6 +140,21 @@ function IngredientForm({
   const [supplierId, setSupplierId] = useState(ingredient?.supplierId ?? '');
   const [price, setPrice] = useState(moneyValue(ingredient?.pricePerPack ?? null));
   const [allergens, setAllergens] = useState((ingredient?.allergens ?? []).join(', '));
+
+  // On-hand stock. Loaded separately because it lives in its own table — one row
+  // per ingredient, or NO row when he has not counted it.
+  const stock = useAsync(() => stockRepository(db).list(), []);
+  const existingStock =
+    stock.state.status === 'ready'
+      ? stock.state.data.find((s) => s.ingredientId === ingredient?.id)
+      : undefined;
+
+  const [onHand, setOnHand] = useState<string | null>(null);
+  // `null` means "not edited yet", so the field shows what is stored until he
+  // touches it. Distinct from '' which is him deliberately clearing it.
+  const onHandValue =
+    onHand ?? (existingStock === undefined ? '' : String(existingStock.onHand.value));
+  const onHandParse = parseQuantity(onHandValue);
 
   const [nameError, setNameError] = useState<string | null>(null);
   const [stockError, setStockError] = useState<string | null>(null);
@@ -176,8 +208,32 @@ function IngredientForm({
     };
 
     try {
-      if (ingredient === null) await repo.create(value);
-      else await repo.update(ingredient.id, value);
+      const saved =
+        ingredient === null ? await repo.create(value) : await repo.update(ingredient.id, value);
+
+      // The stock row is a SECOND write, to a different table, and deliberately
+      // not made atomic with the first: they are independent rows, a stock
+      // failure cannot corrupt an ingredient definition, and the id does not
+      // exist until the create returns.
+      const id = saved?.id ?? ingredient?.id;
+      if (id !== undefined && id !== '') {
+        const stockRepo = stockRepository(db);
+
+        if (onHandParse.value === null) {
+          // RULE 8: blank means "not counted", which is the ABSENCE of a row —
+          // not a zero. Writing 0 here would make the shopping list behave
+          // identically while recording something he never said.
+          if (existingStock !== undefined) await stockRepo.clearOnHand(id);
+        } else {
+          await stockRepo.setOnHand(
+            kitchenId,
+            id,
+            onHandParse.value,
+            (parseText(stockUnit) ?? '') as StockUnit,
+          );
+        }
+      }
+
       done();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save.');
@@ -254,6 +310,38 @@ function IngredientForm({
             numeric
             hint={`${recipeUnit} and ${stockUnit} do not convert on their own — g to kg does, "each" to kg does not. Leave blank and quantities using this ingredient stay unresolved rather than being guessed.`}
           />
+        )}
+
+        {/* THE MIDDLE TERM of required − stock − purchased. Without a figure here
+            the shopping list orders the full amount every time, including what is
+            already on the shelf. */}
+        <Field
+          label={stockUnit.trim() === '' ? 'On hand' : `On hand (${stockUnit.trim()})`}
+          value={onHandValue}
+          onChange={setOnHand}
+          inputMode="decimal"
+          numeric
+          error={onHandParse.error}
+          hint="What is on the shelf right now. Leave blank if you have not counted it — blank is not zero, and the shopping list treats the two differently. Enter 0 to say you counted and there is none."
+        />
+
+        {/* Rule 4, caught at the point it would otherwise go wrong silently. The
+            stored figure keeps the unit it was counted in; rewriting it here
+            would turn 2 kg into 2 g without anyone touching the number. */}
+        {existingStock !== undefined &&
+          stockUnit.trim() !== '' &&
+          existingStock.onHand.unit !== stockUnit.trim() && (
+            <p className="unresolved">
+              The figure on hand was counted in {existingStock.onHand.unit}, not{' '}
+              {stockUnit.trim()}. It is left as counted rather than being reinterpreted — recount
+              it in {stockUnit.trim()} and save to correct it.
+            </p>
+          )}
+
+        {existingStock !== undefined && (
+          <p className="hint muted">
+            Last counted {existingStock.countedAt.slice(0, 10)}.
+          </p>
         )}
       </fieldset>
 

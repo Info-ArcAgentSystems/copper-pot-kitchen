@@ -18,6 +18,7 @@ import {
   parseCount,
   parseMoney,
   parseText,
+  parseQuantity,
   requireText,
   textValue,
 } from '../../src/ui/form';
@@ -169,5 +170,38 @@ describe('delete warnings', () => {
 
     expect(warning).toContain('4 ingredients');
     expect(warning).not.toContain('invoice');
+  });
+});
+
+describe('parseQuantity — measured amounts, unlike parseCount', () => {
+  it('accepts a decimal, because stock on a shelf is fractional', () => {
+    // parseCount would reject this. Forcing a round number here would make the
+    // owner round, and the rounded figure feeds required − stock − purchased.
+    expect(parseQuantity('2.5')).toEqual({ value: 2.5, error: null });
+  });
+
+  it('accepts a whole number', () => {
+    expect(parseQuantity('4')).toEqual({ value: 4, error: null });
+  });
+
+  it('RULE 8: blank is null, not zero', () => {
+    // For stock these are different statements — "not counted" and "none left".
+    expect(parseQuantity('').value).toBeNull();
+  });
+
+  it('keeps an explicit zero as zero', () => {
+    expect(parseQuantity('0')).toEqual({ value: 0, error: null });
+  });
+
+  it('rejects a negative amount', () => {
+    expect(parseQuantity('-1').error).not.toBeNull();
+  });
+
+  it('rejects something that is not a number', () => {
+    expect(parseQuantity('a few').error).not.toBeNull();
+  });
+
+  it('tolerates surrounding whitespace', () => {
+    expect(parseQuantity('  2.5  ').value).toBe(2.5);
   });
 });

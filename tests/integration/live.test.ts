@@ -20,6 +20,15 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { Db, Row } from '../../src/data/db';
+import { buildBackup, EXPORTED_TABLES, importable } from '../../src/ui/backup';
+import {
+  ingredientRepository,
+  jobRepository,
+  recipeRepository,
+  stockRepository,
+} from '../../src/data/repositories';
+import { outstandingShopping, requirementsForRange } from '../../src/engine/shopping';
 
 /**
  * Read `.env.local` directly.
@@ -77,6 +86,43 @@ async function makeJob(fields: Record<string, unknown> = {}): Promise<string> {
   if (error !== null) throw new Error(`could not create job: ${error.message}`);
   return (data as { id: string }).id;
 }
+
+/**
+ * A READ-ONLY `Db` port over the live client.
+ *
+ * Not `supabaseDb` from `src/data/client.ts`, deliberately: that module reads
+ * `import.meta.env`, which needs Vite's browser types, and `tsconfig.test.json`
+ * excludes those on purpose so a test needing a browser global fails to compile.
+ * Importing it would mean widening either the test types or the purity guard's
+ * allow-list, to run a test that only ever reads.
+ *
+ * Every write method throws. This port exists to prove that rows written by the
+ * suite come back in a shape the ENGINE accepts — the mappers against real data —
+ * so a write arriving through it would mean the test had drifted from that.
+ */
+const readOnlyPort = (): Db => {
+  const rows = async (table: string, run: PromiseLike<{ data: unknown; error: { message: string } | null }>) => {
+    const { data, error } = await run;
+    if (error !== null) throw new Error(`${table}: ${error.message}`);
+    return (data ?? []) as Row[];
+  };
+
+  const refuse = (op: string) => (): never => {
+    throw new Error(`${op} is not available on the read-only integration port`);
+  };
+
+  return {
+    selectAll: (table) => rows(table, db.from(table).select('*')),
+    selectWhere: (table, column, value) => rows(table, db.from(table).select('*').eq(column, value)),
+    selectWhereIn: async (table, column, values) =>
+      values.length === 0 ? [] : rows(table, db.from(table).select('*').in(column, values)),
+    insert: refuse('insert'),
+    upsert: refuse('upsert'),
+    update: refuse('update'),
+    deleteWhere: refuse('delete'),
+    rpc: refuse('rpc'),
+  };
+};
 
 const changesFor = async (jobId: string): Promise<Record<string, unknown>[]> => {
   const { data, error } = await db
@@ -939,9 +985,21 @@ live('backup, restore and clear (Phase 5)', () => {
       .single();
     expect(created.error).toBeNull();
 
-    // Export everything as it stands.
+    /**
+     * EVERY exported table, from the app's own list — not a hand-picked subset.
+     *
+     * The first version of this test read five tables, cleared all nineteen, and
+     * restored five. It passed for as long as nothing in the kitchen referenced
+     * the missing fourteen, then failed on `jobs_property_id_fkey` the moment a
+     * job had a property: properties were cleared and never restored.
+     *
+     * Worse than the failure: while it passed, it was DESTROYING the other
+     * fourteen tables on every run — properties, rates, templates, stock, the
+     * tick tables — and reporting success. Driving it from EXPORTED_TABLES means
+     * the test cannot drift from what the app actually backs up.
+     */
     const before: Record<string, unknown[]> = {};
-    for (const table of ['suppliers', 'customers', 'ingredients', 'recipes', 'jobs']) {
+    for (const table of EXPORTED_TABLES) {
       const read = await db.from(table).select('*');
       expect(read.error, `could not read ${table}`).toBeNull();
       before[table] = read.data ?? [];
@@ -949,15 +1007,19 @@ live('backup, restore and clear (Phase 5)', () => {
 
     expect((before['suppliers'] ?? []).some((r) => (r as { name: string }).name === supplierName)).toBe(true);
 
-    // Clear.
     const cleared = await db.rpc('clear_kitchen');
     expect(cleared.error, 'clear_kitchen should be callable by the owner').toBeNull();
 
     const afterClear = await db.from('suppliers').select('id');
     expect(afterClear.data ?? []).toHaveLength(0);
 
-    // Restore what was there.
-    const restored = await db.rpc('import_kitchen', { p_backup: before });
+    // Through the app's own path: `importable` strips job_changes, so the audit
+    // trail is exported but never written back (Rule 10).
+    const payload = importable(
+      buildBackup('Copper Pot', before as Record<string, Row[]>, new Date().toISOString()),
+    );
+
+    const restored = await db.rpc('import_kitchen', { p_backup: payload });
     expect(restored.error, 'import_kitchen should accept its own export').toBeNull();
 
     const afterRestore = await db.from('suppliers').select('*');
@@ -966,8 +1028,10 @@ live('backup, restore and clear (Phase 5)', () => {
       'the supplier should have come back',
     ).toBe(true);
 
-    // And the counts match what went in.
-    for (const table of ['customers', 'ingredients', 'recipes', 'jobs']) {
+    // Every table restored to the count it went in at — job_changes excepted,
+    // since it is deliberately not written back.
+    for (const table of EXPORTED_TABLES) {
+      if (table === 'job_changes') continue;
       const read = await db.from(table).select('id');
       expect((read.data ?? []).length, `${table} count changed across the round trip`).toBe(
         (before[table] ?? []).length,
@@ -975,7 +1039,7 @@ live('backup, restore and clear (Phase 5)', () => {
     }
 
     await db.from('suppliers').delete().eq('name', supplierName);
-  }, 60_000);
+  }, 90_000);
 
   it('REFUSES a backup naming a table it does not know, before deleting anything', async () => {
     // The important refusal: validation happens before the clear, so a bad file
@@ -1024,6 +1088,134 @@ live('backup, restore and clear (Phase 5)', () => {
 
     await db.from('suppliers').delete().eq('name', 'INTEGRATION TEST forged');
   });
+});
+
+live('on-hand stock (Phase 4g)', () => {
+  const makeIngredient = async (name: string): Promise<string> => {
+    const { data, error } = await db
+      .from('ingredients')
+      .insert({ kitchen_id: kitchenId, name, stock_unit: 'kg', recipe_unit: 'kg' })
+      .select('id')
+      .single();
+    if (error !== null) throw new Error(`could not create ingredient: ${error.message}`);
+    return (data as { id: string }).id;
+  };
+
+  it('round-trips a figure, updates it, and CLEARS to absent rather than zero', async () => {
+    const ingredientId = await makeIngredient('INTEGRATION TEST mince');
+
+    const set = (qty: number) =>
+      db.from('stock').upsert(
+        { kitchen_id: kitchenId, ingredient_id: ingredientId, qty, unit: 'kg' },
+        { onConflict: 'kitchen_id,ingredient_id' },
+      );
+
+    expect((await set(2.5)).error).toBeNull();
+
+    let rows = await db.from('stock').select('*').eq('ingredient_id', ingredientId);
+    expect(rows.data ?? []).toHaveLength(1);
+    expect(Number((rows.data?.[0] as { qty: number }).qty)).toBe(2.5);
+
+    // A recount UPDATES rather than duplicating.
+    expect((await set(4)).error).toBeNull();
+    rows = await db.from('stock').select('*').eq('ingredient_id', ingredientId);
+    expect(rows.data ?? []).toHaveLength(1);
+    expect(Number((rows.data?.[0] as { qty: number }).qty)).toBe(4);
+
+    // Zero is a REAL figure — "I counted, there is none" — and stays a row.
+    expect((await set(0)).error).toBeNull();
+    rows = await db.from('stock').select('*').eq('ingredient_id', ingredientId);
+    expect(rows.data ?? [], 'a counted zero must survive as a row').toHaveLength(1);
+
+    // Clearing DELETES. "Not counted" is the absence of a row, not a zero.
+    await db.from('stock').delete().eq('ingredient_id', ingredientId);
+    rows = await db.from('stock').select('*').eq('ingredient_id', ingredientId);
+    expect(rows.data ?? []).toHaveLength(0);
+
+    await db.from('ingredients').delete().eq('id', ingredientId);
+  }, 60_000);
+
+  it('THE CLAIM: stock actually reduces the outstanding shopping line', async () => {
+    // The whole point of the change. Everything below is read back OUT of the
+    // database and run through the real engine, so it proves the path end to end
+    // rather than proving the repository in isolation.
+    const ingredientId = await makeIngredient('INTEGRATION TEST flour');
+
+    const recipe = await db.rpc('save_recipe', {
+      p_recipe: {
+        id: null,
+        name: 'INTEGRATION TEST bread',
+        yield_type: 'per_person',
+        confidence: 'locked',
+      },
+      // 1 kg per portion, so 4 portions needs 4 kg — round numbers keep the
+      // assertion about stock rather than about rounding.
+      p_components: [
+        {
+          ingredient_id: ingredientId,
+          sub_recipe_id: null,
+          display_name: 'flour',
+          qty: 1,
+          unit: 'kg',
+          position: 0,
+        },
+      ],
+      p_unquantified: [],
+    });
+    expect(recipe.error).toBeNull();
+    const recipeId = recipe.data as string;
+
+    const job = await db.rpc('save_job', {
+      p_job: {
+        id: null,
+        service_type: 'INTEGRATION TEST',
+        service_date: '2026-08-20',
+        guests: 4,
+        status: 'confirmed',
+      },
+      p_dishes: [{ recipe_id: recipeId, portions: 4, note: null, position: 0 }],
+      p_dietaries: [],
+      p_extras: [],
+    });
+    expect(job.error).toBeNull();
+    const jobId = job.data as string;
+
+    // Read everything back through the repositories and run the real cascade.
+    const port = readOnlyPort();
+    const outstandingFor = async (): Promise<number | undefined> => {
+      const jobs = (await jobRepository(port).list()).filter((j) => j.id === jobId);
+      const recipes = await recipeRepository(port).list();
+      const ingredients = await ingredientRepository(port).list();
+      const stock = await stockRepository(port).list();
+
+      const requirements = requirementsForRange(jobs, recipes, ingredients);
+      const lines = outstandingShopping(requirements.lines, stock, [], ingredients);
+
+      return lines.find((l) => l.ingredientId === ingredientId)?.outstanding.value;
+    };
+
+    // No stock: the full 4 kg is outstanding.
+    expect(await outstandingFor(), 'with no stock the whole amount is outstanding').toBe(4);
+
+    // 3 kg on the shelf: 1 kg outstanding.
+    await db.from('stock').upsert(
+      { kitchen_id: kitchenId, ingredient_id: ingredientId, qty: 3, unit: 'kg' },
+      { onConflict: 'kitchen_id,ingredient_id' },
+    );
+    expect(await outstandingFor(), '4 required − 3 on hand should leave 1').toBe(1);
+
+    // Fully stocked: nothing outstanding, and the line drops off the list.
+    await db.from('stock').upsert(
+      { kitchen_id: kitchenId, ingredient_id: ingredientId, qty: 4, unit: 'kg' },
+      { onConflict: 'kitchen_id,ingredient_id' },
+    );
+    expect(await outstandingFor(), 'a fully stocked item needs nothing bought').toBe(0);
+
+    await db.from('jobs').delete().eq('id', jobId);
+    await db.from('stock').delete().eq('ingredient_id', ingredientId);
+    await db.from('recipes').delete().eq('id', recipeId);
+    await db.from('ingredients').delete().eq('id', ingredientId);
+  }, 90_000);
 });
 
 live('the audit trail cannot be tampered with from the app', () => {

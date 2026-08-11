@@ -38,7 +38,7 @@ const TABS = [
   { to: '/packing', label: 'Packing' },
   { to: '/money', label: 'Money' },
   { to: '/recipes', label: 'Recipes' },
-  { to: '/ingredients', label: 'Stock' },
+  { to: '/ingredients', label: 'Ingredients' },
   { to: '/setup', label: 'Setup' },
 ] as const;
 

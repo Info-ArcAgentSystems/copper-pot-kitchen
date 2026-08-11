@@ -18,9 +18,9 @@ Keep it honest. A stale architecture file is worse than none, because it gets tr
 | Last updated | 9 August 2026 |
 | Repo | `Info-ArcAgentSystems/copper-pot-kitchen` (private) |
 | Database | Supabase, schema + 9 migrations, **all applied** (9 Aug) |
-| Unit tests | **716 pass**, 2 skipped, 2 todo (`npm run test`) — 0.5s, no network |
+| Unit tests | **735 pass**, 2 skipped, 2 todo (`npm run test`) — 0.5s, no network |
 | Golden pack | **wired** — 15 pass, 2 skipped pending owner, 2 todo |
-| Integration | **39 pass** (`npm run test:integration`) — live Supabase, run deliberately. Occasionally flaky under latency, see Known gaps |
+| Integration | **41 pass** (`npm run test:integration`) — live Supabase, run deliberately. Occasionally flaky under latency, see Known gaps |
 
 ---
 
@@ -69,7 +69,8 @@ session reads to work out where things stand.
 | 9 Aug 2026 | Phase 5 — **backup, restore and clear-all**. Raw-row export with a coverage guard that reads `schema.sql`; `clear_kitchen` and `import_kitchen` RPCs **written, not run**. `job_changes` exported but never imported. **715 unit; 3 integration tests blocked on the migration** |
 | 9 Aug 2026 | **Backup migration applied. Integration 39/39, green twice.** A leftover supplier from the new tests broke the first run: `cleanUp` never covered `suppliers`, the same gap that orphaned an ingredient in August. Cleanup now covers suppliers and properties and verifies both |
 | 9 Aug 2026 | Date fields on Jobs, Shopping, Prep, Packing and Money switched to `<input type="date">`. Affordance only — the stored format, parsing and validation are untouched. Measured in-browser: 16px / 44px hold, and every malformed value (including 2026-02-31) comes back as empty string, so the control NARROWS what reaches the engine |
-| | *Next: the stock gap and the tab regrouping, then scan / dashboard / Ask Sous* |
+| 9 Aug 2026 | **Stock entry** — `stockRepository` gained `setOnHand`/`clearOnHand`, and the ingredient form writes them. Closes the cascade gap: `required − stock − purchased` finally has its middle term. Proven live end-to-end — 4 kg required drops to 1 kg outstanding with 3 kg on hand, and off the list entirely when fully stocked. Tab renamed Stock → Ingredients. **735 unit, 41 integration** |
+| | *Next: the tab regrouping, then scan / dashboard / Ask Sous* |
 
 ---
 
@@ -798,8 +799,8 @@ Redirects cover it in three lines.
 
 | Suite | Command | Covers | Status |
 |---|---|---|---|
-| Integration | `npm run test:integration` | RLS, audit triggers, job delete, `save_recipe`, `save_job`, three tick tables, backup/restore/clear — live Supabase | **39 pass** (9 Aug). Needs `CPK_TEST_EMAIL`/`CPK_TEST_PASSWORD`. **`clear_kitchen` deletes the whole signed-in kitchen** — never point this at real owner data |
-| Unit | `npm run test` | engine, data, ui | **716 green**, 2 skipped, 2 todo — every engine module, plus `purity`, mappers, repositories, the pure form/impact/shopping formatting, and the Rule 6 derived guard |
+| Integration | `npm run test:integration` | RLS, audit triggers, job delete, `save_recipe`, `save_job`, three tick tables, on-hand stock, backup/restore/clear — live Supabase | **41 pass** (9 Aug). Needs `CPK_TEST_EMAIL`/`CPK_TEST_PASSWORD`. **`clear_kitchen` deletes the whole signed-in kitchen** — never point this at real owner data |
+| Unit | `npm run test` | engine, data, ui | **735 green**, 2 skipped, 2 todo — every engine module, plus `purity`, mappers, repositories, the pure form/impact/shopping formatting, and the Rule 6 derived guard |
 | Golden | `npm run test:copperpot` | the owner's regression pack | **15 pass, 2 skipped, 2 todo** — read `tests/golden/PENDING_OWNER.md` before touching |
 | E2E | `npm run test:e2e` | workflows, desktop and mobile | not started |
 
@@ -810,13 +811,15 @@ fixture id, so the reason a test exists survives the person who wrote it.
 |---|---|
 | `CALC-NUCELLA-BBQ-SPLIT` | BBQ sides were scaling to meat eaters instead of all guests. 27 guests, 22 meat eaters, must produce 27 baps and 2700 g of potatoes. |
 | `job_dishes.portions` nullable | `not null default 0` turned "let the guest count decide" into "make none of this dish", silently disabling the impact cascade at the column level. The live `save_job` test asserts a null round-trips. |
+| backup round-trip was LOSSY | The Phase 5 round-trip test read five tables, cleared all nineteen, and restored five — so it destroyed properties, rates, templates, stock and the tick tables on every run while reporting success. It passed only for as long as nothing referenced the missing fourteen, then failed on `jobs_property_id_fkey` once a job had a property. Now driven from `EXPORTED_TABLES` through the app's own `buildBackup`/`importable`, so the test cannot drift from what the app backs up. |
 | integration cleanup coverage | The backup tests created suppliers, which `cleanUp` did not delete. The leftover then broke the NEXT run on the unique (kitchen_id, name) constraint — identical in shape to the orphaned ingredient, and identical in cause: a test created data the cleanup did not know about. Cleanup now covers suppliers and properties and verifies suppliers are gone, alongside jobs and ingredients. |
 | integration cleanup ordering | Ingredients were deleted before recipes across an `on delete restrict` edge and the error was swallowed, orphaning a row that broke the NEXT run on a unique constraint — a failure that looks nothing like its cause. Cleanup now runs parents-first at both ends of the suite and verifies ingredients as well as jobs. |
 | ~~`20260809000100_backup` not applied~~ | **closed 9 Aug** | Applied and proven live: a full export → clear → restore round trip returns every row, a payload naming an unknown table is refused **before** anything is deleted, and a forged `kitchen_id` in the file is overwritten with the caller's. **39/39, green on two consecutive runs** |
 | Stale-backup reminder is per device | no | The last-backup fingerprint lives in `localStorage`, so exporting on the phone leaves a laptop still reminding. Stated on screen. A `kitchens.last_backup_at` column would fix it but is a migration for a reminder |
-| **On-hand stock cannot be entered anywhere** | **yes** | `stockRepository` has `list()` and nothing else; no screen creates, edits or deletes a `stock` row. But `outstandingShopping` computes `required − stock − purchased` and Shopping reads stock to do it — so with nothing able to write it, that term is permanently absent and the list silently degrades to `required − purchased` with "in stock" reading 0 forever. CLAUDE.md §4 lists stock under the shipped Ingredients feature, so this is a **missed contract item**, not a deferred decision. Note the `/ingredients` tab is LABELLED "Stock" while editing ingredient definitions, which is what hid it |
+| ~~On-hand stock cannot be entered anywhere~~ | **closed 9 Aug** | `setOnHand`/`clearOnHand` added and wired to the ingredient form. Proven live: with 4 kg required, 3 kg of stock leaves 1 kg outstanding and 4 kg drops the line off the list. The mislabelled "Stock" tab that hid it is now "Ingredients" |
 | Eight bottom tabs is too many | no | At 375px that is ~47px each; Phase 6 would make it ten at 37px, below the 44px floor enforced everywhere else. Scrolling is a mitigation, not a fix. **A five-tab regrouping is proposed and not built** — see "Proposed: five tabs" below |
 | Integration suite is latency-flaky | no | Observed 9 Aug: three consecutive runs gave 36 pass (46s), 1 fail (148s), 36 pass (49s). The failure was a 30s test timeout in a run that was ~3x slower overall; per-test timings are normally 0.4–2.3s. It is round-trip latency, not a defect, and it is NOT concurrency — the slow run had the database to itself. The timeout is deliberately NOT raised: 30s is already ample for 2–4 sequential requests, and raising it would mask a real hang. Re-run before believing a single red |
+| Stock has THREE states, not two | blank = no row = "I have not counted this"; `qty 0` = "I counted, there is none"; `qty 2.5` = a figure. Clearing DELETES the row rather than writing zero. Both make the shopping list order the full amount, so the bug would be invisible there — which is exactly why it needs a test rather than a comment. |
 | A backup is ROWS, not domain objects | The domain types are a deliberate narrowing of the schema — `ingredient_price_history` has no domain type at all, and every future column starts life unmapped. A backup built from domain objects would silently drop whatever nobody has modelled yet, invisibly, in the file, until a restore. `tests/ui/backup.test.ts` reads `schema.sql` and fails if any table is neither exported nor explicitly excluded with a reason; verified by dropping a table from the export AND by adding one to the schema. |
 | `job_changes` is exported, never imported | It is the owner's history so it belongs in the file, but writing it back would forge audit rows with a meaningless `changed_by`. Rule 10: a trail that can be written from a file is not a trail. |
 | Margin percentage is absent BY DESIGN | The basis (% of price vs % of cost) is unanswered, and the two differ substantially at catering margins. The screen shows the absolute figure and says the percentage is waiting on the owner. `tests/ui/moneyView.test.ts` fails on a percent sign, a division by revenue or cost, or a `*100` in the money feature — verified by planting one, which tripped three assertions. Without that guard a future session adds a percentage in thirty seconds and nobody notices which basis it chose. |

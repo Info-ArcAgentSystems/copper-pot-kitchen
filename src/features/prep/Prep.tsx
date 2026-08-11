@@ -155,8 +155,8 @@ export function Prep(): ReactNode {
 
       <fieldset className="units">
         <legend>Which days</legend>
-        <Field label="From" value={from} onChange={setFrom} numeric inputMode="numeric" />
-        <Field label="To" value={to} onChange={setTo} numeric inputMode="numeric" />
+        <Field label="From" value={from} onChange={setFrom} type="date" />
+        <Field label="To" value={to} onChange={setTo} type="date" />
         <p className="hint muted">
           These are prep days, not service days. Something served just after this range can
           still be made inside it.

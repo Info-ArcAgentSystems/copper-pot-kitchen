@@ -44,6 +44,18 @@ describe('touch targets', () => {
   it('keeps inputs at 16px so iOS Safari does not zoom the page on focus', () => {
     expect(tokens).toMatch(/font-size:\s*16px/);
   });
+
+  it('no type-specific input rule sets a font-size below 16px', () => {
+    // The base `input` rule is unqualified, so every type inherits 16px. A rule
+    // targeting one type — `input[type='date']`, say — could quietly undercut it
+    // and reintroduce the zoom on exactly one screen, which is the kind of
+    // regression nobody notices until they are standing in a supermarket.
+    for (const [rule] of allCss.matchAll(/input\[type=[^\]]+\][^{]*\{[^}]*\}/g)) {
+      const size = /font-size:\s*(\d+)px/.exec(rule);
+      if (size === null) continue;
+      expect(Number(size[1]), `a type-specific input rule sets ${size[1]}px`).toBeGreaterThanOrEqual(16);
+    }
+  });
 });
 
 describe('numerals', () => {

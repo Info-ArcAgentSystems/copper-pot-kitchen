@@ -98,6 +98,18 @@ textarea {
   font-size: 16px; /* below 16px iOS Safari zooms the whole page on focus */
 }
 
+/* Native date inputs.
+   iOS Safari applies its own appearance to these, which can centre the value
+   oddly inside the 44px box and right-align it. Neither height nor font-size is
+   touched here — those stay inherited from the rule above, so the 44px floor and
+   the 16px no-zoom rule continue to apply exactly as they do to every other
+   input. */
+input[type='date'] {
+  -webkit-appearance: none;
+  appearance: none;
+  text-align: left;
+}
+
 /* Quantities, money, counts. */
 .num {
   font-variant-numeric: var(--num);

@@ -23,6 +23,17 @@ export interface FieldProps {
   readonly error?: string | null;
   readonly required?: boolean;
   readonly multiline?: boolean;
+  /**
+   * `'date'` gives the native picker — a calendar on desktop, the system wheel on
+   * iOS and Android — while still accepting typed entry.
+   *
+   * Safe here precisely because it changes nothing downstream: a date input hands
+   * back either a valid `YYYY-MM-DD` or an empty string, never a half-typed one.
+   * That is already the stored format and already what `parseText` expects, so
+   * blank still becomes null (Rule 8) through the same path. It narrows what can
+   * reach the engine rather than widening it.
+   */
+  readonly type?: 'text' | 'date';
   readonly inputMode?: 'text' | 'numeric' | 'decimal' | 'email' | 'tel';
   readonly autoComplete?: string;
   /** Right-aligned tabular numerals, for quantities and money. */
@@ -38,6 +49,7 @@ export function Field({
   error = null,
   required = false,
   multiline = false,
+  type = 'text',
   inputMode = 'text',
   autoComplete,
   numeric = false,
@@ -68,7 +80,7 @@ export function Field({
       ) : (
         <input
           id={id}
-          type="text"
+          type={type}
           className={numeric ? 'num' : undefined}
           value={value}
           inputMode={inputMode}

@@ -178,8 +178,8 @@ export function Packing(): ReactNode {
 
       <fieldset className="units">
         <legend>Which dates</legend>
-        <Field label="From" value={from} onChange={setFrom} numeric inputMode="numeric" />
-        <Field label="To" value={to} onChange={setTo} numeric inputMode="numeric" />
+        <Field label="From" value={from} onChange={setFrom} type="date" />
+        <Field label="To" value={to} onChange={setTo} type="date" />
         <p className="hint muted">
           One list per job. Each is packed and delivered on its own, so nothing here is added
           up across jobs.

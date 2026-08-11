@@ -366,7 +366,7 @@ function JobForm({ job, done }: { job: Job | null; done: () => void }): ReactNod
         onChange={setPropertyId}
       />
 
-      <Field label="Service date" value={serviceDate} onChange={setServiceDate} placeholder="2026-07-22" numeric />
+      <Field label="Service date" value={serviceDate} onChange={setServiceDate} type="date" />
       <Field label="Service time" value={serviceTime} onChange={setServiceTime} placeholder="18:00" numeric />
       <Field
         label="Service type"

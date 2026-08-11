@@ -115,8 +115,8 @@ export function Money(): ReactNode {
 
       <fieldset className="units">
         <legend>Which dates</legend>
-        <Field label="From" value={from} onChange={setFrom} numeric inputMode="numeric" />
-        <Field label="To" value={to} onChange={setTo} numeric inputMode="numeric" />
+        <Field label="From" value={from} onChange={setFrom} type="date" />
+        <Field label="To" value={to} onChange={setTo} type="date" />
       </fieldset>
 
       {view !== null && view.rows.length === 0 ? (

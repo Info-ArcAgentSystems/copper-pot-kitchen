@@ -201,8 +201,8 @@ export function Shopping(): ReactNode {
 
       <fieldset className="units">
         <legend>Which dates</legend>
-        <Field label="From" value={from} onChange={setFrom} numeric inputMode="numeric" />
-        <Field label="To" value={to} onChange={setTo} numeric inputMode="numeric" />
+        <Field label="From" value={from} onChange={setFrom} type="date" />
+        <Field label="To" value={to} onChange={setTo} type="date" />
         <p className="hint muted">
           Ticks belong to these dates. Change the window and you are looking at a different
           shop, not losing the one you ticked.

@@ -30,6 +30,7 @@ import { Shopping } from './features/shopping/Shopping';
 import { Prep } from './features/prep/Prep';
 import { Packing } from './features/packing/Packing';
 import { Money } from './features/money/Money';
+import { AskSous } from './features/sous/AskSous';
 
 const TABS = [
   { to: '/', label: 'Jobs' },
@@ -49,6 +50,11 @@ function Header(): ReactNode {
   return (
     <header className="app-header">
       <span>{state.membership.kitchenName}</span>
+      {/* Ask Sous lives here rather than in the bottom bar: it is cross-cutting,
+          and the bar is already past the point where another tab fits. */}
+      <NavLink to="/sous" className="tap">
+        Ask Sous
+      </NavLink>
       <button
         type="button"
         onClick={() => {
@@ -85,6 +91,7 @@ export default function App(): ReactNode {
             <Route path="/shopping" element={<Shopping />} />
             <Route path="/packing" element={<Packing />} />
             <Route path="/money" element={<Money />} />
+            <Route path="/sous" element={<AskSous />} />
             <Route path="/recipes" element={<Recipes />} />
             <Route path="/ingredients" element={<Ingredients />} />
             <Route path="/setup" element={<Setup />} />

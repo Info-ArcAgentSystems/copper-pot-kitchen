@@ -1,0 +1,58 @@
+# Copper Pot Kitchen — Supabase project config.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# READ THIS BEFORE RUNNING ANY supabase COMMAND ON THIS MACHINE
+#
+# The Copper Pot project ref is:
+#
+#     vhzpwdzrlrcfhxrjawym          Copper Pot Kitchen
+#
+# It is NOT the only project on this machine. PCD PROD (okkyabcaordghcqgoifk)
+# lives here too, and an `ask-sous` deploy has already gone to it by mistake —
+# the CLI used the linked project, and the linked project was PCD.
+#
+# `project_id` BELOW DOES NOT PREVENT THAT. It is the identifier for the LOCAL
+# development stack (container naming), not the remote deploy target. The remote
+# target comes from the link state in `supabase/.temp/`, which is machine-local
+# and gitignored, or from an explicit `--project-ref`.
+#
+# So the thing that actually stops a wrong-project deploy is the flag, and the
+# npm scripts in package.json bake it in:
+#
+#     npm run supabase:deploy:sous     deploy ask-sous to Copper Pot
+#     npm run supabase:link            (re)link this checkout to Copper Pot
+#
+# Use those rather than a bare `supabase functions deploy`. If you must run the
+# CLI directly, pass --project-ref vhzpwdzrlrcfhxrjawym every time.
+# ─────────────────────────────────────────────────────────────────────────────
+
+project_id = "copper-pot-kitchen"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173"]
+jwt_expiry = 3600
+enable_signup = false
+
+[functions.ask-sous]
+# The Anthropic key is a FUNCTION SECRET, set with:
+#     npm run supabase:secrets -- ANTHROPIC_API_KEY=sk-ant-...
+# It is never a VITE_ variable — Vite inlines those into the browser bundle.
+verify_jwt = true

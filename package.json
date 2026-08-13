@@ -13,7 +13,11 @@
     "test:watch": "vitest",
     "test:copperpot": "vitest run tests/golden",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "supabase:link": "supabase link --project-ref vhzpwdzrlrcfhxrjawym",
+    "supabase:deploy:sous": "supabase functions deploy ask-sous --project-ref vhzpwdzrlrcfhxrjawym",
+    "supabase:secrets": "supabase secrets set --project-ref vhzpwdzrlrcfhxrjawym",
+    "supabase:push": "supabase db push --project-ref vhzpwdzrlrcfhxrjawym"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.111.0",

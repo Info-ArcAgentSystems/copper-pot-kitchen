@@ -31,6 +31,12 @@ dist-ssr
 .env
 .env.local
 
+# Supabase machine-local link state. NOT committed: `.temp/pooler-url` carries a
+# database connection string, and the linked ref is per-machine anyway. The ref
+# that matters is recorded in supabase/config.toml and baked into the npm
+# scripts, which is what stops a deploy defaulting to the wrong project.
+supabase/.temp/
+
 # Playwright
 test-results
 playwright-report

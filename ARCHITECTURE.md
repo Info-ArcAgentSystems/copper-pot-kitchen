@@ -82,10 +82,39 @@ session reads to work out where things stand.
 | GitHub org | `Info-ArcAgentSystems` |
 | Repo | `copper-pot-kitchen`, private, branch `main` |
 | Supabase project | Copper Pot Kitchen (free tier) |
-| **Project ref** | `vhzpwdzrlrcfhxrjawym` — the subdomain of `VITE_SUPABASE_URL` |
+| **Project ref** | `vhzpwdzrlrcfhxrjawym` — the subdomain of `VITE_SUPABASE_URL`. **Always pass it explicitly, see below** |
 | Kitchen id | `15d29fdb-7d54-49b6-9665-2459e6a2a707` |
 | Owner account | `info@arcagentsystems.com` — to be handed to the owner's own account later, with this one stepping down to `support` |
 | Local path | `~/code/arcagent/copper-pot-kitchen` on both machines |
+
+### EVERY supabase CLI COMMAND NEEDS `--project-ref vhzpwdzrlrcfhxrjawym`
+
+**This machine has PCD PROD (`okkyabcaordghcqgoifk`) linked as well**, and the CLI deploys to
+whatever is linked. The first `ask-sous` deploy went to PCD for exactly that reason — the
+command was correct, the default was not.
+
+`project_id` in `supabase/config.toml` does **not** prevent this. It names the LOCAL
+development stack, not the remote target; the target comes from the machine-local link state in
+`supabase/.temp/` or from an explicit flag. So the flag is the only reliable guard, and the npm
+scripts bake it in:
+
+| Instead of | Run |
+|---|---|
+| `supabase functions deploy ask-sous` | `npm run supabase:deploy:sous` |
+| `supabase secrets set KEY=…` | `npm run supabase:secrets -- KEY=…` |
+| `supabase db push` | `npm run supabase:push` |
+| `supabase link` | `npm run supabase:link` |
+
+Running the CLI directly is fine as long as `--project-ref vhzpwdzrlrcfhxrjawym` is on it. **This
+is the deploy target for the scanners too** — `parse-image` in Phase 6b lands on the same
+project and has the same failure mode.
+
+`supabase/.temp/` is gitignored: it holds a pooler connection string, and the linked ref is
+per-machine. The ref that matters is recorded in `config.toml` and in the scripts above.
+
+**Left behind on PCD PROD:** a stray `ask-sous` function from the mis-targeted deploy, and
+possibly an `ANTHROPIC_API_KEY` secret if one was set before the target was noticed. Worth
+removing from that project — it is not Copper Pot's to clean up, but it is Copper Pot's mistake.
 
 Secrets live in `.env.local` (never committed) and, from Phase 6, in Supabase function
 secrets. Both are recreated per machine from the Supabase dashboard.
@@ -842,7 +871,7 @@ fixture id, so the reason a test exists survives the person who wrote it.
 | ~~`20260809000100_backup` not applied~~ | **closed 9 Aug** | Applied and proven live: a full export → clear → restore round trip returns every row, a payload naming an unknown table is refused **before** anything is deleted, and a forged `kitchen_id` in the file is overwritten with the caller's. **39/39, green on two consecutive runs** |
 | Stale-backup reminder is per device | no | The last-backup fingerprint lives in `localStorage`, so exporting on the phone leaves a laptop still reminding. Stated on screen. A `kitchens.last_backup_at` column would fix it but is a migration for a reminder |
 | ~~On-hand stock cannot be entered anywhere~~ | **closed 9 Aug** | `setOnHand`/`clearOnHand` added and wired to the ingredient form. Proven live: with 4 kg required, 3 kg of stock leaves 1 kg outstanding and 4 kg drops the line off the list. The mislabelled "Stock" tab that hid it is now "Ingredients" |
-| **`ask-sous` edge function not deployed** | **yes** | Written at `supabase/functions/ask-sous/`. Deploy with `supabase secrets set ANTHROPIC_API_KEY=...` then `supabase functions deploy ask-sous`. Until then the screen shows "Ask Sous is not set up on this project yet" rather than failing obscurely. Everything below the function — dispatcher, tools, guards, commit boundary — is tested offline |
+| `ask-sous` deploy target | no | The first deploy went to **PCD PROD** because that project was linked on this machine. Now guarded: `npm run supabase:deploy:sous` bakes in `--project-ref vhzpwdzrlrcfhxrjawym`. A stray `ask-sous` (and possibly an `ANTHROPIC_API_KEY` secret) may remain on PCD and should be removed there |
 | Eight bottom tabs is too many | no | At 375px that is ~47px each; Phase 6 would make it ten at 37px, below the 44px floor enforced everywhere else. Scrolling is a mitigation, not a fix. **A five-tab regrouping is proposed and not built** — see "Proposed: five tabs" below |
 | Integration suite is latency-flaky | no | Observed 9 Aug: three consecutive runs gave 36 pass (46s), 1 fail (148s), 36 pass (49s). The failure was a 30s test timeout in a run that was ~3x slower overall; per-test timings are normally 0.4–2.3s. It is round-trip latency, not a defect, and it is NOT concurrency — the slow run had the database to itself. The timeout is deliberately NOT raised: 30s is already ample for 2–4 sequential requests, and raising it would mask a real hang. Re-run before believing a single red |
 | Stock has THREE states, not two | blank = no row = "I have not counted this"; `qty 0` = "I counted, there is none"; `qty 2.5` = a figure. Clearing DELETES the row rather than writing zero. Both make the shopping list order the full amount, so the bug would be invisible there — which is exactly why it needs a test rather than a comment. |

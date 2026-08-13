@@ -126,6 +126,8 @@ const data = (over: Partial<SousData> = {}): SousData => ({
   rates: [],
   stock: [],
   templates: [],
+  today: '2026-08-01',
+  horizon: '2026-08-31',
   ...over,
 });
 

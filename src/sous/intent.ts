@@ -19,13 +19,20 @@ import type { IsoDate, JobId } from '../engine/types';
 
 /** Every tool name, in one place. The schema sent to the model derives from this. */
 export const TOOL_NAMES = [
+  'how_much_ingredient',
   'shopping_for_range',
   'prep_for_range',
   'packing_for_job',
   'money_for_range',
   'job_details',
-  'what_needs_attention',
+  // Renamed from `what_needs_attention`. The old name contained "needs" and
+  // captured every "how much X do I NEED" question — the model picked it for a
+  // quantity question and returned an anomalies object. Names weigh heavily in
+  // tool selection, so removing the magnet mattered more than adding the
+  // alternative. `tests/sous/guards.test.ts` now forbids "need" in any tool name.
+  'problems_with_jobs',
   'propose_job_change',
+  'clarify',
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];
@@ -38,6 +45,31 @@ export interface RangeArgs {
 
 export interface JobArgs {
   readonly jobId: JobId;
+}
+
+/**
+ * "How much adobo do I need?"
+ *
+ * `ingredient` is the owner's word for it, resolved against the names in the
+ * context. Dates are optional: without them the tool answers for a default
+ * forward window rather than refusing, because "how much adobo" is a question
+ * about the near future and demanding a date range to answer it is pedantry.
+ */
+export interface IngredientArgs {
+  readonly ingredient: string;
+  readonly from?: IsoDate;
+  readonly to?: IsoDate;
+}
+
+/**
+ * The model could not map the question, so it asks instead of guessing.
+ *
+ * The output is a QUESTION, never a fact. This is what stops "how many grams in
+ * a kilo" being answered from the model's own knowledge: it has no tool for it,
+ * and the only thing it can do with an unmappable question is hand it back.
+ */
+export interface ClarifyArgs {
+  readonly question: string;
 }
 
 /**
@@ -56,12 +88,14 @@ export interface JobChangeArgs {
 }
 
 export type Intent =
+  | { readonly tool: 'how_much_ingredient'; readonly args: IngredientArgs }
+  | { readonly tool: 'clarify'; readonly args: ClarifyArgs }
   | { readonly tool: 'shopping_for_range'; readonly args: RangeArgs }
   | { readonly tool: 'prep_for_range'; readonly args: RangeArgs }
   | { readonly tool: 'packing_for_job'; readonly args: JobArgs }
   | { readonly tool: 'money_for_range'; readonly args: RangeArgs }
   | { readonly tool: 'job_details'; readonly args: JobArgs }
-  | { readonly tool: 'what_needs_attention'; readonly args: RangeArgs }
+  | { readonly tool: 'problems_with_jobs'; readonly args: RangeArgs }
   | { readonly tool: 'propose_job_change'; readonly args: JobChangeArgs };
 
 /**
@@ -76,4 +110,44 @@ export interface Unresolved {
   readonly reason: string;
 }
 
-export type SousReply = { readonly kind: 'intent'; readonly intent: Intent } | Unresolved;
+export type SousReply =
+  | { readonly kind: 'intent'; readonly intent: Intent; readonly preamble: string | null }
+  | Unresolved;
+
+// ---------------------------------------------------------------------------
+// Conversation
+// ---------------------------------------------------------------------------
+
+/**
+ * One completed turn, as it is sent BACK to the model on the next question.
+ *
+ * THE MOST IMPORTANT TYPE IN THE CONVERSATIONAL DESIGN, because of what it does
+ * not have: a result.
+ *
+ * A turn records what was ASKED and which tool ran. It never records what the
+ * engine ANSWERED. Feeding results back into the model's context is the obvious
+ * way to build a chat, and it is exactly how a grounded assistant starts
+ * inventing — once a figure has been in the context, a later turn can restate it,
+ * round it, or carry it into a question it does not apply to.
+ *
+ * So follow-ups work by RE-ROUTING, not by remembering. "What about Sunday?"
+ * resolves because the model can see the last tool and its arguments, and emits
+ * the same tool with new dates. The engine then runs again, fresh.
+ */
+export interface Turn {
+  readonly question: string;
+  readonly tool: ToolName;
+  readonly args: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * What the model may say in its own words.
+ *
+ * Written BEFORE the engine runs, so it cannot contain a figure — there is none
+ * to contain. It is conversational glue: "Sure, let me check Sunday:".
+ *
+ * NO DIGITS ALLOWED, enforced by `validateReply`. Glue does not need them, and
+ * the rule is blunt precisely so it cannot be argued with: any digit in
+ * model-authored prose is rejected rather than inspected.
+ */
+export type Preamble = string;

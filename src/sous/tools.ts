@@ -31,6 +31,7 @@ import { prepPlanByDay, productionBuckets } from '../engine/production';
 import { applyBuffetSplit } from '../engine/rules';
 import { outstandingShopping, requirementsForRange } from '../engine/shopping';
 import { TOOL_NAMES, type Intent, type ToolName } from './intent';
+import type { OutstandingLine } from '../engine/shopping';
 import type {
   ClientRate,
   Customer,
@@ -50,18 +51,29 @@ export interface SousData {
   readonly rates: readonly ClientRate[];
   readonly stock: readonly StockLevel[];
   readonly templates: readonly ServiceTemplate[];
+  /**
+   * The default window, supplied by the SCREEN rather than computed here.
+   *
+   * "How much adobo" carries no dates, and a tool that invented them would be
+   * deciding business scope on its own. The screen owns the clock; this layer
+   * stays pure and testable with a fixed date.
+   */
+  readonly today: string;
+  readonly horizon: string;
 }
 
 export type ToolKind = 'read' | 'propose';
 
 /** What a tool produced. Discriminated so the screen renders the right thing. */
 export type ToolResult =
+  | { readonly kind: 'how_much'; readonly value: HowMuch }
+  | { readonly kind: 'clarify'; readonly value: { readonly question: string } }
   | { readonly kind: 'shopping'; readonly value: ReturnType<typeof shoppingFor> }
   | { readonly kind: 'prep'; readonly value: ReturnType<typeof prepFor> }
   | { readonly kind: 'packing'; readonly value: ReturnType<typeof packingFor> }
   | { readonly kind: 'money'; readonly value: ReturnType<typeof moneyFor> }
   | { readonly kind: 'job'; readonly value: ReturnType<typeof jobDetails> }
-  | { readonly kind: 'attention'; readonly value: ReturnType<typeof attention> }
+  | { readonly kind: 'problems'; readonly value: ReturnType<typeof attention> }
   | { readonly kind: 'proposal'; readonly value: Proposal };
 
 /**
@@ -80,6 +92,38 @@ export interface Proposal {
   /** The job as it would be saved. Built by the ENGINE path, not the model. */
   readonly after: Job;
 }
+
+/**
+ * FOUR STATES, and conflating any two of them is the defect this tool exists to
+ * fix. The bug that prompted it returned an unrelated anomalies object for a
+ * quantity question; the fix is not just routing but being able to SAY each of
+ * these.
+ *
+ *   no_such_ingredient   nothing by that name is recorded at all
+ *   ambiguous            several match — names them, never picks (Rule 8)
+ *   none_needed          it exists, and nothing in the window uses it
+ *   needed               here is the quantity
+ *
+ * `none_needed` is the one the old code could not express. A zero requirement is
+ * a real answer and has to be said out loud.
+ */
+export type HowMuch =
+  | { readonly state: 'no_such_ingredient'; readonly asked: string }
+  | { readonly state: 'ambiguous'; readonly asked: string; readonly matches: readonly string[] }
+  | {
+      readonly state: 'none_needed';
+      readonly name: string;
+      readonly from: string;
+      readonly to: string;
+    }
+  | {
+      readonly state: 'needed';
+      readonly name: string;
+      readonly from: string;
+      readonly to: string;
+      readonly line: OutstandingLine;
+      readonly pack: Ingredient['pack'];
+    };
 
 const inRange = (jobs: readonly Job[], from: string, to: string): Job[] =>
   jobs.filter((j) => j.serviceDate !== null && j.serviceDate >= from && j.serviceDate <= to);
@@ -168,6 +212,45 @@ function attention(data: SousData, from: string, to: string) {
   return { from, to, anomalies: anomalyScan(jobs, data.recipes) };
 }
 
+/**
+ * How much of ONE ingredient is needed.
+ *
+ * Runs the same cascade the Shopping screen runs and then picks one line out of
+ * it, so the figure here and the figure there cannot disagree. It does no
+ * arithmetic of its own — `outstandingShopping` already did the subtraction.
+ */
+function howMuch(data: SousData, asked: string, from: string, to: string): HowMuch {
+  const wanted = asked.trim().toLowerCase();
+
+  // Exact match first, then contains. "adobo" should find "Adobo seasoning"
+  // without "chicken" finding every chicken dish when one is named exactly that.
+  const exact = data.ingredients.filter((i) => i.name.trim().toLowerCase() === wanted);
+  const matches =
+    exact.length > 0 ? exact : data.ingredients.filter((i) => i.name.toLowerCase().includes(wanted));
+
+  if (matches.length === 0) return { state: 'no_such_ingredient', asked };
+
+  if (matches.length > 1) {
+    // Rule 8: naming the candidates is an answer. Picking one is a guess, and a
+    // guess about which ingredient he meant is a wrong shopping quantity.
+    return { state: 'ambiguous', asked, matches: matches.map((i) => i.name) };
+  }
+
+  const ingredient = matches[0] as Ingredient;
+  const jobs = inRange(data.jobs, from, to).filter((j) => OPERATIONAL.has(j.status));
+  const requirements = requirementsForRange(jobs, data.recipes, data.ingredients);
+  const lines = outstandingShopping(requirements.lines, data.stock, [], data.ingredients);
+  const line = lines.find((l) => l.ingredientId === ingredient.id);
+
+  // Nothing in the window uses it. A REAL answer, and the one the old routing
+  // replaced with an unrelated object.
+  if (line === undefined) {
+    return { state: 'none_needed', name: ingredient.name, from, to };
+  }
+
+  return { state: 'needed', name: ingredient.name, from, to, line, pack: ingredient.pack };
+}
+
 // ---------------------------------------------------------------------------
 // The propose tool — a diff, never a write
 // ---------------------------------------------------------------------------
@@ -231,6 +314,50 @@ const jobSchema = {
 type Args = Record<string, string | number | undefined>;
 
 export const TOOLS: Readonly<Record<ToolName, ToolDefinition>> = {
+  how_much_ingredient: {
+    name: 'how_much_ingredient',
+    kind: 'read',
+    // Leads with the phrasings, because the routing bug was a naming collision:
+    // the old `what_needs_attention` captured "how much X do I NEED".
+    description:
+      "How much of ONE ingredient is needed. Use for 'how much X do I need', 'how many X', 'do I have enough X', 'have I got enough X'. Dates are optional.",
+    parameters: {
+      type: 'object',
+      properties: {
+        ingredient: { type: 'string', description: 'The ingredient name the owner used' },
+        from: { type: 'string', description: 'Optional first date, YYYY-MM-DD' },
+        to: { type: 'string', description: 'Optional last date, YYYY-MM-DD' },
+      },
+      required: ['ingredient'],
+    },
+    run: (d, a) => {
+      const args = a as Args;
+      // Dates optional: "how much adobo" is a question about the near future, and
+      // refusing to answer without a range would be pedantry. The window used is
+      // reported back so the answer states what it covered.
+      const from = args.from === undefined ? d.today : String(args.from);
+      const to = args.to === undefined ? d.horizon : String(args.to);
+
+      return { kind: 'how_much', value: howMuch(d, String(args.ingredient), from, to) };
+    },
+  },
+
+  clarify: {
+    name: 'clarify',
+    kind: 'read',
+    description:
+      'Ask the owner a question when you cannot tell which job, ingredient or dates are meant. Use this rather than guessing. Also use it when the question is not about this kitchen at all.',
+    parameters: {
+      type: 'object',
+      properties: { question: { type: 'string', description: 'What to ask him' } },
+      required: ['question'],
+    },
+    // Returns a QUESTION, never a fact. This is what stops general knowledge
+    // being answered from the model's own head: there is no tool for it, and the
+    // only thing it can do with an unmappable question is hand it back.
+    run: (_d, a) => ({ kind: 'clarify', value: { question: String((a as Args).question) } }),
+  },
+
   shopping_for_range: {
     name: 'shopping_for_range',
     kind: 'read',
@@ -275,13 +402,16 @@ export const TOOLS: Readonly<Record<ToolName, ToolDefinition>> = {
     parameters: jobSchema,
     run: (d, a) => ({ kind: 'job', value: jobDetails(d, String((a as Args).jobId)) }),
   },
-  what_needs_attention: {
-    name: 'what_needs_attention',
+  problems_with_jobs: {
+    name: 'problems_with_jobs',
     kind: 'read',
-    description: 'Anomalies and unresolved items across jobs between two dates.',
+    // Worded off "need" entirely. The old name and description between them
+    // captured quantity questions.
+    description:
+      'Anomalies and unresolved items — jobs missing a guest count, a menu, an address, or with a dietary that has not been pinned down.',
     parameters: rangeSchema,
     run: (d, a) => ({
-      kind: 'attention',
+      kind: 'problems',
       value: attention(d, String((a as Args).from), String((a as Args).to)),
     }),
   },

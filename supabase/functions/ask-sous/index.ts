@@ -67,6 +67,36 @@ const TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'how_much_ingredient',
+      description:
+        "How much of ONE ingredient is needed. Use for 'how much X do I need', 'how many X', 'do I have enough X', 'have I got enough X'. Dates are optional.",
+      parameters: {
+        type: 'object',
+        properties: {
+          ingredient: { type: 'string' },
+          from: { type: 'string' },
+          to: { type: 'string' },
+        },
+        required: ['ingredient'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'clarify',
+      description:
+        'Ask the owner a question when you cannot tell which job, ingredient or dates are meant. Use this rather than guessing. Also use it when the question is not about this kitchen at all.',
+      parameters: {
+        type: 'object',
+        properties: { question: { type: 'string' } },
+        required: ['question'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'shopping_for_range',
       description: 'What still needs buying between two dates.',
       parameters: {
@@ -127,8 +157,9 @@ const TOOLS = [
   {
     type: 'function',
     function: {
-      name: 'what_needs_attention',
-      description: 'Anomalies and unresolved items across jobs between two dates.',
+      name: 'problems_with_jobs',
+      description:
+        'Anomalies and unresolved items — jobs missing a guest count, a menu, an address, or with a dietary that has not been pinned down.',
       parameters: {
         type: 'object',
         properties: { from: { type: 'string' }, to: { type: 'string' } },
@@ -172,7 +203,20 @@ its id, date, customer and service type. Use those ids.
 If you cannot tell which job or which dates are meant, do NOT guess. Guessing acts on the
 wrong job. Say what is ambiguous instead.
 
-Dates are YYYY-MM-DD. Today's date is in the context.`;
+Dates are YYYY-MM-DD. Today's date is in the context.
+
+You may write a short conversational line in `preamble` — "Sure, let me check Sunday:".
+It MUST contain no digits at all. It is written before anything has been worked out, so
+you have no figure to put in it; a digit there is either invented or copied from a
+previous turn, and both are wrong. The answer itself is rendered from the tool result,
+not by you.
+
+Earlier turns are given as questions and the tools they used, never as answers. That is
+deliberate: you do not know what any previous question returned, so never refer to a
+previous result. For "what about Sunday?" pick the same tool as last time with new dates.
+
+If a question is not about this kitchen — general knowledge, conversions, anything you
+would answer from memory — use `clarify`. You are not a source of facts here.`;
 
 serve(async (request: Request): Promise<Response> => {
   const json = (body: unknown, status = 200): Response =>
@@ -196,7 +240,7 @@ serve(async (request: Request): Promise<Response> => {
     return json({ reason: 'OPENAI_API_KEY is not set on this function.' }, 500);
   }
 
-  let payload: { message?: unknown; context?: unknown };
+  let payload: { message?: unknown; context?: unknown; history?: unknown };
   try {
     payload = (await request.json()) as typeof payload;
   } catch {
@@ -220,6 +264,13 @@ serve(async (request: Request): Promise<Response> => {
       tool_choice: 'required',
       messages: [
         { role: 'system', content: SYSTEM },
+        // Earlier turns as QUESTIONS AND TOOLS ONLY. No engine output ever
+        // re-enters the model's context — see the `Turn` type in intent.ts for
+        // why that line is the one holding the whole design up.
+        ...(Array.isArray(payload.history) ? payload.history : []).map((turn) => ({
+          role: 'user' as const,
+          content: `Earlier: "${(turn as { question?: string }).question ?? ''}" → used ${(turn as { tool?: string }).tool ?? ''} with ${JSON.stringify((turn as { args?: unknown }).args ?? {})}`,
+        })),
         {
           role: 'user',
           content: `Context:\n${JSON.stringify(payload.context)}\n\nQuestion: ${payload.message}`,
@@ -233,7 +284,12 @@ serve(async (request: Request): Promise<Response> => {
   }
 
   const result = (await upstream.json()) as {
-    choices?: { message?: { tool_calls?: { function?: { name?: string; arguments?: string } }[] } }[];
+    choices?: {
+      message?: {
+        content?: string | null;
+        tool_calls?: { function?: { name?: string; arguments?: string } }[];
+      };
+    }[];
   };
 
   const call = result.choices?.[0]?.message?.tool_calls?.[0]?.function;
@@ -262,5 +318,14 @@ serve(async (request: Request): Promise<Response> => {
   // inspection of the arguments, no filling in of blanks, and above all no
   // computing — the client validates the name against its own registry and the
   // engine does the rest.
-  return json({ tool: call.name, args });
+  /**
+   * The preamble rides ALONGSIDE the tool call, never instead of it.
+   *
+   * It is written before the engine has run, so it cannot contain a real figure —
+   * there is none yet. The client rejects it if it contains a digit anyway, since
+   * "cannot" and "did not" are different claims and only one of them is testable.
+   */
+  const preamble = result.choices?.[0]?.message?.content ?? undefined;
+
+  return json({ tool: call.name, args, preamble });
 });

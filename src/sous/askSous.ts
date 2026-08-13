@@ -16,7 +16,7 @@
  * from Anthropic to OpenAI changed nothing outside the edge function.
  */
 
-import { TOOL_NAMES, type Intent, type SousReply, type ToolName } from './intent';
+import { TOOL_NAMES, type Intent, type SousReply, type ToolName, type Turn } from './intent';
 import type { ClientRate, Customer, Ingredient, Job, Recipe } from '../engine/types';
 
 /**
@@ -78,6 +78,32 @@ export function buildContext(
  * running an unrecognised instruction against the owner's data is high enough
  * that "refuse anything unfamiliar" is the only sensible posture.
  */
+/**
+ * THE NO-DIGITS RULE.
+ *
+ * The model may write a conversational line, and it writes it before the engine
+ * has run — so it has no figure to include. This checks anyway, because "could
+ * not have" and "did not" are different claims and only the second is testable.
+ *
+ * Blunt on purpose. Inspecting a number to see whether it is "really" a data
+ * figure means deciding whether "the 24th" is a date or a quantity, and a rule
+ * that needs judgement is a rule that erodes. Glue does not need digits:
+ * "Sure, let me check Sunday:" carries the whole conversational load.
+ *
+ * A preamble with a digit is DROPPED, not rejected — the tool call beside it is
+ * still valid and the owner still gets his answer. Losing the pleasantry costs
+ * nothing; losing the answer would be a worse trade.
+ */
+export function cleanPreamble(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+
+  const text = raw.trim();
+  if (text === '') return null;
+  if (/\d/.test(text)) return null;
+
+  return text;
+}
+
 export function validateReply(raw: unknown): SousReply {
   if (typeof raw !== 'object' || raw === null) {
     return { kind: 'unresolved', reason: 'Sous did not reply with anything usable.' };
@@ -108,7 +134,26 @@ export function validateReply(raw: unknown): SousReply {
   return {
     kind: 'intent',
     intent: { tool: candidate.tool as ToolName, args: candidate.args } as Intent,
+    preamble: cleanPreamble((candidate as { preamble?: unknown }).preamble),
   };
+}
+
+/**
+ * The transcript sent back on the next question.
+ *
+ * QUESTIONS AND TOOLS ONLY. Never a result.
+ *
+ * Feeding answers back is the obvious way to build a chat and it is exactly how
+ * a grounded assistant starts inventing: once a figure has been in the context,
+ * a later turn can restate it, round it, or carry it into a question it does not
+ * apply to. Follow-ups here work by RE-ROUTING — "what about Sunday?" makes the
+ * model pick the same tool with new dates, and the engine runs again from
+ * scratch.
+ *
+ * Trimmed to the last few turns: this is a kitchen assistant, not a thread.
+ */
+export function buildHistory(turns: readonly Turn[], keep = 6): readonly Turn[] {
+  return turns.slice(-keep).map((t) => ({ question: t.question, tool: t.tool, args: t.args }));
 }
 
 export interface AskOptions {
@@ -128,6 +173,7 @@ export async function askSous(
   message: string,
   context: SousContext,
   options: AskOptions,
+  history: readonly Turn[] = [],
 ): Promise<SousReply> {
   const send = options.send ?? fetch;
 
@@ -139,7 +185,7 @@ export async function askSous(
         'content-type': 'application/json',
         authorization: `Bearer ${options.token}`,
       },
-      body: JSON.stringify({ message, context }),
+      body: JSON.stringify({ message, context, history: buildHistory(history) }),
     });
   } catch {
     return {

@@ -29,15 +29,37 @@ import {
   stockRepository,
 } from '../../data/repositories';
 import { askSous, buildContext } from '../../sous/askSous';
+import { renderAnswer, type Answer } from '../../ui/sousAnswer';
+import type { Turn } from '../../sous/intent';
 import { commitProposal } from '../../sous/commit';
 import { runIntent, type Proposal, type SousData, type ToolResult } from '../../sous/tools';
-import { buildShoppingView } from '../../ui/shoppingView';
-import { buildPrepView } from '../../ui/prepView';
 import { Field } from '../../ui/Field';
 import { useAsync } from '../../ui/useAsync';
 import { supabaseClient } from '../../data/client';
 
+/**
+ * One question and what came back.
+ *
+ * `tool` is the part that goes back to the model next turn — and it holds no
+ * answer. `answer` and `result` stay on THIS side of the boundary, for rendering
+ * only.
+ */
+interface Exchange {
+  readonly question: string;
+  /** The model's own words. Digit-free by validation, written before the engine ran. */
+  readonly preamble: string | null;
+  readonly answer: Answer | null;
+  readonly refusal: string | null;
+  readonly result: ToolResult | null;
+  readonly tool: Turn | null;
+}
+
 const today = (): string => new Date().toISOString().slice(0, 10);
+
+const addDays = (date: string, days: number): string => {
+  const [y, m, d] = date.split('-').map(Number) as [number, number, number];
+  return new Date(Date.UTC(y, m - 1, d) + days * 86_400_000).toISOString().slice(0, 10);
+};
 
 export function AskSous(): ReactNode {
   const db = supabaseDb();
@@ -52,10 +74,25 @@ export function AskSous(): ReactNode {
 
   const [question, setQuestion] = useState('');
   const [asking, setAsking] = useState(false);
-  const [refusal, setRefusal] = useState<string | null>(null);
-  const [result, setResult] = useState<ToolResult | null>(null);
   const [committing, setCommitting] = useState(false);
   const [outcome, setOutcome] = useState<string | null>(null);
+
+  /**
+   * The conversation, session-only.
+   *
+   * Not persisted: there is no schema for a transcript, and inventing one to
+   * store chat history is not something to do quietly. Closing the app is a
+   * clean slate, which for a kitchen assistant is the right default anyway.
+   */
+  const [exchanges, setExchanges] = useState<Exchange[]>([]);
+
+  /**
+   * What goes BACK to the model: questions and the tools they used, never the
+   * answers. See `Turn` in intent.ts — that omission is the whole design.
+   */
+  const turns: Turn[] = exchanges
+    .filter((e): e is Exchange & { tool: Turn } => e.tool !== null)
+    .map((e) => e.tool);
 
   const ready =
     jobs.state.status === 'ready' &&
@@ -77,16 +114,20 @@ export function AskSous(): ReactNode {
       rates: rates.state.status === 'ready' ? rates.state.data : [],
       stock: stock.state.status === 'ready' ? stock.state.data : [],
       templates: templates.state.status === 'ready' ? templates.state.data : [],
+      // The screen owns the clock. A question with no dates gets the next week,
+      // and the answer states which window it covered rather than implying "ever".
+      today: today(),
+      horizon: addDays(today(), 7),
     };
   }, [ready, jobs.state, recipes.state, ingredients.state, customers.state, rates.state, stock.state, templates.state]);
 
   const ask = async (): Promise<void> => {
     if (data === null || question.trim() === '') return;
 
+    const asked = question.trim();
     setAsking(true);
-    setRefusal(null);
-    setResult(null);
     setOutcome(null);
+    setQuestion('');
 
     try {
       const session = await supabaseClient().auth.getSession();
@@ -104,20 +145,53 @@ export function AskSous(): ReactNode {
           today(),
         ),
         { url: `${base}/functions/v1/ask-sous`, token },
+        // Prior turns, so "what about Sunday?" resolves. It works by RE-ROUTING —
+        // the model picks the same tool with new dates — not by remembering an
+        // answer it was never shown.
+        turns,
       );
 
       if (reply.kind === 'unresolved') {
-        setRefusal(reply.reason);
+        setExchanges((prior) => [
+          ...prior,
+          { question: asked, preamble: null, answer: null, refusal: reply.reason, result: null, tool: null },
+        ]);
         return;
       }
 
-      // The engine runs HERE, after the model is done.
+      // The engine runs HERE, after the model is done. This ordering is what makes
+      // the preamble safe: the model wrote its line before any of this existed.
       const ran = runIntent(data, reply.intent);
       if (ran === null) {
-        setRefusal('Sous asked for something that does not exist here.');
+        setExchanges((prior) => [
+          ...prior,
+          {
+            question: asked,
+            preamble: null,
+            answer: null,
+            refusal: 'Sous asked for something that does not exist here.',
+            result: null,
+            tool: null,
+          },
+        ]);
         return;
       }
-      setResult(ran);
+
+      setExchanges((prior) => [
+        ...prior,
+        {
+          question: asked,
+          preamble: reply.preamble,
+          answer: renderAnswer(ran, data),
+          refusal: null,
+          result: ran,
+          tool: {
+            question: asked,
+            tool: reply.intent.tool,
+            args: reply.intent.args as unknown as Record<string, unknown>,
+          },
+        },
+      ]);
     } finally {
       setAsking(false);
     }
@@ -132,7 +206,8 @@ export function AskSous(): ReactNode {
 
     setOutcome(done.ok ? 'Saved, and the change is in the job history.' : done.error);
     if (done.ok) {
-      setResult(null);
+      // The proposal is spent. Clearing it stops a second tap re-saving.
+      setExchanges((prior) => prior.map((e) => ({ ...e, result: null })));
       jobs.reload();
     }
     setCommitting(false);
@@ -159,101 +234,58 @@ export function AskSous(): ReactNode {
         {asking ? 'Asking…' : 'Ask'}
       </button>
 
-      {/* A refusal is shown as itself, not as a failure. Rule 8 at the
-          conversational layer: asking again is cheap, acting on the wrong job is
-          not. */}
-      {refusal !== null && <p className="unresolved">{refusal}</p>}
       {outcome !== null && <p className="muted">{outcome}</p>}
 
-      {result !== null && data !== null && (
-        <Answer result={result} data={data} onConfirm={confirm} committing={committing} />
-      )}
+      {/* The conversation. Oldest first, so it reads like a thread. */}
+      {exchanges.map((exchange, i) => (
+        <section key={`${i}-${exchange.question}`} className="sous-turn">
+          <p className="sous-asked">{exchange.question}</p>
+
+          {/* The model's own words — written BEFORE the engine ran, and rejected
+              by validation if they contained a digit. Conversational glue only:
+              every figure below comes from the engine. */}
+          {exchange.preamble !== null && <p className="muted">{exchange.preamble}</p>}
+
+          {/* A refusal is shown as itself, not as a failure. Rule 8 at the
+              conversational layer: asking again is cheap, acting on the wrong job
+              is not. */}
+          {exchange.refusal !== null && <p className="unresolved">{exchange.refusal}</p>}
+
+          {exchange.answer !== null && (
+            <>
+              <p className="sous-lead">{exchange.answer.lead}</p>
+
+              {exchange.answer.detail.length > 0 && (
+                <ul className="sous-detail num">
+                  {exchange.answer.detail.map((d) => (
+                    <li key={d}>{d}</li>
+                  ))}
+                </ul>
+              )}
+
+              {exchange.answer.flags.length > 0 && (
+                <ul className="unresolved-block">
+                  {exchange.answer.flags.map((flagText) => (
+                    <li key={flagText}>{flagText}</li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
+
+          {/* Rule 7: a proposal is a suggestion until he taps confirm. */}
+          {exchange.result?.kind === 'proposal' && (
+            <ProposalView
+              proposal={exchange.result.value}
+              onConfirm={confirm}
+              committing={committing}
+            />
+          )}
+        </section>
+      ))}
+
     </div>
   );
-}
-
-function Answer({
-  result,
-  data,
-  onConfirm,
-  committing,
-}: {
-  result: ToolResult;
-  data: SousData;
-  onConfirm: (p: Proposal) => Promise<void>;
-  committing: boolean;
-}): ReactNode {
-  // Every branch renders through the SAME formatter the matching screen uses, so
-  // the two cannot disagree.
-  switch (result.kind) {
-    case 'shopping': {
-      const view = buildShoppingView(
-        result.value.lines,
-        result.value.gaps,
-        data.ingredients,
-        [],
-      );
-      return (
-        <section className="sous-answer">
-          <h2>
-            Shopping, {result.value.from} to {result.value.to}
-          </h2>
-          {view.nothingToBuy && <p className="muted">Nothing to buy.</p>}
-          {view.groups.map((g) => (
-            <ul key={g.supplierName} className="records">
-              {g.lines.map((l) => (
-                <li key={l.ingredientId} className="shop-line">
-                  <span className="num buy">{l.buy ?? l.outstanding}</span>{' '}
-                  <span className="shop-name">{l.name}</span>
-                </li>
-              ))}
-            </ul>
-          ))}
-        </section>
-      );
-    }
-
-    case 'prep': {
-      const view = buildPrepView(result.value.days, [], data.jobs, data.customers, []);
-      return (
-        <section className="sous-answer">
-          <h2>
-            Prep, {result.value.from} to {result.value.to}
-          </h2>
-          {view.days.map((d) => (
-            <div key={d.prepDate}>
-              <h3>{d.prepDate}</h3>
-              <ul className="records">
-                {d.lines.map((l) => (
-                  <li key={l.recipeId} className="prep-line">
-                    <span className="num batch">{l.batchLabel ?? `${l.portions} portions`}</span>{' '}
-                    <span className="prep-name">{l.recipeName}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </section>
-      );
-    }
-
-    case 'proposal':
-      return (
-        <section className="sous-answer">
-          <h2>Sous suggests this change</h2>
-          <ProposalView proposal={result.value} onConfirm={onConfirm} committing={committing} />
-        </section>
-      );
-
-    default:
-      // The remaining read tools render their engine output directly. Terse by
-      // design — this is the same data the screens show, not a summary of it.
-      return (
-        <section className="sous-answer">
-          <pre className="backup-text num">{JSON.stringify(result.value, null, 2)}</pre>
-        </section>
-      );
-  }
 }
 
 function ProposalView({

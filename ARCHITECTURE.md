@@ -809,6 +809,43 @@ the eight tapas dishes. Cheesecake needs confirming before it is treated as lock
 
 ---
 
+## Ask Sous — the conversation, and why it cannot free-form
+
+The model may now write a line of prose and see earlier turns. Neither loosens Rules 2, 3 or 7,
+because of **when it speaks and what it remembers**:
+
+- **It speaks BEFORE the engine runs.** The `preamble` is written when nothing has been
+  computed, so there is no figure to restate. Validation drops any preamble containing a digit —
+  blunt on purpose, because a rule needing judgement about whether "the 24th" is a date or a
+  quantity is a rule that erodes. A dropped preamble costs a pleasantry; the tool call beside it
+  still runs.
+- **History carries QUESTIONS, never ANSWERS.** A stored turn is `{question, tool, args}`.
+  Feeding results back is the obvious way to build a chat and exactly how a grounded assistant
+  starts inventing: once a figure has been in the context, a later turn can restate it, round it,
+  or carry it into a question it does not apply to. Follow-ups work by **re-routing** — "what
+  about Sunday?" makes the model pick the same tool with new dates, and the engine runs again
+  from scratch.
+- **`clarify` is a tool.** A question it cannot map — general knowledge, a conversion, anything
+  answerable from memory — is handed back as a question. There is no path by which the model is
+  a source of facts here.
+
+Transcript is session-only. No schema for it, and inventing one to store chat history is not
+something to do quietly.
+
+## The routing collision (fixed 13 Aug)
+
+"How much adobo do I need" returned a `{from, to, anomalies}` object. Two independent causes:
+
+1. **`what_needs_attention` contained "needs"** and captured every "how much X do I NEED".
+   Names weigh heavily in tool selection. Renamed to `problems_with_jobs`, and a guard now
+   forbids "need" in ANY tool name.
+2. **No tool could answer it.** Every tool was range-scoped; nothing handled one ingredient.
+   Added `how_much_ingredient`, which distinguishes four states — no such ingredient, ambiguous
+   name, none needed, needed — where the old code could express none of them.
+
+`none_needed` is the one that mattered: a zero requirement is a real answer and has to be said,
+not swapped for an unrelated object.
+
 ## Ask Sous — why the model cannot calculate
 
 The model **returns an intent, never an answer**. It reads the question, picks one of seven

@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { TOOL_NAMES } from '../../src/sous/intent';
 import { TOOLS, runIntent, toolSchema, type SousData } from '../../src/sous/tools';
-import { buildContext, validateReply } from '../../src/sous/askSous';
+import { buildContext, buildHistory, cleanPreamble, validateReply } from '../../src/sous/askSous';
 import type { Intent } from '../../src/sous/intent';
 
 const SOUS_DIR = fileURLToPath(new URL('../../src/sous', import.meta.url));
@@ -36,6 +36,8 @@ const empty: SousData = {
   rates: [],
   stock: [],
   templates: [],
+  today: '2026-08-20',
+  horizon: '2026-08-27',
 };
 
 // ---------------------------------------------------------------------------
@@ -339,5 +341,173 @@ describe('the API key never reaches the browser', () => {
     // And it does catch the real shape, both vendors.
     expect(KEY_SHAPE.test('sk-proj-AbCdEf0123456789AbCdEf0123456789')).toBe(true);
     expect(KEY_SHAPE.test('sk-ant-api03-AbCdEf0123456789AbCdEf')).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+/**
+ * ROUTING — the surface a "how much X" question lands on.
+ *
+ * The bug: "how much adobo do I need" returned a {from, to, anomalies} object,
+ * which is `what_needs_attention`'s shape. Two causes, and fixing either alone
+ * leaves it half-present — the NAME captured "need", and no tool could answer an
+ * ingredient-scoped question at all.
+ *
+ * These guard the surface. Whether the model actually PICKS the right tool needs
+ * the deployed function, and is not something a unit test can claim.
+ */
+describe('routing surface for quantity questions', () => {
+  it('has a tool for one ingredient at a time', () => {
+    expect(TOOL_NAMES).toContain('how_much_ingredient');
+  });
+
+  it('NO TOOL NAME contains "need" — that was the magnet', () => {
+    // `what_needs_attention` captured every "how much X do I NEED". Names weigh
+    // heavily in tool selection, so this is the guard that stops the collision
+    // coming back under another name.
+    for (const name of TOOL_NAMES) {
+      expect(name, `"${name}" contains "need" and will capture quantity questions`).not.toMatch(
+        /need/i,
+      );
+    }
+  });
+
+  it('exactly ONE description claims the "how much" phrasings', () => {
+    // Two tools advertising the same phrasing is the ambiguity that caused this.
+    const claiming = TOOL_NAMES.filter((n) => /how much|how many/i.test(TOOLS[n].description));
+
+    expect(claiming).toEqual(['how_much_ingredient']);
+  });
+
+  it('the quantity tool advertises the phrasings a person actually uses', () => {
+    const description = TOOLS.how_much_ingredient.description.toLowerCase();
+
+    for (const phrasing of ['how much', 'how many', 'enough']) {
+      expect(description, `does not mention "${phrasing}"`).toContain(phrasing);
+    }
+  });
+
+  it('the edge function offers it too, with the same phrasings', () => {
+    const code = readFileSync(EDGE, 'utf8');
+
+    expect(code).toContain('how_much_ingredient');
+    expect(code).toContain('how much');
+    expect(code, 'the renamed tool must not linger').not.toContain('what_needs_attention');
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+/**
+ * THE CONVERSATION, and why it cannot become free-form.
+ *
+ * The model may now write a line of prose and see earlier turns. Neither loosens
+ * Rules 2, 3 or 7, because of WHEN it speaks and WHAT it remembers:
+ *
+ *   it speaks BEFORE the engine runs, so it has no figure to restate
+ *   it remembers QUESTIONS, never answers, so no figure re-enters its context
+ *
+ * Both are asserted here rather than trusted.
+ */
+describe('conversational path stays grounded', () => {
+  it('THE NO-DIGITS RULE: a preamble with a number is dropped', () => {
+    // Glue does not need digits. A digit in model prose is either invented or
+    // carried from a previous turn, and both are wrong.
+    expect(cleanPreamble('Sure, let me check Sunday:')).toBe('Sure, let me check Sunday:');
+    expect(cleanPreamble('You need about 3 kg of adobo')).toBeNull();
+    expect(cleanPreamble('That is €360 for the weekend')).toBeNull();
+    expect(cleanPreamble('Checking the 24th')).toBeNull();
+  });
+
+  it('drops the preamble but KEEPS the tool call', () => {
+    // Losing a pleasantry costs nothing. Losing the answer would be a worse trade,
+    // so a bad preamble degrades the chat rather than breaking it.
+    const reply = validateReply({
+      tool: 'how_much_ingredient',
+      args: { ingredient: 'adobo' },
+      preamble: 'You need 3 kg',
+    });
+
+    expect(reply.kind).toBe('intent');
+    if (reply.kind !== 'intent') return;
+    expect(reply.preamble).toBeNull();
+    expect(reply.intent.tool).toBe('how_much_ingredient');
+  });
+
+  it('keeps a clean preamble', () => {
+    const reply = validateReply({
+      tool: 'how_much_ingredient',
+      args: { ingredient: 'adobo' },
+      preamble: 'Let me look:',
+    });
+
+    expect(reply.kind).toBe('intent');
+    if (reply.kind !== 'intent') return;
+    expect(reply.preamble).toBe('Let me look:');
+  });
+
+  it('HISTORY CARRIES QUESTIONS, NEVER ANSWERS', () => {
+    // The load-bearing line of the whole design. Feeding results back is the
+    // obvious way to build a chat and exactly how a grounded assistant starts
+    // inventing: once a figure has been in the context, a later turn can restate
+    // it, round it, or carry it into a question it does not apply to.
+    const history = buildHistory([
+      {
+        question: 'how much adobo do I need',
+        tool: 'how_much_ingredient',
+        args: { ingredient: 'adobo' },
+        // A result deliberately smuggled onto the turn — it must not survive.
+        result: { outstanding: 3.15, packs: 4 },
+      } as never,
+    ]);
+
+    const serialised = JSON.stringify(history);
+
+    expect(serialised).toContain('how much adobo');
+    expect(serialised, 'an engine figure reached the model context').not.toContain('3.15');
+    expect(serialised).not.toContain('outstanding');
+    expect(serialised).not.toContain('result');
+  });
+
+  it('trims the transcript rather than growing it forever', () => {
+    const turns = Array.from({ length: 20 }, (_, i) => ({
+      question: `q${i}`,
+      tool: 'shopping_for_range' as const,
+      args: {},
+    }));
+
+    expect(buildHistory(turns).length).toBeLessThanOrEqual(6);
+  });
+
+  it('a question it cannot map goes to clarify, which returns a QUESTION', () => {
+    // "How many grams in a kilo" has no tool. The only thing the model can do with
+    // it is hand it back — it is not a source of facts here.
+    expect(TOOL_NAMES).toContain('clarify');
+
+    const result = runIntent(empty, {
+      tool: 'clarify',
+      args: { question: 'Which Saturday did you mean?' },
+    });
+
+    expect(result?.kind).toBe('clarify');
+    if (result?.kind !== 'clarify') return;
+    expect(result.value.question).toBe('Which Saturday did you mean?');
+  });
+
+  it('RULE 7 SURVIVES THE CHAT: no turn sequence reaches commit', () => {
+    // A multi-turn conversation ending in a proposal is still a proposal. The
+    // dispatcher resolves against the registry, so no amount of conversational
+    // build-up produces a write.
+    for (const tool of ['commit', 'commitProposal', 'save', 'confirm']) {
+      expect(validateReply({ tool, args: {} }).kind, `${tool} was accepted`).toBe('unresolved');
+      expect(runIntent(empty, { tool, args: {} } as never)).toBeNull();
+    }
+  });
+
+  it('the conversational path adds no new write to the registry', () => {
+    // The chat brought two new tools. Both must be reads.
+    expect(TOOLS.how_much_ingredient.kind).toBe('read');
+    expect(TOOLS.clarify.kind).toBe('read');
   });
 });

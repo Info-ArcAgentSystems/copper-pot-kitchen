@@ -6,11 +6,14 @@
  * tool is refused rather than executed — which is the mechanism that makes
  * `{tool: 'commit'}` a no-op rather than a write.
  *
- * NO ANTHROPIC KEY IS REACHABLE FROM HERE. It lives in a Supabase function
+ * NO PROVIDER KEY IS REACHABLE FROM HERE. It lives in a Supabase function
  * secret, read by Deno inside the edge function. It is deliberately not a
  * `VITE_` variable: Vite INLINES those into the browser bundle at build time, so
  * a key named that way would ship to every visitor. `tests/sous/guards.test.ts`
- * asserts no file under `src/` even mentions it.
+ * asserts no file under `src/` names a provider or carries a key-shaped string.
+ *
+ * This file does not know or care which provider answers. That is why swapping
+ * from Anthropic to OpenAI changed nothing outside the edge function.
  */
 
 import { TOOL_NAMES, type Intent, type SousReply, type ToolName } from './intent';

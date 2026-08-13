@@ -125,8 +125,13 @@ describe('RULE 3 — a fixed set of typed tools, not a chat box', () => {
     // A tool offered there but missing here would be chosen by the model and then
     // refused by the dispatcher — which the owner experiences as Sous ignoring
     // them, with nothing in the UI explaining why.
+    //
+    // Scraped from OpenAI's shape, where name and description sit under
+    // `function: { ... }`. The pattern is provider-specific by necessity; what it
+    // GUARDS is not, so it must keep biting after the swap — verified by renaming
+    // a tool in the function and watching this go red.
     const code = readFileSync(EDGE, 'utf8');
-    const offered = [...code.matchAll(/name: '([a-z_]+)',\n\s*description/g)].map((m) => m[1]);
+    const offered = [...code.matchAll(/name: '([a-z_]+)',\s*\n\s*description/g)].map((m) => m[1]);
 
     expect(offered.sort()).toEqual([...TOOL_NAMES].sort());
   });
@@ -211,8 +216,71 @@ describe('RULE 7 — the model has no path to commit', () => {
 
 // ---------------------------------------------------------------------------
 
+/**
+ * CORS — the failure mode that shipped, and that no test caught.
+ *
+ * The first deploy answered the browser's preflight with 405 and no allow-origin,
+ * so `fetch` REJECTED and the client reported "could not reach Sous" — a
+ * misleading diagnosis for a function that was reachable and healthy.
+ *
+ * Nothing caught it because curl does not enforce CORS and every other test here
+ * is offline. Source inspection is the only thing that can, so these are blunt
+ * and they check ORDER as well as presence: an OPTIONS branch that sits after the
+ * method check is the exact bug, and it looks fine at a glance.
+ */
+describe('CORS — the browser can actually reach it', () => {
+  const code = readFileSync(EDGE, 'utf8');
+
+  it('answers the preflight', () => {
+    expect(code, 'no OPTIONS branch — the preflight will fall through').toContain(
+      "request.method === 'OPTIONS'",
+    );
+  });
+
+  it('answers it BEFORE the method check, which is where the bug was', () => {
+    // `if (method !== 'POST') return 405` swallows the preflight when it comes
+    // first. Presence alone would pass with the branch in the wrong place.
+    const options = code.indexOf("request.method === 'OPTIONS'");
+    const post = code.indexOf("request.method !== 'POST'");
+
+    expect(options).toBeGreaterThan(-1);
+    expect(post).toBeGreaterThan(-1);
+    expect(options, 'the OPTIONS branch must come first').toBeLessThan(post);
+  });
+
+  it('sets an allow-origin header', () => {
+    expect(code).toContain('access-control-allow-origin');
+  });
+
+  it('puts CORS on EVERY response, including the error paths', () => {
+    // A 500 with no allow-origin is exactly as invisible to the browser as the
+    // 405 was, so a real failure would present as the same wrong diagnosis. The
+    // shared json helper is what makes that automatic.
+    const helper = code.slice(code.indexOf('const json ='), code.indexOf('const json =') + 400);
+
+    expect(helper, 'the json helper must spread the CORS headers').toContain('CORS');
+  });
+
+  it('allows the headers the client actually sends', () => {
+    const allowed = /access-control-allow-headers':\s*'([^']+)'/.exec(code)?.[1] ?? '';
+
+    expect(allowed).toContain('authorization');
+    expect(allowed).toContain('content-type');
+  });
+});
+
 describe('the API key never reaches the browser', () => {
-  it('no file under src/ mentions ANTHROPIC', () => {
+  /**
+   * A real key, not a vendor name.
+   *
+   * The obvious check — "does any file contain `sk-`" — fires on the function's
+   * own name: **ask-sous contains sk-**. So the pattern requires a long token
+   * after the prefix, which matches a key and not a filename. Both directions are
+   * verified: a planted key fails, and a repo full of `ask-sous` passes.
+   */
+  const KEY_SHAPE = /\bsk-[A-Za-z0-9_-]{20,}/;
+
+  it('no file under src/ mentions a provider key variable', () => {
     // It lives in a Supabase function secret. Naming it VITE_ANYTHING would make
     // Vite inline it into the bundle — the same trap the integration credentials
     // hit, except this one is billable.
@@ -231,7 +299,10 @@ describe('the API key never reaches the browser', () => {
         // is not a leak, and an earlier version of this guard flagged exactly
         // that — the same false positive the engine purity guard hit on the
         // sentence describing its own rule.
-        if (/ANTHROPIC/i.test(strip(readFileSync(path, 'utf8')))) {
+        // Vendor-agnostic: naming both providers means switching again cannot
+        // quietly disarm this guard.
+        const code = strip(readFileSync(path, 'utf8'));
+        if (/OPENAI|ANTHROPIC/i.test(code) || KEY_SHAPE.test(code)) {
           offenders.push(path.slice(path.indexOf('src/')));
         }
       }
@@ -244,10 +315,29 @@ describe('the API key never reaches the browser', () => {
   it('the edge function reads it from Deno, not from import.meta.env', () => {
     const code = readFileSync(EDGE, 'utf8');
 
-    expect(code).toContain("Deno.env.get('ANTHROPIC_API_KEY')");
+    expect(code).toContain("Deno.env.get('OPENAI_API_KEY')");
     expect(code).not.toContain('import.meta.env');
-    expect(code, 'a VITE_ prefix would inline the key into the bundle').not.toContain(
-      'VITE_ANTHROPIC',
+    expect(code, 'a VITE_ prefix would inline the key into the bundle').not.toMatch(
+      /VITE_(OPENAI|ANTHROPIC)/,
     );
+  });
+
+  it('no literal key is committed anywhere in the repo source', () => {
+    // The edge function included. A key pasted in while debugging is the likeliest
+    // way one ever lands in git.
+    for (const path of [EDGE, join(SOUS_DIR, 'askSous.ts')]) {
+      expect(KEY_SHAPE.test(readFileSync(path, 'utf8')), `${path} contains a key`).toBe(false);
+    }
+  });
+
+  it('THE TRAP: the key pattern does not fire on "ask-sous"', () => {
+    // `ask-sous` contains `sk-`. A naive check would flag every file naming the
+    // function, and the usual response to a guard that cries wolf is to delete it.
+    expect(KEY_SHAPE.test('supabase/functions/ask-sous/index.ts')).toBe(false);
+    expect(KEY_SHAPE.test('npm run supabase:deploy:sous')).toBe(false);
+
+    // And it does catch the real shape, both vendors.
+    expect(KEY_SHAPE.test('sk-proj-AbCdEf0123456789AbCdEf0123456789')).toBe(true);
+    expect(KEY_SHAPE.test('sk-ant-api03-AbCdEf0123456789AbCdEf')).toBe(true);
   });
 });

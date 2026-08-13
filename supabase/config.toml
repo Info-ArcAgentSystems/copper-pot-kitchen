@@ -52,7 +52,12 @@ jwt_expiry = 3600
 enable_signup = false
 
 [functions.ask-sous]
-# The Anthropic key is a FUNCTION SECRET, set with:
-#     npm run supabase:secrets -- ANTHROPIC_API_KEY=sk-ant-...
+# The OpenAI key is a FUNCTION SECRET, set with:
+#     npm run supabase:secrets -- OPENAI_API_KEY=sk-...
+# No quotes around the value — a shell that passes them through makes them part
+# of the secret, which authenticates as a 401 and looks like a revoked key.
 # It is never a VITE_ variable — Vite inlines those into the browser bundle.
 verify_jwt = true
+
+# parse-image (the scanners) uses the SAME OPENAI_API_KEY on this same project.
+# One secret, both functions.

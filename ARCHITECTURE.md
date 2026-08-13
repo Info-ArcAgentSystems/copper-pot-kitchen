@@ -112,9 +112,21 @@ project and has the same failure mode.
 `supabase/.temp/` is gitignored: it holds a pooler connection string, and the linked ref is
 per-machine. The ref that matters is recorded in `config.toml` and in the scripts above.
 
-**Left behind on PCD PROD:** a stray `ask-sous` function from the mis-targeted deploy, and
-possibly an `ANTHROPIC_API_KEY` secret if one was set before the target was noticed. Worth
-removing from that project — it is not Copper Pot's to clean up, but it is Copper Pot's mistake.
+### The AI provider is OpenAI
+
+ArcAgent standardises on it. The key is `OPENAI_API_KEY`, a **function secret** on
+`vhzpwdzrlrcfhxrjawym`, set with `npm run supabase:secrets -- OPENAI_API_KEY=sk-...` — **no
+quotes around the value**, since a shell that passes them through makes them part of the secret
+and the result authenticates as a 401 that looks exactly like a revoked key.
+
+**`parse-image` (the scanners, 6b) uses the same secret on the same project** — same
+`Authorization: Bearer`, same endpoint host, with the vision content shape instead of tools. One
+secret, both functions.
+
+The swap touched **only** `supabase/functions/ask-sous/`. Nothing in `src/` names a provider,
+because the model returns an intent and never touches data: the client parses `{tool, args}` or
+`{reason}` and does not care who produced it. That the change was containable is the
+architecture working, not a happy accident.
 
 Secrets live in `.env.local` (never committed) and, from Phase 6, in Supabase function
 secrets. Both are recreated per machine from the Supabase dashboard.
@@ -871,7 +883,8 @@ fixture id, so the reason a test exists survives the person who wrote it.
 | ~~`20260809000100_backup` not applied~~ | **closed 9 Aug** | Applied and proven live: a full export → clear → restore round trip returns every row, a payload naming an unknown table is refused **before** anything is deleted, and a forged `kitchen_id` in the file is overwritten with the caller's. **39/39, green on two consecutive runs** |
 | Stale-backup reminder is per device | no | The last-backup fingerprint lives in `localStorage`, so exporting on the phone leaves a laptop still reminding. Stated on screen. A `kitchens.last_backup_at` column would fix it but is a migration for a reminder |
 | ~~On-hand stock cannot be entered anywhere~~ | **closed 9 Aug** | `setOnHand`/`clearOnHand` added and wired to the ingredient form. Proven live: with 4 kg required, 3 kg of stock leaves 1 kg outstanding and 4 kg drops the line off the list. The mislabelled "Stock" tab that hid it is now "Ingredients" |
-| `ask-sous` deploy target | no | The first deploy went to **PCD PROD** because that project was linked on this machine. Now guarded: `npm run supabase:deploy:sous` bakes in `--project-ref vhzpwdzrlrcfhxrjawym`. A stray `ask-sous` (and possibly an `ANTHROPIC_API_KEY` secret) may remain on PCD and should be removed there |
+| ~~`ask-sous` deploy target~~ | closed | Went to **PCD PROD** because that project was linked here. Guarded by `npm run supabase:deploy:sous`, which bakes in `--project-ref vhzpwdzrlrcfhxrjawym`. PCD has been cleaned |
+| ~~ask-sous unreachable from the browser~~ | **closed 13 Aug** | The function answered the CORS preflight with 405 and no allow-origin, so `fetch` rejected and the client said "could not reach Sous" — a misleading diagnosis for a healthy function. **Invisible to curl and to every offline test, which is why it shipped.** Fixed in the OpenAI rewrite, and `tests/sous/guards.test.ts` now checks the OPTIONS branch exists AND comes before the method check — the wrong-order version looks fine at a glance |
 | Eight bottom tabs is too many | no | At 375px that is ~47px each; Phase 6 would make it ten at 37px, below the 44px floor enforced everywhere else. Scrolling is a mitigation, not a fix. **A five-tab regrouping is proposed and not built** — see "Proposed: five tabs" below |
 | Integration suite is latency-flaky | no | Observed 9 Aug: three consecutive runs gave 36 pass (46s), 1 fail (148s), 36 pass (49s). The failure was a 30s test timeout in a run that was ~3x slower overall; per-test timings are normally 0.4–2.3s. It is round-trip latency, not a defect, and it is NOT concurrency — the slow run had the database to itself. The timeout is deliberately NOT raised: 30s is already ample for 2–4 sequential requests, and raising it would mask a real hang. Re-run before believing a single red |
 | Stock has THREE states, not two | blank = no row = "I have not counted this"; `qty 0` = "I counted, there is none"; `qty 2.5` = a figure. Clearing DELETES the row rather than writing zero. Both make the shopping list order the full amount, so the bug would be invisible there — which is exactly why it needs a test rather than a comment. |

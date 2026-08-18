@@ -205,7 +205,7 @@ wrong job. Say what is ambiguous instead.
 
 Dates are YYYY-MM-DD. Today's date is in the context.
 
-You may write a short conversational line in `preamble` — "Sure, let me check Sunday:".
+You may write a short conversational line in 'preamble' — "Sure, let me check Sunday:".
 It MUST contain no digits at all. It is written before anything has been worked out, so
 you have no figure to put in it; a digit there is either invented or copied from a
 previous turn, and both are wrong. The answer itself is rendered from the tool result,
@@ -216,7 +216,7 @@ deliberate: you do not know what any previous question returned, so never refer 
 previous result. For "what about Sunday?" pick the same tool as last time with new dates.
 
 If a question is not about this kitchen — general knowledge, conversions, anything you
-would answer from memory — use `clarify`. You are not a source of facts here.`;
+would answer from memory — use 'clarify'. You are not a source of facts here.`;
 
 serve(async (request: Request): Promise<Response> => {
   const json = (body: unknown, status = 200): Response =>

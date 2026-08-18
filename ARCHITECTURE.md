@@ -112,6 +112,17 @@ project and has the same failure mode.
 `supabase/.temp/` is gitignored: it holds a pooler connection string, and the linked ref is
 per-machine. The ref that matters is recorded in `config.toml` and in the scripts above.
 
+### Edge functions ARE in the local gate — via lint, not tsc
+
+`oxlint` scans the whole repo except `dist/` and `node_modules/`, so
+`supabase/functions/` is linted and **`parse-image` will be covered the same way with no change
+needed**. It reports parse errors as `error` and exits 1.
+
+`tsc` does **not** see the functions and cannot: they use Deno globals and remote `https://`
+imports, which is why the projects include only `src`, `tests` and `vite.config.ts`. So type
+errors inside a function are not caught locally — syntax errors are, and that is the failure
+mode that actually bites.
+
 ### The AI provider is OpenAI
 
 ArcAgent standardises on it. The key is `OPENAI_API_KEY`, a **function secret** on
@@ -902,6 +913,7 @@ Redirects cover it in three lines.
 
 | Suite | Command | Covers | Status |
 |---|---|---|---|
+| **Verify** | `npm run verify` | every local gate, each result stated | **Run this before any deploy.** It exists because a failure was once missed, not because the gates were missing |
 | Integration | `npm run test:integration` | RLS, audit triggers, job delete, `save_recipe`, `save_job`, three tick tables, on-hand stock, backup/restore/clear — live Supabase | **41 pass** (9 Aug). Needs `CPK_TEST_EMAIL`/`CPK_TEST_PASSWORD`. **`clear_kitchen` deletes the whole signed-in kitchen** — never point this at real owner data |
 | Unit | `npm run test` | engine, data, ui, sous | **787 green**, 2 skipped, 2 todo — every engine module, plus `purity`, mappers, repositories, the pure form/impact/shopping formatting, and the Rule 6 derived guard |
 | Golden | `npm run test:copperpot` | the owner's regression pack | **15 pass, 2 skipped, 2 todo** — read `tests/golden/PENDING_OWNER.md` before touching |
@@ -915,6 +927,7 @@ fixture id, so the reason a test exists survives the person who wrote it.
 | `CALC-NUCELLA-BBQ-SPLIT` | BBQ sides were scaling to meat eaters instead of all guests. 27 guests, 22 meat eaters, must produce 27 baps and 2700 g of potatoes. |
 | `job_dishes.portions` nullable | `not null default 0` turned "let the guest count decide" into "make none of this dish", silently disabling the impact cascade at the column level. The live `save_job` test asserts a null round-trips. |
 | backup round-trip was LOSSY | The Phase 5 round-trip test read five tables, cleared all nineteen, and restored five — so it destroyed properties, rates, templates, stock and the tick tables on every run while reporting success. It passed only for as long as nothing referenced the missing fourteen, then failed on `jobs_property_id_fkey` once a job had a property. Now driven from `EXPORTED_TABLES` through the app's own `buildBackup`/`importable`, so the test cannot drift from what the app backs up. |
+| a gate that passed silently | `npm run lint` caught the ask-sous syntax error perfectly — exit 1, naming file, line and column, in the same words the deploy later used. It was missed because it was checked as `npm run lint >/dev/null 2>&1 && echo ok`: when lint failed the `&&` short-circuited and printed NOTHING, and an absent success message reads like a quiet pass. One error line among forty pre-existing warnings did the rest. `npm run verify` now states PASS/FAIL per gate and prints only error lines on failure. **The lesson is about how a check is read, not which checks exist.** |
 | integration cleanup coverage | The backup tests created suppliers, which `cleanUp` did not delete. The leftover then broke the NEXT run on the unique (kitchen_id, name) constraint — identical in shape to the orphaned ingredient, and identical in cause: a test created data the cleanup did not know about. Cleanup now covers suppliers and properties and verifies suppliers are gone, alongside jobs and ingredients. |
 | integration cleanup ordering | Ingredients were deleted before recipes across an `on delete restrict` edge and the error was swallowed, orphaning a row that broke the NEXT run on a unique constraint — a failure that looks nothing like its cause. Cleanup now runs parents-first at both ends of the suite and verifies ingredients as well as jobs. |
 | ~~`20260809000100_backup` not applied~~ | **closed 9 Aug** | Applied and proven live: a full export → clear → restore round trip returns every row, a payload naming an unknown table is refused **before** anything is deleted, and a forged `kitchen_id` in the file is overwritten with the caller's. **39/39, green on two consecutive runs** |

@@ -26,6 +26,7 @@ import { BackupScreen } from './features/setup/Backup';
 import { Ingredients } from './features/setup/Ingredients';
 import { Recipes } from './features/setup/Recipes';
 import { Jobs } from './features/jobs/Jobs';
+import { ScanJobSheet } from './features/scan/ScanJobSheet';
 import { Shopping } from './features/shopping/Shopping';
 import { Prep } from './features/prep/Prep';
 import { Packing } from './features/packing/Packing';
@@ -87,6 +88,10 @@ export default function App(): ReactNode {
         <main className="app-main">
           <Routes>
             <Route path="/" element={<Jobs />} />
+            {/* Scan is NOT a tab. It produces jobs, so it is an action on the
+                Jobs screen — and a ninth tab would put every tab under the 44px
+                floor the rest of the app holds to. See ARCHITECTURE.md. */}
+            <Route path="/scan/job-sheet" element={<ScanJobSheet />} />
             <Route path="/prep" element={<Prep />} />
             <Route path="/shopping" element={<Shopping />} />
             <Route path="/packing" element={<Packing />} />

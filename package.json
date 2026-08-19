@@ -16,6 +16,7 @@
     "test:e2e": "playwright test",
     "supabase:link": "supabase link --project-ref vhzpwdzrlrcfhxrjawym",
     "supabase:deploy:sous": "supabase functions deploy ask-sous --project-ref vhzpwdzrlrcfhxrjawym",
+    "supabase:deploy:parse-image": "supabase functions deploy parse-image --project-ref vhzpwdzrlrcfhxrjawym",
     "supabase:secrets": "supabase secrets set --project-ref vhzpwdzrlrcfhxrjawym",
     "supabase:push": "supabase db push --project-ref vhzpwdzrlrcfhxrjawym",
     "verify": "bash scripts/verify.sh"

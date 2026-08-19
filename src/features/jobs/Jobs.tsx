@@ -19,6 +19,7 @@
  */
 
 import { useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { supabaseDb } from '../../data/client';
 import {
   clientRateRepository,
@@ -76,35 +77,42 @@ export function Jobs(): ReactNode {
   const repo = jobRepository(supabaseDb());
 
   return (
-    <RecordScreen<Job>
-      title="Jobs"
-      addLabel="Add a job"
-      emptyDescription="A job is one service: who, where, when, how many, and what you are cooking."
-      load={async () =>
-        (await repo.list()).sort((a, b) =>
-          (b.serviceDate ?? '').localeCompare(a.serviceDate ?? ''),
-        )
-      }
-      keyOf={(j) => j.id}
-      renderRow={(j) => (
-        <>
-          <strong>
-            {j.serviceDate ?? 'no date'} · {j.serviceType ?? 'no service type'}
-          </strong>
-          <span className="muted num">
-            {[
-              j.guests === null ? 'no guest count' : `${j.guests} guests`,
-              `${j.dishes.length} dish${j.dishes.length === 1 ? '' : 'es'}`,
-              j.status,
-            ].join(' · ')}
-          </span>
-          {j.dietaries.some((d) => d.kind === 'unresolved') && (
-            <span className="unresolved">unresolved dietary</span>
-          )}
-        </>
-      )}
-      renderForm={(job, done) => <JobForm job={job} done={done} />}
-    />
+    <>
+      {/* Scan lives here rather than in the tab bar: it produces jobs, and the
+          bar is already at its width limit. */}
+      <p className="muted">
+        <Link to="/scan/job-sheet">Scan a job sheet from a photo</Link>
+      </p>
+      <RecordScreen<Job>
+        title="Jobs"
+        addLabel="Add a job"
+        emptyDescription="A job is one service: who, where, when, how many, and what you are cooking."
+        load={async () =>
+          (await repo.list()).sort((a, b) =>
+            (b.serviceDate ?? '').localeCompare(a.serviceDate ?? ''),
+          )
+        }
+        keyOf={(j) => j.id}
+        renderRow={(j) => (
+          <>
+            <strong>
+              {j.serviceDate ?? 'no date'} · {j.serviceType ?? 'no service type'}
+            </strong>
+            <span className="muted num">
+              {[
+                j.guests === null ? 'no guest count' : `${j.guests} guests`,
+                `${j.dishes.length} dish${j.dishes.length === 1 ? '' : 'es'}`,
+                j.status,
+              ].join(' · ')}
+            </span>
+            {j.dietaries.some((d) => d.kind === 'unresolved') && (
+              <span className="unresolved">unresolved dietary</span>
+            )}
+          </>
+        )}
+          renderForm={(job, done) => <JobForm job={job} done={done} />}
+      />
+    </>
   );
 }
 

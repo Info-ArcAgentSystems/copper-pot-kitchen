@@ -14,11 +14,11 @@ Keep it honest. A stale architecture file is worse than none, because it gets tr
 
 | | |
 |---|---|
-| Current phase | Phase 6a — **Ask Sous shipped** (edge function written, NOT deployed). Scanners and dashboard remain |
-| Last updated | 9 August 2026 |
+| Current phase | Phase 6b — **job sheet scanner built** (`parse-image` written, NOT deployed). Recipe-card and invoice scanners, and the dashboard, remain |
+| Last updated | 20 August 2026 |
 | Repo | `Info-ArcAgentSystems/copper-pot-kitchen` (private) |
 | Database | Supabase, schema + 9 migrations, **all applied** (9 Aug) |
-| Unit tests | **787 pass**, 2 skipped, 2 todo (`npm run test`) — 0.5s, no network |
+| Unit tests | **909 pass**, 2 skipped, 2 todo (`npm run test`) — 0.6s, no network |
 | Golden pack | **wired** — 15 pass, 2 skipped pending owner, 2 todo |
 | Integration | **41 pass** (`npm run test:integration`) — live Supabase, run deliberately. Occasionally flaky under latency, see Known gaps |
 
@@ -71,7 +71,10 @@ session reads to work out where things stand.
 | 9 Aug 2026 | Date fields on Jobs, Shopping, Prep, Packing and Money switched to `<input type="date">`. Affordance only — the stored format, parsing and validation are untouched. Measured in-browser: 16px / 44px hold, and every malformed value (including 2026-02-31) comes back as empty string, so the control NARROWS what reaches the engine |
 | 9 Aug 2026 | **Stock entry** — `stockRepository` gained `setOnHand`/`clearOnHand`, and the ingredient form writes them. Closes the cascade gap: `required − stock − purchased` finally has its middle term. Proven live end-to-end — 4 kg required drops to 1 kg outstanding with 3 kg on hand, and off the list entirely when fully stocked. Tab renamed Stock → Ingredients. **735 unit, 41 integration** |
 | 9 Aug 2026 | Phase 6a — **Ask Sous**. The model returns an INTENT and never sees a computed number; the engine runs in the browser afterwards and the existing formatters render it. Rules 2, 3 and 7 each enforced structurally and verified by inversion. `ask-sous` edge function **written, NOT deployed**. **787 unit** |
-| | *Next: deploy ask-sous, then the tab regrouping and the scanners* |
+| 13 Aug 2026 | **Ask Sous deployed and working on OpenAI.** Three defects found and fixed in use, each with a regression test: the CORS preflight (405, invisible to curl); `what_needs_attention` capturing every "how much X do I NEED" and returning an anomalies object; and the model asking for dates instead of defaulting to today→+7 the way every screen does |
+| 20 Aug 2026 | **Ingredient lookup fixed.** "How much soy sauce" answered "you have no ingredient called soy sauce" with Soy Sauce on screen. Case was never the cause — the matcher compared CHARACTERS one-directionally, so `"Sauce, Soy"`, `"Soy  Sauce"`, `"Soy-sauce"` and a stored name shorter than the question all read as absent. Now compares WORDS over four tiers, strictest first |
+| 20 Aug 2026 | Phase 6b — **the job sheet scanner**. `parse-image` reuses the ask-sous skeleton exactly: same secret, same project, CORS preflight answered first, the JSON-string arguments parse, `tool_choice: 'required'`. The matcher was extracted to `engine/nameMatch.ts` and is now shared, so the scanner and Ask Sous cannot disagree about whether a name is already in the owner's data. **`parse-image` written, NOT deployed.** **909 unit** |
+| | *Next: deploy parse-image, then the recipe-card and invoice scanners, then the dashboard* |
 
 ---
 
@@ -101,13 +104,26 @@ scripts bake it in:
 | Instead of | Run |
 |---|---|
 | `supabase functions deploy ask-sous` | `npm run supabase:deploy:sous` |
+| `supabase functions deploy parse-image` | `npm run supabase:deploy:parse-image` |
 | `supabase secrets set KEY=…` | `npm run supabase:secrets -- KEY=…` |
 | `supabase db push` | `npm run supabase:push` |
 | `supabase link` | `npm run supabase:link` |
 
-Running the CLI directly is fine as long as `--project-ref vhzpwdzrlrcfhxrjawym` is on it. **This
-is the deploy target for the scanners too** — `parse-image` in Phase 6b lands on the same
-project and has the same failure mode.
+Running the CLI directly is fine as long as `--project-ref vhzpwdzrlrcfhxrjawym` is on it.
+`parse-image` lands on the same project and has the same failure mode; its script is pinned
+the same way, and `tests/scan/guards.test.ts` fails if any `supabase:` script loses the flag.
+
+### TWO DEPLOY PATHS, AND A FEATURE TOUCHING BOTH NEEDS BOTH
+
+| What changed | How it ships |
+|---|---|
+| `supabase/functions/**` | `npm run supabase:deploy:<name>` — **manual, never by Claude** |
+| everything under `src/` | `git push` → Vercel |
+
+They are independent, and neither implies the other. A scanner change that edits the prompt
+*and* the review screen is **not shipped** until both have gone — and the half that is live
+will look like the whole feature. The symptom is a screen behaving as though the function
+were still the old one, which reads as a client bug and is not.
 
 `supabase/.temp/` is gitignored: it holds a pooler connection string, and the linked ref is
 per-machine. The ref that matters is recorded in `config.toml` and in the scripts above.
@@ -214,6 +230,7 @@ Mark each as `not started` / `in progress` / `done`, and keep the description ac
 | `checks.ts` | `allergenScan`, `dietaryCrossCheck`, `readinessCheck`, `anomalyScan` | **done** — 1 Aug 2026 |
 | `impact.ts` | `changeImpact` | **done** — 1 Aug 2026 |
 | `history.ts` | `historicalAggregate` | **done** — 1 Aug 2026 |
+| `nameMatch.ts` | matching typed or scanned names to stored records | **done** — 20 Aug 2026 |
 | `types.ts` | shared domain types | **done** — 31 Jul 2026 |
 
 `types.ts` has no imports and no logic; it erases at runtime apart from one `brand` symbol.
@@ -582,14 +599,53 @@ that loses its customer loses its client group and stops being priceable. The co
 counts the references first and says "3 jobs refer to this customer" rather than "are you
 sure?".
 
-### `src/sous` — Ask Sous · **not started**
+### `src/sous` — Ask Sous · **done** (13 Aug 2026)
 
-Tool definitions over the engine, chat UI, propose-and-confirm flow.
+Tool definitions over the engine, chat UI, propose-and-confirm flow. Deployed and in use.
 
-### `supabase/functions` — server side · **not started**
+### `src/scan` — the scanners · **job sheet done** (20 Aug 2026)
 
-`ask-sous` (intent parsing) · `parse-image` (three scan modes). Anthropic key lives here as a
-secret and nowhere else.
+| File | Responsibility | Status |
+|---|---|---|
+| `parseImage.ts` | post the photo, validate the reply. **Node-pure** | **done** |
+| `jobSheet.ts` | review a read against the owner's data — gaps and new things | **done** |
+| `commit.ts` | the one path that writes, after the owner confirms | **done** |
+
+**It mirrors `src/sous/`, and is deliberately not under `features/`.** CLAUDE.md §2 lists
+scan only under `features/`, because the scanners and recipe search were asked for by Paul
+*after* the contract documents were written — the gap is history, not a constraint. The
+structure follows `sous/` for the same reason `sous/` has it: model-facing client plus pure
+logic that must be testable without React. The screen itself is `features/scan/`.
+
+**`parseImage.ts` holds no browser globals.** Downscaling the photo needs a canvas, so it
+lives in `features/scan/scaleImage.ts` instead. `tsconfig.test.json` compiles without
+`lib: DOM` on purpose, and it caught this during the build — the split keeps the part with
+the Rule 8 decisions in it runnable under plain Node.
+
+**THE MODEL RESOLVES NOTHING.** It returns what it read, verbatim, and is never told which
+customers, properties or recipes exist. Matching happens in the browser through
+`engine/nameMatch`, the same function Ask Sous uses. Two matchers would eventually disagree
+about whether a customer already exists, and the scanner would create a duplicate of someone
+already in the book — silently, and for weeks.
+
+**Flag, never invent.** An unreadable field is a GAP (null, surfaced for him to fill); a name
+read fine but absent from his data is NEW (flagged, never created). There is no third
+handling and in particular no "probably" — a name matching several records is ambiguous and
+becomes a gap. `commitScannedJob` refuses a review with any gap outstanding, and the test
+proving it uses a Proxy db that records being reached: asserting `ok === false` against a
+null db passes even with the gap check deleted, because the write throws and is caught into
+the same shape. That was verified by deleting the check.
+
+`guestsConfirmed` is **always false** on a scanned job. He confirmed the scan is a fair
+reading of the sheet, which is not the same as confirming the sheet was right.
+
+### `supabase/functions` — server side · **ask-sous deployed, parse-image written**
+
+`ask-sous` (intent parsing, **deployed 13 Aug**) · `parse-image` (job sheet mode, **written
+20 Aug, NOT deployed**). The **OpenAI** key is one function secret shared by both, on
+`vhzpwdzrlrcfhxrjawym`, and lives nowhere else.
+
+Recipe-card and invoice modes are **not built**. Only the job sheet ships in 6b.
 
 ---
 
@@ -906,6 +962,11 @@ Phase 6 then needs no new tabs. **Scan is not a destination** — it produces jo
 prices, so it belongs as an action on those screens. **Ask Sous is cross-cutting**, so it wants
 a persistent affordance rather than somewhere to navigate to.
 
+**Followed in 6b, and worth restating because it is easy to undo.** The job sheet scanner is
+a link on the Jobs screen at `/scan/job-sheet`, not a ninth tab. Nine tabs at 375px is ~41px
+each, under the 44px floor the rest of the app holds to. The five-tab regrouping above is
+still proposed and still not built.
+
 Cost: `/shopping`, `/prep` and `/packing` become children of `/service`, breaking bookmarks.
 Redirects cover it in three lines.
 
@@ -915,7 +976,7 @@ Redirects cover it in three lines.
 |---|---|---|---|
 | **Verify** | `npm run verify` | every local gate, each result stated | **Run this before any deploy.** It exists because a failure was once missed, not because the gates were missing |
 | Integration | `npm run test:integration` | RLS, audit triggers, job delete, `save_recipe`, `save_job`, three tick tables, on-hand stock, backup/restore/clear — live Supabase | **41 pass** (9 Aug). Needs `CPK_TEST_EMAIL`/`CPK_TEST_PASSWORD`. **`clear_kitchen` deletes the whole signed-in kitchen** — never point this at real owner data |
-| Unit | `npm run test` | engine, data, ui, sous | **787 green**, 2 skipped, 2 todo — every engine module, plus `purity`, mappers, repositories, the pure form/impact/shopping formatting, and the Rule 6 derived guard |
+| Unit | `npm run test` | engine, data, ui, sous, scan | **909 green**, 2 skipped, 2 todo — every engine module, plus `purity`, mappers, repositories, the pure form/impact/shopping formatting, the Rule 6 derived guard, and the scanner's flag-never-invent guards |
 | Golden | `npm run test:copperpot` | the owner's regression pack | **15 pass, 2 skipped, 2 todo** — read `tests/golden/PENDING_OWNER.md` before touching |
 | E2E | `npm run test:e2e` | workflows, desktop and mobile | not started |
 
@@ -924,6 +985,9 @@ fixture id, so the reason a test exists survives the person who wrote it.
 
 | Fixture id | Why the test exists |
 |---|---|
+| scanned guest count | A scanner is the easiest place in the system to breach Rule 8, because a plausible value is always to hand. "a few" must stay the owner's words and `guests` must stay null — a guessed figure stops looking like a guess the moment it is saved. The test fails on any digit derived from vague wording, and was verified by planting a `parseInt` fallback. |
+| commit refused with a null db | `commitScannedJob` must refuse a review with gaps *without reaching the database*. Asserting `ok === false` against a null db looks equivalent and is not: the write is still attempted, throws, and is caught into the same shape — so the assertion passed with the gap check deleted. Proven by deleting it. The test now uses a Proxy db that records being reached. |
+| name matching is shared | Ask Sous and the scanner must agree on whether a name is already in the owner's data. Two implementations would drift, and the scanner would create a duplicate customer — silently, and nobody would notice for weeks. `engine/nameMatch.ts` is the single implementation and has its own tests for the shapes that broke it. |
 | `CALC-NUCELLA-BBQ-SPLIT` | BBQ sides were scaling to meat eaters instead of all guests. 27 guests, 22 meat eaters, must produce 27 baps and 2700 g of potatoes. |
 | `job_dishes.portions` nullable | `not null default 0` turned "let the guest count decide" into "make none of this dish", silently disabling the impact cascade at the column level. The live `save_job` test asserts a null round-trips. |
 | backup round-trip was LOSSY | The Phase 5 round-trip test read five tables, cleared all nineteen, and restored five — so it destroyed properties, rates, templates, stock and the tick tables on every run while reporting success. It passed only for as long as nothing referenced the missing fourteen, then failed on `jobs_property_id_fkey` once a job had a property. Now driven from `EXPORTED_TABLES` through the app's own `buildBackup`/`importable`, so the test cannot drift from what the app backs up. |

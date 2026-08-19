@@ -72,6 +72,17 @@ describe('"how much X do I need" — the question that started this', () => {
     expect(answer.lead).toContain('4 × 1 kg');
   });
 
+  it('STATES THE WINDOW it answered for, even when it names packs', () => {
+    // When he asked no dates, the window is a default he never chose. A figure
+    // that does not say what it covers is a figure he cannot check — a week's
+    // adobo and a month's adobo read identically otherwise.
+    const answer = renderAnswer(howMuch(needed()), data);
+
+    expect(answer.lead).toContain('between 2026-08-20 and 2026-08-27');
+    expect(answer.lead).toContain('4 × 1 kg');
+    expect(answer.lead).not.toMatch(/which dates|specify/i);
+  });
+
   it('SAYS SO when nothing in the window needs it', () => {
     // Rule 8, and the exact failure reported: a zero requirement is a real answer
     // and must be stated, not swapped for an unrelated object.

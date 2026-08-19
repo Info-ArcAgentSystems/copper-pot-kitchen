@@ -110,11 +110,16 @@ function howMuchAnswer(v: HowMuch): Answer {
         };
       }
 
+      // EVERY branch names the window, including this one, which used to stop at
+      // the pack count. When no dates were asked for, the window is a default the
+      // owner never chose — so a figure that does not say what it covers is a
+      // figure he cannot check. A week's adobo and a month's adobo read
+      // identically otherwise.
       return {
         lead:
           packs === null
             ? `You need ${line.outstanding.value} ${line.outstanding.unit} of ${v.name} ${range(v.from, v.to)}.`
-            : `You need ${line.outstanding.value} ${line.outstanding.unit} of ${v.name} — ${packs}.`,
+            : `You need ${line.outstanding.value} ${line.outstanding.unit} of ${v.name} ${range(v.from, v.to)} — ${packs}.`,
         detail,
         flags: packs === null ? [...flags, 'No pack size set, so buy it by quantity.'] : flags,
       };

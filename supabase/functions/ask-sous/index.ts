@@ -69,7 +69,7 @@ const TOOLS = [
     function: {
       name: 'how_much_ingredient',
       description:
-        "How much of ONE ingredient is needed. Use for 'how much X do I need', 'how many X', 'do I have enough X', 'have I got enough X'. Dates are optional.",
+        "How much of ONE ingredient is needed. Use for 'how much X do I need', 'how many X', 'do I have enough X', 'have I got enough X'. Dates are OPTIONAL — if the owner named none, omit from and to and it answers for the default window. Never ask him for dates.",
       parameters: {
         type: 'object',
         properties: {
@@ -86,7 +86,7 @@ const TOOLS = [
     function: {
       name: 'clarify',
       description:
-        'Ask the owner a question when you cannot tell which job, ingredient or dates are meant. Use this rather than guessing. Also use it when the question is not about this kitchen at all.',
+        'Ask the owner a question when you cannot tell which job or which ingredient is meant — a name matching several things. Use this rather than guessing. Also use it when the question is not about this kitchen at all. NOT for missing dates: a tool with optional dates defaults to a forward window instead of asking.',
       parameters: {
         type: 'object',
         properties: { question: { type: 'string' } },
@@ -200,8 +200,15 @@ does not — you cannot work out what that means, so ask.
 Resolve people, dates and jobs using the context you are given. It lists every job with
 its id, date, customer and service type. Use those ids.
 
-If you cannot tell which job or which dates are meant, do NOT guess. Guessing acts on the
-wrong job. Say what is ambiguous instead.
+If you cannot tell which JOB or which INGREDIENT is meant, do NOT guess. Guessing acts on
+the wrong job, or produces a shopping quantity for the wrong thing. Say what is ambiguous
+instead.
+
+MISSING DATES ARE NOT AMBIGUOUS, and are never a reason to use 'clarify'. A tool whose
+dates are optional answers for a default window — today to a week ahead, the same window
+the Shopping screen opens on — and the answer says which window it used. "How much adobo do
+I need" is a complete question: call how_much_ingredient with the ingredient and no dates.
+Pass from/to only when the owner named dates himself ("for Sunday", "next month").
 
 Dates are YYYY-MM-DD. Today's date is in the context.
 

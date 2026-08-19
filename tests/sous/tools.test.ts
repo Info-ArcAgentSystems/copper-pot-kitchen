@@ -199,6 +199,67 @@ describe('read tools return what the engine returned', () => {
     expect(result.value.job).toBeNull();
   });
 
+  /**
+   * "How much adobo do I need" — WITH NO DATES.
+   *
+   * The reported defect after the routing fix: instead of the anomalies object it
+   * had returned before, Sous replied "could you specify the dates?". That is more
+   * friction than the Shopping screen, which simply opens on today to a week
+   * ahead and answers.
+   *
+   * So a dateless quantity question must ANSWER, over `today`–`horizon`, and the
+   * result must carry that window back so the sentence can state it. The routing
+   * half — that the model picks this tool rather than `clarify` — is guarded on
+   * the tool surface in `guards.test.ts`; what a deployed model actually picks is
+   * not something a unit test can claim.
+   */
+  it('answers a quantity question with NO DATES over the default window', () => {
+    const d = data({ jobs: [job()], today: '2026-08-18', horizon: '2026-08-25' });
+
+    const result = runIntent(d, {
+      tool: 'how_much_ingredient',
+      args: { ingredient: 'mince' },
+    });
+
+    expect(result?.kind).toBe('how_much');
+    if (result?.kind !== 'how_much') return;
+
+    // Not a clarification, and not a refusal — a quantity.
+    expect(result.value.state).toBe('needed');
+    if (result.value.state !== 'needed') return;
+
+    // The window it used, reported so the answer can say which dates it covered.
+    expect(result.value.from).toBe('2026-08-18');
+    expect(result.value.to).toBe('2026-08-25');
+  });
+
+  it('the default window is the SCREEN\'s, not one invented here', () => {
+    // Same question, a different window from the screen: the answer follows the
+    // window it was given rather than a range this layer decided for itself. The
+    // job on the 20th is outside this one, so the honest answer is "none needed".
+    const result = runIntent(
+      data({ jobs: [job()], today: '2026-09-01', horizon: '2026-09-08' }),
+      { tool: 'how_much_ingredient', args: { ingredient: 'mince' } },
+    );
+
+    expect(result?.kind).toBe('how_much');
+    if (result?.kind !== 'how_much') return;
+    expect(result.value.state).toBe('none_needed');
+    if (result.value.state !== 'none_needed') return;
+    expect(result.value.from).toBe('2026-09-01');
+  });
+
+  it('dates the owner DID name override the default', () => {
+    const result = runIntent(data({ jobs: [job()], today: '2026-09-01', horizon: '2026-09-08' }), {
+      tool: 'how_much_ingredient',
+      args: { ingredient: 'mince', from: '2026-08-01' as IsoDate, to: '2026-08-31' as IsoDate },
+    });
+
+    expect(result?.kind).toBe('how_much');
+    if (result?.kind !== 'how_much') return;
+    expect(result.value.state).toBe('needed');
+  });
+
   it('packing derives portions through applyBuffetSplit', () => {
     const result = runIntent(data({ jobs: [job({ dishes: [] })] }), {
       tool: 'packing_for_job',

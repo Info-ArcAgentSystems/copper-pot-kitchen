@@ -319,8 +319,15 @@ export const TOOLS: Readonly<Record<ToolName, ToolDefinition>> = {
     kind: 'read',
     // Leads with the phrasings, because the routing bug was a naming collision:
     // the old `what_needs_attention` captured "how much X do I NEED".
+    //
+    // "Never ask him for dates" is not politeness. The first deploy of the fixed
+    // routing answered "how much adobo do I need" with "could you specify the
+    // dates?", which is more friction than the Shopping screen — that screen just
+    // opens on today to a week ahead. The tool now says out loud that dates are
+    // optional AND that asking for them is wrong, because "optional" alone read
+    // as permission to ask.
     description:
-      "How much of ONE ingredient is needed. Use for 'how much X do I need', 'how many X', 'do I have enough X', 'have I got enough X'. Dates are optional.",
+      "How much of ONE ingredient is needed. Use for 'how much X do I need', 'how many X', 'do I have enough X', 'have I got enough X'. Dates are OPTIONAL — if the owner named none, omit from and to and it answers for the default window. Never ask him for dates.",
     parameters: {
       type: 'object',
       properties: {
@@ -333,8 +340,13 @@ export const TOOLS: Readonly<Record<ToolName, ToolDefinition>> = {
     run: (d, a) => {
       const args = a as Args;
       // Dates optional: "how much adobo" is a question about the near future, and
-      // refusing to answer without a range would be pedantry. The window used is
-      // reported back so the answer states what it covered.
+      // refusing to answer without a range would be pedantry — and worse friction
+      // than the Shopping screen, which simply opens on today to a week ahead.
+      // `today` and `horizon` are that same window, supplied by the screen.
+      //
+      // The window used is carried back on the result so the answer STATES it.
+      // Defaulting silently would be its own defect: he would have no way to tell
+      // a week's figure from a month's.
       const from = args.from === undefined ? d.today : String(args.from);
       const to = args.to === undefined ? d.horizon : String(args.to);
 
@@ -345,8 +357,14 @@ export const TOOLS: Readonly<Record<ToolName, ToolDefinition>> = {
   clarify: {
     name: 'clarify',
     kind: 'read',
+    // A MISSING DATE RANGE IS NOT AN AMBIGUITY. This description used to list
+    // "dates" beside job and ingredient, and that word alone was enough to route
+    // "how much adobo do I need" here — the model had no way to know a default
+    // window existed. Clarify is for a name that genuinely matches several things,
+    // where picking one would be a guess about which thing he meant (Rule 8). A
+    // date he did not mention is not a guess; it is the window every screen uses.
     description:
-      'Ask the owner a question when you cannot tell which job, ingredient or dates are meant. Use this rather than guessing. Also use it when the question is not about this kitchen at all.',
+      'Ask the owner a question when you cannot tell which job or which ingredient is meant — a name matching several things. Use this rather than guessing. Also use it when the question is not about this kitchen at all. NOT for missing dates: a tool with optional dates defaults to a forward window instead of asking.',
     parameters: {
       type: 'object',
       properties: { question: { type: 'string', description: 'What to ask him' } },

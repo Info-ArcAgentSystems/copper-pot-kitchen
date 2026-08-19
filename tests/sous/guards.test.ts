@@ -388,6 +388,59 @@ describe('routing surface for quantity questions', () => {
     }
   });
 
+  /**
+   * A MISSING DATE RANGE IS NOT AN AMBIGUITY.
+   *
+   * The second half of the same defect. With the routing fixed, "how much adobo do
+   * I need" stopped returning anomalies and started returning "could you specify
+   * the dates?" — `clarify`, because both its description and the system prompt
+   * listed dates beside job and ingredient as something to ask about.
+   *
+   * That is worse friction than the Shopping screen, which just opens on today to
+   * a week ahead. Clarify is for a NAME matching several things, where picking one
+   * would be a guess about which thing he meant (Rule 8). A date he did not
+   * mention is not a guess.
+   */
+  it('the quantity tool takes dates as OPTIONAL, so a dateless question is answerable', () => {
+    const required = (TOOLS.how_much_ingredient.parameters as { required?: string[] }).required;
+
+    expect(required).toEqual(['ingredient']);
+  });
+
+  it('clarify does NOT advertise itself for missing dates', () => {
+    // The word "dates" in the list of things clarify handles was enough on its own
+    // to capture a dateless quantity question.
+    const description = TOOLS.clarify.description;
+
+    expect(description).not.toMatch(/which job, ingredient or dates/i);
+    expect(description, 'clarify must say dates are not its job').toMatch(/not for missing dates/i);
+  });
+
+  it('the quantity tool tells the model not to ask for dates', () => {
+    const description = TOOLS.how_much_ingredient.description.toLowerCase();
+
+    // "Dates are optional" alone read as permission to ask anyway.
+    expect(description).toContain('optional');
+    expect(description).toContain('never ask him for dates');
+  });
+
+  it('the EDGE PROMPT says a missing date range gets a default window, not a question', () => {
+    // The client registry and the prompt must agree. The prompt is the stronger
+    // instruction of the two, and it was the one telling the model to ask.
+    const code = readFileSync(EDGE, 'utf8');
+
+    expect(code, 'the prompt must state that missing dates are not ambiguous').toMatch(
+      /MISSING DATES ARE NOT AMBIGUOUS/,
+    );
+    expect(code, 'the edge copy of clarify must match the registry').toMatch(
+      /NOT for missing dates/,
+    );
+    expect(
+      code,
+      'the prompt must not list dates as a thing to clarify',
+    ).not.toMatch(/which job or which dates are meant/);
+  });
+
   it('the edge function offers it too, with the same phrasings', () => {
     const code = readFileSync(EDGE, 'utf8');
 

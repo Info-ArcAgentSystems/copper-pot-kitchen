@@ -73,9 +73,17 @@ const TOOLS = [
       parameters: {
         type: 'object',
         properties: {
-          ingredient: { type: 'string' },
-          from: { type: 'string' },
-          to: { type: 'string' },
+          // Described, because this copy of the schema is what the model
+          // actually reads — the registry's own property descriptions never
+          // reach it. Without this, "use those ids" in the prompt reads as
+          // covering ingredients too.
+          ingredient: {
+            type: 'string',
+            description:
+              'The ingredient NAME, as the owner said it. Not an id. Match it to a name in the context if you can, otherwise pass his words through unchanged.',
+          },
+          from: { type: 'string', description: 'Optional first date, YYYY-MM-DD' },
+          to: { type: 'string', description: 'Optional last date, YYYY-MM-DD' },
         },
         required: ['ingredient'],
       },

@@ -108,7 +108,19 @@ export interface Proposal {
  * a real answer and has to be said out loud.
  */
 export type HowMuch =
-  | { readonly state: 'no_such_ingredient'; readonly asked: string }
+  | {
+      readonly state: 'no_such_ingredient';
+      readonly asked: string;
+      /**
+       * Stored names sharing a word with what he asked. Empty when nothing does.
+       *
+       * "You have no ingredient called X" is a claim about the whole kitchen, and
+       * it was being made about ingredients visible on the Ingredients screen.
+       * Naming the near misses turns a wrong denial into a usable answer without
+       * picking one for him (Rule 8).
+       */
+      readonly near: readonly string[];
+    }
   | { readonly state: 'ambiguous'; readonly asked: string; readonly matches: readonly string[] }
   | {
       readonly state: 'none_needed';
@@ -124,6 +136,110 @@ export type HowMuch =
       readonly line: OutstandingLine;
       readonly pack: Ingredient['pack'];
     };
+
+/**
+ * MATCHING THE OWNER'S WORDS TO A STORED NAME.
+ *
+ * The bug this exists for: "how much soy sauce do I need" answered "you have no
+ * ingredient called soy sauce" while Soy Sauce sat on the Ingredients screen.
+ *
+ * Case was never the problem — the old matcher lowercased both sides, and "soy
+ * sauce" did find "Soy Sauce". What it could not survive was any difference in
+ * SHAPE, because it asked one question only: does the stored name contain the
+ * asked string, character for character?
+ *
+ *   "Sauce, Soy"   the same words, reordered, with a comma  → missed
+ *   "Soy  Sauce"   one extra space                          → missed
+ *   "Soy-sauce"    a hyphen                                 → missed
+ *   "Soy"          stored name SHORTER than what he said    → missed
+ *
+ * Every one of those is the ingredient he meant, and every one was reported as
+ * not existing. A supplier-style list ("Sauce, Soy") misses on every item.
+ *
+ * So names are compared as WORDS, not as characters: punctuation becomes a
+ * separator, runs of space collapse, and the comparison walks a tier at a time
+ * from strictest to loosest, STOPPING at the first tier that finds anything.
+ * Stopping matters — it is what keeps an exact hit from being diluted into an
+ * ambiguity by looser neighbours.
+ *
+ *   1  the id itself           the model was given ids alongside names
+ *   2  same words, same order  "soy sauce" = "Soy Sauce" = "Soy-Sauce"
+ *   3  one runs inside the other, at word boundaries
+ *   4  same words, any order   "soy sauce" = "Sauce, Soy"
+ *
+ * Word boundaries throughout, so "oil" cannot match "boiled rice".
+ *
+ * NOTHING HERE PICKS. A tier finding several returns several, and the caller
+ * says so rather than choosing (Rule 8) — being looser makes that path MORE
+ * likely, not less, which is the safe direction.
+ */
+const words = (text: string): string[] =>
+  text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter((w) => w !== '');
+
+/** Does `haystack` contain `needle` as a contiguous run of WHOLE words? */
+const runOfWords = (haystack: readonly string[], needle: readonly string[]): boolean => {
+  if (needle.length === 0 || needle.length > haystack.length) return false;
+
+  return haystack.some((_, at) =>
+    needle.every((word, offset) => haystack[at + offset] === word),
+  );
+};
+
+const allWordsIn = (needle: readonly string[], haystack: readonly string[]): boolean =>
+  needle.length > 0 && needle.every((w) => haystack.includes(w));
+
+export function findIngredients(
+  ingredients: readonly Ingredient[],
+  asked: string,
+): readonly Ingredient[] {
+  const wanted = words(asked);
+  if (wanted.length === 0) return [];
+
+  // The id, first and alone. The context hands the model `{ingredientId, name}`
+  // pairs and the prompt tells it to use ids for jobs, so an id arriving here is
+  // a foreseeable reading rather than a fault — and an id is unambiguous.
+  const byId = ingredients.filter((i) => i.id === asked.trim());
+  if (byId.length > 0) return byId;
+
+  const named = ingredients.map((i) => ({ ingredient: i, words: words(i.name) }));
+
+  const tiers = [
+    (n: { words: string[] }) => n.words.join(' ') === wanted.join(' '),
+    (n: { words: string[] }) => runOfWords(n.words, wanted) || runOfWords(wanted, n.words),
+    (n: { words: string[] }) => allWordsIn(wanted, n.words) || allWordsIn(n.words, wanted),
+  ];
+
+  for (const tier of tiers) {
+    const hits = named.filter(tier);
+    // First tier that finds anything wins outright. A looser tier never gets to
+    // add candidates to a tighter tier's answer.
+    if (hits.length > 0) return hits.map((n) => n.ingredient);
+  }
+
+  return [];
+}
+
+/**
+ * What to offer when nothing matched: stored names sharing any word.
+ *
+ * Deliberately looser than the matcher — it only ever produces a suggestion the
+ * owner reads, never a quantity.
+ */
+export function nearestNames(
+  ingredients: readonly Ingredient[],
+  asked: string,
+): readonly string[] {
+  const wanted = words(asked);
+
+  return ingredients
+    .filter((i) => words(i.name).some((w) => wanted.includes(w)))
+    .map((i) => i.name);
+}
 
 const inRange = (jobs: readonly Job[], from: string, to: string): Job[] =>
   jobs.filter((j) => j.serviceDate !== null && j.serviceDate >= from && j.serviceDate <= to);
@@ -220,15 +336,16 @@ function attention(data: SousData, from: string, to: string) {
  * arithmetic of its own — `outstandingShopping` already did the subtraction.
  */
 function howMuch(data: SousData, asked: string, from: string, to: string): HowMuch {
-  const wanted = asked.trim().toLowerCase();
+  const matches = findIngredients(data.ingredients, asked);
 
-  // Exact match first, then contains. "adobo" should find "Adobo seasoning"
-  // without "chicken" finding every chicken dish when one is named exactly that.
-  const exact = data.ingredients.filter((i) => i.name.trim().toLowerCase() === wanted);
-  const matches =
-    exact.length > 0 ? exact : data.ingredients.filter((i) => i.name.toLowerCase().includes(wanted));
-
-  if (matches.length === 0) return { state: 'no_such_ingredient', asked };
+  if (matches.length === 0) {
+    // Rule 8 again, and the reason `near` exists: "you have no ingredient called
+    // X" is a strong claim, and it was being made about ingredients that were
+    // sitting on the Ingredients screen. When nothing matched, say what IS stored
+    // that shares a word, so the owner can see the name to use rather than being
+    // told a thing he can see does not exist.
+    return { state: 'no_such_ingredient', asked, near: nearestNames(data.ingredients, asked) };
+  }
 
   if (matches.length > 1) {
     // Rule 8: naming the candidates is an answer. Picking one is a guess, and a

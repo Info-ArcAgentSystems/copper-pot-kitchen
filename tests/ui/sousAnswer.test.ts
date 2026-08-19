@@ -99,10 +99,26 @@ describe('"how much X do I need" — the question that started this', () => {
   it('distinguishes "no such ingredient" from "none needed"', () => {
     // Different problems with different fixes. Blurring them sends him looking in
     // the wrong place.
-    const answer = renderAnswer(howMuch({ state: 'no_such_ingredient', asked: 'adobo' }), data);
+    const answer = renderAnswer(
+      howMuch({ state: 'no_such_ingredient', asked: 'adobo', near: [] }),
+      data,
+    );
 
     expect(answer.lead).toContain('no ingredient called');
     expect(answer.detail.join(' ')).toContain('Ingredients');
+  });
+
+  it('does not claim the kitchen has nothing when something similar is stored', () => {
+    // The reported sentence was printed about an ingredient on the Ingredients
+    // screen. A flat denial there is false, not merely unhelpful.
+    const answer = renderAnswer(
+      howMuch({ state: 'no_such_ingredient', asked: 'soy sauce', near: ['Light soy'] }),
+      data,
+    );
+
+    expect(answer.lead).not.toContain('You have no ingredient');
+    expect(answer.lead).toContain('Nothing is stored under exactly');
+    expect(answer.detail).toEqual(['Light soy']);
   });
 
   it('NAMES the candidates when several match, and picks none', () => {

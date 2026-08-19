@@ -48,11 +48,22 @@ function howMuchAnswer(v: HowMuch): Answer {
   switch (v.state) {
     case 'no_such_ingredient':
       // Rule 8: an absent record and a zero requirement are different answers.
-      return {
-        lead: `You have no ingredient called "${v.asked}".`,
-        detail: ['Add it in Ingredients if you use it, and it will appear in shopping.'],
-        flags: [],
-      };
+      //
+      // And when something similar IS stored, say so. This sentence was being
+      // printed about ingredients sitting on the Ingredients screen, which makes
+      // it a false statement about the kitchen rather than an unhelpful one —
+      // naming what is there lets him see the spelling to use.
+      return v.near.length === 0
+        ? {
+            lead: `You have no ingredient called "${v.asked}".`,
+            detail: ['Add it in Ingredients if you use it, and it will appear in shopping.'],
+            flags: [],
+          }
+        : {
+            lead: `Nothing is stored under exactly "${v.asked}".`,
+            detail: v.near.map((n) => n),
+            flags: ['Ask again with one of these names.'],
+          };
 
     case 'ambiguous':
       // Naming the candidates IS the answer. Picking one would be a guess, and a

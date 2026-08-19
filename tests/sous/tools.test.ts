@@ -260,6 +260,132 @@ describe('read tools return what the engine returned', () => {
     expect(result.value.state).toBe('needed');
   });
 
+  /**
+   * "How much soy sauce do I need" — WHEN SOY SAUCE IS RIGHT THERE.
+   *
+   * Reported after the routing fix landed: the question reached the right tool,
+   * did not ask for dates, and then answered "you have no ingredient called soy
+   * sauce" about an ingredient visible on the Ingredients screen.
+   *
+   * Case was never the cause — the old matcher lowercased both sides. It compared
+   * CHARACTERS, so any difference in shape (a comma, a doubled space, a hyphen,
+   * word order, or a stored name shorter than what he said) read as absent.
+   *
+   * These pin the shapes. `no_such_ingredient` is now a claim about the whole
+   * kitchen, so it must only be made when it is true.
+   */
+  const withIngredients = (...names: string[]): SousData =>
+    data({
+      jobs: [],
+      recipes: [],
+      stock: [],
+      ingredients: names.map((name, n) => ({ ...mince, id: `i${n}` as IngredientId, name })),
+    });
+
+  const lookup = (names: string[], asked: string) => {
+    const result = runIntent(withIngredients(...names), {
+      tool: 'how_much_ingredient',
+      args: { ingredient: asked },
+    });
+
+    expect(result?.kind).toBe('how_much');
+    return result?.kind === 'how_much' ? result.value : null;
+  };
+
+  it.each([
+    ['Soy Sauce', 'the reported case — stored capitalised'],
+    ['soy sauce', 'already lowercase'],
+    ['SOY SAUCE', 'shouted'],
+    ['  Soy Sauce  ', 'padded with spaces'],
+    ['Soy  Sauce', 'a doubled interior space'],
+    ['Soy-sauce', 'hyphenated'],
+    ['Sauce, Soy', 'supplier-style, words reordered'],
+    ['Dark Soy Sauce', 'stored name more specific than the question'],
+  ])('resolves "soy sauce" to stored %j — %s', (stored) => {
+    const value = lookup([stored], 'soy sauce');
+
+    expect(value?.state, `"${stored}" was reported as not existing`).not.toBe(
+      'no_such_ingredient',
+    );
+    if (value?.state !== 'none_needed') return;
+    expect(value.name).toBe(stored);
+  });
+
+  it('resolves a question MORE specific than the stored name', () => {
+    // "Soy" is what is stored; he asked for "soy sauce". The old matcher only
+    // looked one way — stored-contains-asked — so this was absent.
+    const value = lookup(['Soy'], 'soy sauce');
+
+    expect(value?.state).toBe('none_needed');
+  });
+
+  it('no_such_ingredient fires ONLY for a name genuinely absent', () => {
+    const value = lookup(['Soy Sauce', 'Chicken breast'], 'saffron');
+
+    expect(value?.state).toBe('no_such_ingredient');
+    if (value?.state !== 'no_such_ingredient') return;
+    expect(value.asked).toBe('saffron');
+    // Nothing stored shares a word with it, so there is nothing to suggest.
+    expect(value.near).toEqual([]);
+  });
+
+  it('names what IS stored rather than denying it outright', () => {
+    // "Light soy" is not confidently "soy sauce", so it is not matched — but
+    // saying "you have no ingredient called soy sauce" would still be false.
+    const value = lookup(['Light soy', 'Chicken breast'], 'soy sauce');
+
+    expect(value?.state).toBe('no_such_ingredient');
+    if (value?.state !== 'no_such_ingredient') return;
+    expect(value.near).toEqual(['Light soy']);
+  });
+
+  it('matches on WORD boundaries, so "oil" is not found inside "boiled rice"', () => {
+    const value = lookup(['Boiled rice'], 'oil');
+
+    expect(value?.state).toBe('no_such_ingredient');
+  });
+
+  it('NAMES several rather than picking, when the question fits more than one', () => {
+    // Being looser makes this path more likely, which is the safe direction:
+    // several candidates is an answer, picking one is a guess (Rule 8).
+    const value = lookup(['Dark soy sauce', 'Light soy sauce'], 'soy sauce');
+
+    expect(value?.state).toBe('ambiguous');
+    if (value?.state !== 'ambiguous') return;
+    expect(value.matches).toEqual(['Dark soy sauce', 'Light soy sauce']);
+  });
+
+  it('an EXACT hit is not diluted into an ambiguity by looser neighbours', () => {
+    // "Soy Sauce" is exactly what he asked for. "Dark soy sauce" also contains
+    // those words, but the exact tier wins outright and never reaches it.
+    const value = lookup(['Soy Sauce', 'Dark soy sauce'], 'soy sauce');
+
+    expect(value?.state).toBe('none_needed');
+    if (value?.state !== 'none_needed') return;
+    expect(value.name).toBe('Soy Sauce');
+  });
+
+  it('accepts an ingredient ID, since the context hands the model ids too', () => {
+    const result = runIntent(withIngredients('Soy Sauce'), {
+      tool: 'how_much_ingredient',
+      args: { ingredient: 'i0' },
+    });
+
+    expect(result?.kind).toBe('how_much');
+    if (result?.kind !== 'how_much') return;
+    expect(result.value.state).toBe('none_needed');
+  });
+
+  it('reads the ingredients it was GIVEN, which are the screen\'s own rows', () => {
+    // Rule: no repository filters by kitchen — RLS is the single definition of
+    // scope, and Ask Sous and the Ingredients screen make the same list() call.
+    // This layer therefore searches exactly what it was handed, and an empty set
+    // is reported as absent rather than as an error.
+    const value = lookup([], 'soy sauce');
+
+    expect(value?.state).toBe('no_such_ingredient');
+  });
+
   it('packing derives portions through applyBuffetSplit', () => {
     const result = runIntent(data({ jobs: [job({ dishes: [] })] }), {
       tool: 'packing_for_job',

@@ -49,7 +49,7 @@ const owner = { ingredients: [ingredient()], suppliers: [] };
 const read = (over: Partial<InvoiceRead> = {}): InvoiceRead => ({
   supplier: 'Musgrave',
   invoiceDate: '2026-08-20',
-  lines: [{ description: 'flour', quantity: 5, unit: 'kg', lineTotal: 4500 }],
+  lines: [{ description: 'flour', quantity: 5, unit: 'kg', lineTotalCents: 4500 }],
   uncertain: [],
   ...over,
 });
@@ -111,7 +111,7 @@ describe('RULE 8 — every refusal reaches the owner', () => {
     // A case of flour against a kg pack. There is no honest factor, and inventing
     // one puts a wrong price into every recipe using it.
     const review = reviewInvoice(
-      read({ lines: [{ description: 'flour', quantity: 4, unit: 'case', lineTotal: 4500 }] }),
+      read({ lines: [{ description: 'flour', quantity: 4, unit: 'case', lineTotalCents: 4500 }] }),
       owner,
     );
 
@@ -122,7 +122,7 @@ describe('RULE 8 — every refusal reaches the owner', () => {
 
   it('names both units in the manual-handling note', () => {
     const review = reviewInvoice(
-      read({ lines: [{ description: 'flour', quantity: 4, unit: 'case', lineTotal: 4500 }] }),
+      read({ lines: [{ description: 'flour', quantity: 4, unit: 'case', lineTotalCents: 4500 }] }),
       owner,
     );
 
@@ -133,7 +133,7 @@ describe('RULE 8 — every refusal reaches the owner', () => {
 
   it('refuses an unreadable total rather than pricing at zero', () => {
     const review = reviewInvoice(
-      read({ lines: [{ description: 'flour', quantity: 5, unit: 'kg', lineTotal: null }] }),
+      read({ lines: [{ description: 'flour', quantity: 5, unit: 'kg', lineTotalCents: null }] }),
       owner,
     );
 
@@ -143,7 +143,7 @@ describe('RULE 8 — every refusal reaches the owner', () => {
 
   it('refuses a zero quantity rather than storing Infinity', () => {
     const review = reviewInvoice(
-      read({ lines: [{ description: 'flour', quantity: 0, unit: 'kg', lineTotal: 4500 }] }),
+      read({ lines: [{ description: 'flour', quantity: 0, unit: 'kg', lineTotalCents: 4500 }] }),
       owner,
     );
 
@@ -169,7 +169,7 @@ describe('ingredients are matched, never created', () => {
     // No ingredient means no pack, so there is nothing to convert into. Pricing
     // it would mean inventing the pack as well.
     const review = reviewInvoice(
-      read({ lines: [{ description: 'semolina', quantity: 2, unit: 'kg', lineTotal: 900 }] }),
+      read({ lines: [{ description: 'semolina', quantity: 2, unit: 'kg', lineTotalCents: 900 }] }),
       owner,
     );
 
@@ -187,7 +187,7 @@ describe('ingredients are matched, never created', () => {
       suppliers: [],
     };
     const review = reviewInvoice(
-      read({ lines: [{ description: 'chicken', quantity: 2, unit: 'kg', lineTotal: 1800 }] }),
+      read({ lines: [{ description: 'chicken', quantity: 2, unit: 'kg', lineTotalCents: 1800 }] }),
       two,
     );
 
@@ -205,8 +205,8 @@ describe('what can be saved', () => {
     const review = reviewInvoice(
       read({
         lines: [
-          { description: 'flour', quantity: 5, unit: 'kg', lineTotal: 4500 },
-          { description: 'semolina', quantity: 2, unit: 'kg', lineTotal: 900 },
+          { description: 'flour', quantity: 5, unit: 'kg', lineTotalCents: 4500 },
+          { description: 'semolina', quantity: 2, unit: 'kg', lineTotalCents: 900 },
         ],
       }),
       owner,
@@ -217,7 +217,7 @@ describe('what can be saved', () => {
 
   it('is not ready when nothing on the invoice could be priced', () => {
     const review = reviewInvoice(
-      read({ lines: [{ description: 'semolina', quantity: 2, unit: 'kg', lineTotal: 900 }] }),
+      read({ lines: [{ description: 'semolina', quantity: 2, unit: 'kg', lineTotalCents: 900 }] }),
       owner,
     );
 

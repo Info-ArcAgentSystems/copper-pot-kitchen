@@ -307,10 +307,10 @@ const INVOICE_TOOL = [
                   type: ['string', 'null'],
                   description: 'The unit in that column — kg, g, L, each, case. As printed.',
                 },
-                lineTotal: {
-                  type: ['integer', 'null'],
+                lineTotalPrinted: {
+                  type: ['number', 'null'],
                   description:
-                    'The line total IN CENTS, as printed. EUR 45.00 is 4500. Read the total column; do not add up or work anything out.',
+                    'The line total EXACTLY AS PRINTED, in the currency on the page. A line reading 45.00 is 45.00. Do NOT convert it, do not scale it, do not add up the column. Read the figure and nothing else.',
                 },
               },
               required: ['description', 'quantity', 'unit', 'lineTotal'],
@@ -343,10 +343,12 @@ field for one on purpose. Report the quantity delivered and the line total exact
 appear. Something else divides them, and it does it the same way every time.
 
 Do not add up columns, do not reconcile a total against its lines, do not apply VAT, do not
-convert units. If a figure is unreadable it is null and you name it in 'uncertain'.
+convert units or currencies. If a figure is unreadable it is null and you name it in
+'uncertain'.
 
-Line totals are IN CENTS: EUR 45.00 is 4500. Read the printed figure and convert only the
-decimal point.
+Report every figure EXACTLY AS PRINTED. A total reading 45.00 is 45.00. A quantity reading 5
+is 5. Scaling, rounding or reformatting them is calculation, and calculation is not your job
+here — something else does it, the same way every time.
 
 You are not given the owner's ingredients or suppliers. Report each description as printed.
 Matching happens elsewhere.

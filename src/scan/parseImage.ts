@@ -24,6 +24,7 @@
 import type { JobSheetRead } from './jobSheet';
 import type { InvoiceRead } from './invoice';
 import type { RecipeCardRead } from './recipeCard';
+import { toCents } from '../data/mappers';
 import type { YieldType } from '../engine/types';
 
 export type ScanReply =
@@ -73,6 +74,69 @@ const uncertainties = (
         saw: text((u as { saw?: unknown })?.saw),
       }))
     : [];
+
+/**
+ * A number the model may have sent as text.
+ *
+ * THE BUG THIS EXISTS FOR: every numeric field on an invoice came back
+ * unreadable while the names came through fine, because `text()` accepts a
+ * string and the numeric narrowers demanded `typeof === 'number'`. Models
+ * routinely quote numbers — "5", "45.00", "€45.00" — and each of those was
+ * thrown away.
+ *
+ * READS WHAT IS PRINTED, NEVER GUESSES. Currency symbols and thousands
+ * separators are stripped because they are notation, not value. Anything left
+ * over after that returns null: "about 5" and "5-6" are not numbers, and turning
+ * them into one would be exactly the invention Rule 8 forbids.
+ *
+ * A lone comma is refused rather than interpreted. "45,50" is forty-five point
+ * five to a French supplier and four thousand five hundred and fifty to an Irish
+ * one, and there is no way to tell from the string which was meant.
+ */
+const numeric = (value: unknown): number | null => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value !== 'string') return null;
+
+  let cleaned = value.trim().replace(/[€$£]/gu, '').trim();
+
+  // Thousands separators only in the shape that can only be thousands: 1,250 or
+  // 1,250,000. A bare "45,50" is ambiguous and falls through to the residue check.
+  if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(cleaned)) {
+    cleaned = cleaned.replace(/,/gu, '');
+  }
+
+  if (!/^\d+(\.\d+)?$/.test(cleaned)) return null;
+
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+/**
+ * A quantity that may have arrived with its unit attached.
+ *
+ * The model is asked for them separately, but "5 kg" in the quantity field is a
+ * plausible thing for it to send. Splitting on an exact `number unit` shape is
+ * READING, not guessing — anything less tidy returns null and the line is
+ * flagged.
+ */
+const quantityAndUnit = (
+  rawQuantity: unknown,
+  rawUnit: unknown,
+): { quantity: number | null; unit: string | null } => {
+  const unit = text(rawUnit);
+  const direct = numeric(rawQuantity);
+  if (direct !== null) return { quantity: direct, unit };
+
+  if (typeof rawQuantity === 'string') {
+    const split = /^\s*([\d.,]+)\s*([A-Za-z]+)\s*$/u.exec(rawQuantity);
+    if (split !== null) {
+      const amountPart = numeric(split[1]);
+      if (amountPart !== null) return { quantity: amountPart, unit: unit ?? (split[2] ?? null) };
+    }
+  }
+
+  return { quantity: null, unit };
+};
 
 const strings = (value: unknown): string[] =>
   Array.isArray(value) ? value.map(text).filter((s): s is string => s !== null) : [];
@@ -292,22 +356,40 @@ export function validateInvoice(raw: unknown): InvoiceReply {
             .map((l) => {
               const line = l as Record<string, unknown>;
               const description = text(line['description']);
-              return description === null
-                ? null
-                : {
-                    description,
-                    quantity: amount(line['quantity']),
-                    unit: text(line['unit']),
-                    // Cents, so a fractional one is a misread rather than a price.
-                    lineTotal: count(line['lineTotal']),
-                  };
+              if (description === null) return null;
+
+              const measured = quantityAndUnit(line['quantity'], line['unit']);
+
+              /**
+               * THE CENTS BOUNDARY, and the only place the scale changes.
+               *
+               * The model reports `lineTotalPrinted` exactly as it appears on the
+               * page — 45.00 for a €45.00 line. `toCents` multiplies by a hundred,
+               * reusing the same conversion the database mapper uses so there is
+               * one definition of what a euro is worth (Rule 5).
+               *
+               * The FIELD IS RENAMED deliberately. The old schema asked the model
+               * for cents, so an old deployed function still returns `lineTotal`.
+               * Looking for a different name means a stale function produces a
+               * VISIBLE "could not be read" rather than feeding 4500 into a parser
+               * that would read it as €4500 — a hundredfold error in the opposite
+               * direction, silent, during the window between the two deploys.
+               */
+              const printed = numeric(line['lineTotalPrinted']);
+
+              return {
+                description,
+                quantity: measured.quantity,
+                unit: measured.unit,
+                lineTotalCents: printed === null ? null : (toCents(printed) as number),
+              };
             })
             .filter(
               (l): l is {
                 description: string;
                 quantity: number | null;
                 unit: string | null;
-                lineTotal: number | null;
+                lineTotalCents: number | null;
               } => l !== null,
             )
         : [],

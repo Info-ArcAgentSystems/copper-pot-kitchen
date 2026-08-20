@@ -38,8 +38,15 @@ export interface InvoiceRead {
     readonly quantity: number | null;
     /** The unit on the invoice — not necessarily the owner's pack unit. */
     readonly unit: string | null;
-    /** The line total in cents, as printed. Null when unreadable. */
-    readonly lineTotal: number | null;
+    /**
+     * The line total IN CENTS, already converted at the parse boundary.
+     *
+     * Named for its unit on purpose. The field it comes from is
+     * `lineTotalPrinted` — euros as they appear on the page — and the whole
+     * defect this rename closes was a scale ambiguity nobody could see in a name
+     * like `lineTotal`.
+     */
+    readonly lineTotalCents: number | null;
   }[];
   readonly uncertain: readonly { readonly field: string; readonly saw: string | null }[];
 }
@@ -132,7 +139,7 @@ export function reviewInvoice(read: InvoiceRead, owner: InvoiceOwnerData): Invoi
         ? pricePerPackFromInvoice(ingredient.record, {
             quantity: line.quantity,
             unit: (line.unit ?? '') as StockUnit,
-            lineTotal: line.lineTotal === null ? null : (line.lineTotal as Cents),
+            lineTotal: line.lineTotalCents === null ? null : (line.lineTotalCents as Cents),
           })
         : { kind: 'unreadable', missing: ['ingredient'] };
 

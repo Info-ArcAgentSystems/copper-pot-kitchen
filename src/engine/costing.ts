@@ -22,6 +22,7 @@ import type {
   Job,
   Recipe,
   RecipeId,
+  StockUnit,
 } from './types';
 
 export type MissingReason =
@@ -590,5 +591,95 @@ export function rangeMoney(
       revenue: asRevenue(aggregate(cancelled.map((v) => v.result.revenue))),
     },
     missing,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// pricePerPackFromInvoice
+// ---------------------------------------------------------------------------
+
+/** One invoice line, as READ off the page. No derived figure among them. */
+export interface InvoiceLineRead {
+  /** How much was delivered. Null when the figure could not be read. */
+  readonly quantity: number | null;
+  /** The unit printed on the invoice — not necessarily the pack unit. */
+  readonly unit: StockUnit;
+  /** The line total, as printed. Null when unreadable. */
+  readonly lineTotal: Cents | null;
+}
+
+/**
+ * Four outcomes, kept apart because each is fixed somewhere different.
+ *
+ * `unconvertible` and `no_pack` would both be "we cannot price this" if they were
+ * merged, and the owner would have to work out which of two unrelated problems he
+ * had. One is fixed on the invoice line, the other on the ingredient.
+ */
+export type InvoicePrice =
+  | {
+      readonly kind: 'priced';
+      readonly pricePerPack: Cents;
+      /** Shown beside it so the arithmetic is checkable rather than trusted. */
+      readonly pricePerUnit: Cents;
+    }
+  | { readonly kind: 'unreadable'; readonly missing: readonly string[] }
+  | {
+      readonly kind: 'unconvertible';
+      readonly invoiceUnit: string;
+      readonly packUnit: string;
+    }
+  | { readonly kind: 'no_pack' };
+
+/**
+ * What one pack cost, from what the invoice says was delivered.
+ *
+ * THE DIVISION RULE 2 EXISTS FOR. An invoice reads "5 kg — €45.00" and the useful
+ * number is €9.00 a kilo. Working that out is exactly the sort of helpful
+ * arithmetic a model performs and occasionally gets wrong, so the model reads the
+ * two figures off the page and this function does the sum.
+ *
+ *     pricePerPack = (lineTotal ÷ quantity) × packSizeIn(ingredient, invoiceUnit)
+ *
+ * The conversion is `packSizeIn`'s — the same bridge `stockToPacks` and
+ * `costPerStockUnit` already use (Rule 5). One definition, so what you PAID cannot
+ * drift from what you BUY and what you COST.
+ *
+ * Nothing is assumed. A unit that will not reconcile is REFUSED rather than
+ * bridged with a factor of 1, because a wrong price here propagates into every
+ * recipe using the ingredient and shows up as a plausible margin.
+ */
+export function pricePerPackFromInvoice(
+  ingredient: Ingredient,
+  line: InvoiceLineRead,
+): InvoicePrice {
+  const missing: string[] = [];
+
+  // Zero is grouped with unreadable deliberately: dividing by it yields Infinity,
+  // which would flow onward as a number and look like a real price.
+  if (line.quantity === null || line.quantity <= 0) missing.push('quantity');
+  // A negative total is a credit note. Real, but not a price.
+  if (line.lineTotal === null || (line.lineTotal as number) < 0) missing.push('lineTotal');
+
+  if (missing.length > 0) return { kind: 'unreadable', missing };
+
+  if (ingredient.pack === null) return { kind: 'no_pack' };
+
+  const packSize = packSizeIn(ingredient, line.unit);
+  if (packSize === null || packSize <= 0) {
+    return {
+      kind: 'unconvertible',
+      invoiceUnit: line.unit,
+      packUnit: ingredient.pack.unit,
+    };
+  }
+
+  // Unrounded through the middle, rounded once at the end — the same discipline
+  // `recipeCostFractional` uses, so ten lines do not accumulate ten roundings.
+  const perUnit = (line.lineTotal as number) / (line.quantity as number);
+
+  return {
+    kind: 'priced',
+    pricePerPack: toCents(perUnit * packSize),
+    pricePerUnit: toCents(perUnit),
   };
 }

@@ -14,11 +14,11 @@ Keep it honest. A stale architecture file is worse than none, because it gets tr
 
 | | |
 |---|---|
-| Current phase | Phase 6b — **job sheet scanner built** (`parse-image` written, NOT deployed). Recipe-card and invoice scanners, and the dashboard, remain |
+| Current phase | Phase 6c — **all three scanners built**. Job sheet is live; recipe card and invoice need both deploy paths. Dashboard remains |
 | Last updated | 20 August 2026 |
 | Repo | `Info-ArcAgentSystems/copper-pot-kitchen` (private) |
 | Database | Supabase, schema + 9 migrations, **all applied** (9 Aug) |
-| Unit tests | **909 pass**, 2 skipped, 2 todo (`npm run test`) — 0.6s, no network |
+| Unit tests | **964 pass**, 2 skipped, 2 todo (`npm run test`) — 0.6s, no network |
 | Golden pack | **wired** — 15 pass, 2 skipped pending owner, 2 todo |
 | Integration | **41 pass** (`npm run test:integration`) — live Supabase, run deliberately. Occasionally flaky under latency, see Known gaps |
 
@@ -74,7 +74,8 @@ session reads to work out where things stand.
 | 13 Aug 2026 | **Ask Sous deployed and working on OpenAI.** Three defects found and fixed in use, each with a regression test: the CORS preflight (405, invisible to curl); `what_needs_attention` capturing every "how much X do I NEED" and returning an anomalies object; and the model asking for dates instead of defaulting to today→+7 the way every screen does |
 | 20 Aug 2026 | **Ingredient lookup fixed.** "How much soy sauce" answered "you have no ingredient called soy sauce" with Soy Sauce on screen. Case was never the cause — the matcher compared CHARACTERS one-directionally, so `"Sauce, Soy"`, `"Soy  Sauce"`, `"Soy-sauce"` and a stored name shorter than the question all read as absent. Now compares WORDS over four tiers, strictest first |
 | 20 Aug 2026 | Phase 6b — **the job sheet scanner**. `parse-image` reuses the ask-sous skeleton exactly: same secret, same project, CORS preflight answered first, the JSON-string arguments parse, `tool_choice: 'required'`. The matcher was extracted to `engine/nameMatch.ts` and is now shared, so the scanner and Ask Sous cannot disagree about whether a name is already in the owner's data. **`parse-image` written, NOT deployed.** **909 unit** |
-| | *Next: deploy parse-image, then the recipe-card and invoice scanners, then the dashboard* |
+| 13 Aug 2026 | Phase 6c — **recipe card and invoice scanners**. One function, three modes behind a validated `mode`. `pricePerPackFromInvoice` added to `costing.ts`: the model reads two printed numbers, the ENGINE divides. **964 unit, engine 305** |
+| | *Next: deploy parse-image and push, then the dashboard* |
 
 ---
 
@@ -876,6 +877,32 @@ the eight tapas dishes. Cheesecake needs confirming before it is treated as lock
 
 ---
 
+## The invoice division — the sharpest Rule 2 edge in the app
+
+An invoice reads "5 kg — €45.00" and the useful figure is €9.00 a kilo. Working that out is
+exactly the sort of helpful arithmetic a model performs and occasionally gets wrong, and a wrong
+price here does not announce itself: it propagates into every recipe using the ingredient and
+surfaces as a plausible margin on a screen the owner trusts.
+
+So `InvoiceRead` has **no** price-per-pack or per-unit field. Not optional, not nullable — none.
+A field a model could fill by dividing is a field it will fill by dividing. The division lives in
+`pricePerPackFromInvoice` (`engine/costing.ts`), reusing `packSizeIn` so what you PAID cannot
+drift from what you BUY and what you COST.
+
+Four outcomes, kept apart because each is fixed somewhere different: `priced`, `unreadable`,
+`unconvertible` (a case invoiced against a kg pack — surfaced, never bridged with an invented
+factor), and `no_pack`.
+
+## Recipe cards: unquantified BY NAME
+
+An ingredient whose quantity could not be read goes to `unquantified` with **no quantity field
+at all** — not a nullable one. There is nothing for a number to occupy, so a later edit cannot
+fill it in. The routing is done in `reviewRecipeCard`, deterministically, rather than asked of
+the model: "which list does this belong in" is not a judgement to put to a smudged photograph.
+
+The **yield is read, never inferred**. Defaulting `yieldType` to per-person would silently
+multiply or divide every quantity on the card by the guest count, and the error is invisible.
+
 ## Ask Sous — the conversation, and why it cannot free-form
 
 The model may now write a line of prose and see earlier turns. Neither loosens Rules 2, 3 or 7,
@@ -991,6 +1018,7 @@ fixture id, so the reason a test exists survives the person who wrote it.
 | `CALC-NUCELLA-BBQ-SPLIT` | BBQ sides were scaling to meat eaters instead of all guests. 27 guests, 22 meat eaters, must produce 27 baps and 2700 g of potatoes. |
 | `job_dishes.portions` nullable | `not null default 0` turned "let the guest count decide" into "make none of this dish", silently disabling the impact cascade at the column level. The live `save_job` test asserts a null round-trips. |
 | backup round-trip was LOSSY | The Phase 5 round-trip test read five tables, cleared all nineteen, and restored five — so it destroyed properties, rates, templates, stock and the tick tables on every run while reporting success. It passed only for as long as nothing referenced the missing fourteen, then failed on `jobs_property_id_fkey` once a job had a property. Now driven from `EXPORTED_TABLES` through the app's own `buildBackup`/`importable`, so the test cannot drift from what the app backs up. |
+| a string-stripper that manufactured the syntax it stripped | The no-division guard strips comments and strings before looking for `/`. The regex version ate `//api.openai.com/...` inside the endpoint URL, leaving an unterminated quote that mis-paired every string after it — so the guard reported a division inside an HTTP header. Replaced with a single left-to-right state machine, which cannot make that mistake because it knows it is inside a string when it meets the `//`. Same family as the `sk-`/`ask-sous` trap. |
 | a gate that passed silently | `npm run lint` caught the ask-sous syntax error perfectly — exit 1, naming file, line and column, in the same words the deploy later used. It was missed because it was checked as `npm run lint >/dev/null 2>&1 && echo ok`: when lint failed the `&&` short-circuited and printed NOTHING, and an absent success message reads like a quiet pass. One error line among forty pre-existing warnings did the rest. `npm run verify` now states PASS/FAIL per gate and prints only error lines on failure. **The lesson is about how a check is read, not which checks exist.** |
 | integration cleanup coverage | The backup tests created suppliers, which `cleanUp` did not delete. The leftover then broke the NEXT run on the unique (kitchen_id, name) constraint — identical in shape to the orphaned ingredient, and identical in cause: a test created data the cleanup did not know about. Cleanup now covers suppliers and properties and verifies suppliers are gone, alongside jobs and ingredients. |
 | integration cleanup ordering | Ingredients were deleted before recipes across an `on delete restrict` edge and the error was swallowed, orphaning a row that broke the NEXT run on a unique constraint — a failure that looks nothing like its cause. Cleanup now runs parents-first at both ends of the suite and verifies ingredients as well as jobs. |

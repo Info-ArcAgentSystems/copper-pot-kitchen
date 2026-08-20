@@ -27,6 +27,8 @@ import { Ingredients } from './features/setup/Ingredients';
 import { Recipes } from './features/setup/Recipes';
 import { Jobs } from './features/jobs/Jobs';
 import { ScanJobSheet } from './features/scan/ScanJobSheet';
+import { ScanRecipeCard } from './features/scan/ScanRecipeCard';
+import { ScanInvoice } from './features/scan/ScanInvoice';
 import { Shopping } from './features/shopping/Shopping';
 import { Prep } from './features/prep/Prep';
 import { Packing } from './features/packing/Packing';
@@ -92,6 +94,8 @@ export default function App(): ReactNode {
                 Jobs screen — and a ninth tab would put every tab under the 44px
                 floor the rest of the app holds to. See ARCHITECTURE.md. */}
             <Route path="/scan/job-sheet" element={<ScanJobSheet />} />
+            <Route path="/scan/recipe-card" element={<ScanRecipeCard />} />
+            <Route path="/scan/invoice" element={<ScanInvoice />} />
             <Route path="/prep" element={<Prep />} />
             <Route path="/shopping" element={<Shopping />} />
             <Route path="/packing" element={<Packing />} />

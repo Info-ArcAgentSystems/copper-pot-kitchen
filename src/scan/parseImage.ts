@@ -22,10 +22,21 @@
  */
 
 import type { JobSheetRead } from './jobSheet';
+import type { InvoiceRead } from './invoice';
+import type { RecipeCardRead } from './recipeCard';
+import type { YieldType } from '../engine/types';
 
 export type ScanReply =
   | { readonly kind: 'read'; readonly read: JobSheetRead }
   /** Stated in words the owner can act on, never a stack trace. */
+  | { readonly kind: 'unresolved'; readonly reason: string };
+
+export type RecipeCardReply =
+  | { readonly kind: 'read'; readonly read: RecipeCardRead }
+  | { readonly kind: 'unresolved'; readonly reason: string };
+
+export type InvoiceReply =
+  | { readonly kind: 'read'; readonly read: InvoiceRead }
   | { readonly kind: 'unresolved'; readonly reason: string };
 
 /** A string field, or null. Anything else the model produced is discarded. */
@@ -41,6 +52,27 @@ const text = (value: unknown): string | null =>
  */
 const count = (value: unknown): number | null =>
   typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null;
+
+/**
+ * A measured amount, or null.
+ *
+ * Unlike `count`, decimals are legitimate — 1.5 kg of mince is an ordinary line
+ * on a card. Everything else is refused: NaN and Infinity both survive a bare
+ * `typeof === 'number'` and both reach the engine as a silently wrong figure.
+ */
+const amount = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+
+/** The three `uncertain` shapes are identical, so the narrowing is too. */
+const uncertainties = (
+  value: unknown,
+): { field: string; saw: string | null }[] =>
+  Array.isArray(value)
+    ? value.map((u) => ({
+        field: text((u as { field?: unknown })?.field) ?? 'something',
+        saw: text((u as { saw?: unknown })?.saw),
+      }))
+    : [];
 
 const strings = (value: unknown): string[] =>
   Array.isArray(value) ? value.map(text).filter((s): s is string => s !== null) : [];
@@ -112,7 +144,18 @@ export interface ScanOptions {
  * separate deploy from the app, so the UI can exist before it does. Worded as
  * itself rather than as a generic failure.
  */
-export async function parseJobSheet(image: string, options: ScanOptions): Promise<ScanReply> {
+/**
+ * The shared transport.
+ *
+ * One function for all three modes, because everything except the validator is
+ * identical — the same endpoint, auth, and the same three failure sentences. A
+ * copy per mode would be three places to fix the next one.
+ */
+async function postScan(
+  image: string,
+  mode: 'job_sheet' | 'recipe_card' | 'invoice',
+  options: ScanOptions,
+): Promise<{ ok: true; body: unknown } | { ok: false; reason: string }> {
   const send = options.send ?? fetch;
 
   let response: Response;
@@ -123,18 +166,20 @@ export async function parseJobSheet(image: string, options: ScanOptions): Promis
         'content-type': 'application/json',
         authorization: `Bearer ${options.token}`,
       },
-      body: JSON.stringify({ image }),
+      body: JSON.stringify({ image, mode }),
     });
   } catch {
     return {
-      kind: 'unresolved',
-      reason: 'Could not reach the scanner. Check the connection, or type the job in directly.',
+      ok: false,
+      reason: 'Could not reach the scanner. Check the connection, or type it in directly.',
     };
   }
 
   if (!response.ok) {
     return {
-      kind: 'unresolved',
+      ok: false,
+      // "Not set up on this project yet" is a real state — the function ships on
+      // a separate deploy from the app, so the UI can exist before it does.
       reason:
         response.status === 404
           ? 'The scanner is not set up on this project yet.'
@@ -143,8 +188,135 @@ export async function parseJobSheet(image: string, options: ScanOptions): Promis
   }
 
   try {
-    return validateScan(await response.json());
+    return { ok: true, body: await response.json() };
   } catch {
-    return { kind: 'unresolved', reason: 'The scanner replied with something unreadable.' };
+    return { ok: false, reason: 'The scanner replied with something unreadable.' };
   }
+}
+
+/** The envelope check the three validators share. */
+function unwrap(raw: unknown): { ok: true; read: Record<string, unknown> } | { ok: false; reason: string } {
+  if (typeof raw !== 'object' || raw === null) {
+    return { ok: false, reason: 'The scanner did not reply with anything usable.' };
+  }
+
+  const candidate = raw as { read?: unknown; reason?: unknown };
+
+  if (typeof candidate.reason === 'string' && candidate.read === undefined) {
+    return { ok: false, reason: candidate.reason };
+  }
+
+  if (typeof candidate.read !== 'object' || candidate.read === null) {
+    return { ok: false, reason: 'Nothing readable came back for that photo.' };
+  }
+
+  return { ok: true, read: candidate.read as Record<string, unknown> };
+}
+
+export async function parseJobSheet(image: string, options: ScanOptions): Promise<ScanReply> {
+  const sent = await postScan(image, 'job_sheet', options);
+  return sent.ok ? validateScan(sent.body) : { kind: 'unresolved', reason: sent.reason };
+}
+
+/**
+ * A recipe card.
+ *
+ * `qty` is narrowed by `amount`, which lets a decimal through and refuses NaN.
+ * A component whose qty survives as null is routed to `unquantified` by
+ * `reviewRecipeCard` — deterministically, in code, not by the model (Rule 8).
+ */
+export function validateRecipeCard(raw: unknown): RecipeCardReply {
+  const envelope = unwrap(raw);
+  if (!envelope.ok) return { kind: 'unresolved', reason: envelope.reason };
+
+  const r = envelope.read;
+  const yieldRead = text(r['yieldType']);
+
+  return {
+    kind: 'read',
+    read: {
+      name: text(r['name']),
+      course: text(r['course']),
+      // Anything that is not one of the two known yields becomes null, which the
+      // review turns into a gap. A yield defaulted to per_person would silently
+      // rescale every quantity on the card.
+      yieldType:
+        yieldRead === 'per_person' || yieldRead === 'batch' ? (yieldRead as YieldType) : null,
+      portionsPerBatch: count(r['portionsPerBatch']),
+      batchUnit: text(r['batchUnit']),
+      components: Array.isArray(r['components'])
+        ? r['components']
+            .map((c) => {
+              const component = c as Record<string, unknown>;
+              const name = text(component['name']);
+              return name === null
+                ? null
+                : { name, qty: amount(component['qty']), unit: text(component['unit']) };
+            })
+            .filter((c): c is { name: string; qty: number | null; unit: string | null } => c !== null)
+        : [],
+      method: text(r['method']),
+      uncertain: uncertainties(r['uncertain']),
+    },
+  };
+}
+
+export async function parseRecipeCard(
+  image: string,
+  options: ScanOptions,
+): Promise<RecipeCardReply> {
+  const sent = await postScan(image, 'recipe_card', options);
+  return sent.ok ? validateRecipeCard(sent.body) : { kind: 'unresolved', reason: sent.reason };
+}
+
+/**
+ * An invoice.
+ *
+ * Note what is NOT narrowed here, because it is not read: any price per unit or
+ * per pack. `InvoiceRead` has no field for one, so there is nothing for a model
+ * to have divided.
+ */
+export function validateInvoice(raw: unknown): InvoiceReply {
+  const envelope = unwrap(raw);
+  if (!envelope.ok) return { kind: 'unresolved', reason: envelope.reason };
+
+  const r = envelope.read;
+
+  return {
+    kind: 'read',
+    read: {
+      supplier: text(r['supplier']),
+      invoiceDate: text(r['invoiceDate']),
+      lines: Array.isArray(r['lines'])
+        ? r['lines']
+            .map((l) => {
+              const line = l as Record<string, unknown>;
+              const description = text(line['description']);
+              return description === null
+                ? null
+                : {
+                    description,
+                    quantity: amount(line['quantity']),
+                    unit: text(line['unit']),
+                    // Cents, so a fractional one is a misread rather than a price.
+                    lineTotal: count(line['lineTotal']),
+                  };
+            })
+            .filter(
+              (l): l is {
+                description: string;
+                quantity: number | null;
+                unit: string | null;
+                lineTotal: number | null;
+              } => l !== null,
+            )
+        : [],
+      uncertain: uncertainties(r['uncertain']),
+    },
+  };
+}
+
+export async function parseInvoice(image: string, options: ScanOptions): Promise<InvoiceReply> {
+  const sent = await postScan(image, 'invoice', options);
+  return sent.ok ? validateInvoice(sent.body) : { kind: 'unresolved', reason: sent.reason };
 }

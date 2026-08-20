@@ -69,7 +69,7 @@ const CORS: Record<string, string> = {
  * value the model is not sure of. A required `guests: number` would leave it
  * nothing to return but a guess.
  */
-const TOOLS = [
+const JOB_SHEET_TOOL = [
   {
     type: 'function',
     function: {
@@ -142,7 +142,7 @@ const TOOLS = [
   },
 ];
 
-const SYSTEM = `You read photographs of handwritten catering job sheets and report what is on them.
+const JOB_SHEET_SYSTEM = `You read photographs of handwritten catering job sheets and report what is on them.
 
 YOU REPORT, YOU DO NOT INTERPRET. Copy what is written. Do not correct spelling, do not
 expand abbreviations, do not tidy a name into the one you think was meant.
@@ -167,6 +167,206 @@ Report the name as written. Matching it to his records happens elsewhere.
 
 Return the job_sheet tool. There is nothing else to return.`;
 
+/**
+ * RECIPE CARD.
+ *
+ * Two refusals specific to this mode, and both are large if broken:
+ *
+ *   The YIELD is read, never inferred. "Serves 20" is a batch of 20; "150 g per
+ *   person" is per person; anything else is null. Guessing it silently multiplies
+ *   or divides every quantity on the card by the guest count.
+ *
+ *   An unreadable quantity leaves `qty` NULL. It does not become a number. The
+ *   client routes every null-qty component into `unquantified` by name, so the
+ *   ingredient survives without a figure attached to it.
+ */
+const RECIPE_CARD_TOOL = [
+  {
+    type: 'function',
+    function: {
+      name: 'recipe_card',
+      description:
+        'Report what is legible on a photographed recipe card. Report only what is written. Anything unreadable or absent is null, and named in `uncertain`.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: ['string', 'null'], description: 'The recipe name, as written.' },
+          course: {
+            type: ['string', 'null'],
+            description: 'breakfast, main, side or dessert, ONLY if the card says so.',
+          },
+          yieldType: {
+            type: ['string', 'null'],
+            enum: ['per_person', 'batch', null],
+            description:
+              'READ from the card, never worked out. "Serves 20" or "makes 2 trays" is batch. "per person", "per head", "each" is per_person. If the card does not say which, this is null with an `uncertain` entry — do NOT infer it from how big the numbers look.',
+          },
+          portionsPerBatch: {
+            type: ['integer', 'null'],
+            description:
+              'ONLY when the card states how many portions a batch makes. Never divide anything to get it.',
+          },
+          batchUnit: {
+            type: ['string', 'null'],
+            description: 'What one batch is called — tray, pot, gastro. As written.',
+          },
+          components: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string', description: 'The ingredient, as written.' },
+                qty: {
+                  type: ['number', 'null'],
+                  description:
+                    'The number written beside it. NULL if smudged, absent, a range, or a word like "some". Never estimate from the other quantities.',
+                },
+                unit: {
+                  type: ['string', 'null'],
+                  description: 'g, kg, ml, each — as written. Null if not written.',
+                },
+              },
+              required: ['name', 'qty', 'unit'],
+            },
+            description: 'Every ingredient listed, including ones with no quantity beside them.',
+          },
+          method: { type: ['string', 'null'], description: 'The method text, if legible.' },
+          uncertain: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                field: { type: 'string' },
+                saw: { type: ['string', 'null'] },
+              },
+              required: ['field', 'saw'],
+            },
+          },
+        },
+        required: ['name', 'course', 'yieldType', 'portionsPerBatch', 'batchUnit', 'components', 'method', 'uncertain'],
+      },
+    },
+  },
+];
+
+const RECIPE_CARD_SYSTEM = `You read photographs of recipe cards and report what is on them.
+
+YOU REPORT, YOU DO NOT INTERPRET. Copy what is written, including spelling.
+
+NEVER GUESS A QUANTITY. A number you are reading through a smudge, a range, or a word like
+"some" or "a handful" means qty is null. The ingredient still goes in the list — it is kept
+by name, with no figure. A null costs the owner ten seconds; a guessed 2 kg costs him a
+delivery.
+
+THE YIELD IS READ, NOT WORKED OUT. "Serves 20" or "makes 2 trays" is batch. "per person" is
+per_person. If the card does not say, yieldType is null and you say so in 'uncertain'. Do not
+infer it from how large the numbers look: guessing it multiplies or divides every quantity on
+the card by the guest count, and the error is invisible.
+
+Do not convert units. 1.5 kg stays 1.5 kg; it does not become 1500 g.
+
+You are not given the owner's ingredients and do not need them. Report each name as written.
+Matching happens elsewhere.
+
+Return the recipe_card tool. There is nothing else to return.`;
+
+/**
+ * INVOICE.
+ *
+ * The mode with the sharpest refusal. There is NO price-per-pack field on this
+ * schema and no per-unit field either, because a field the model could fill by
+ * dividing is a field it will fill by dividing. It reports the two figures
+ * printed on the page; `engine/costing.ts` does the division (Rule 2).
+ */
+const INVOICE_TOOL = [
+  {
+    type: 'function',
+    function: {
+      name: 'invoice',
+      description:
+        'Report the lines on a photographed supplier invoice, exactly as printed. Do NOT work out any price per unit or per pack — report only the figures on the page.',
+      parameters: {
+        type: 'object',
+        properties: {
+          supplier: { type: ['string', 'null'], description: 'The supplier name, as printed.' },
+          invoiceDate: {
+            type: ['string', 'null'],
+            description: 'YYYY-MM-DD, only if the invoice states an unambiguous date.',
+          },
+          lines: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                description: { type: 'string', description: 'The line description, as printed.' },
+                quantity: {
+                  type: ['number', 'null'],
+                  description: 'How much was delivered. The number in the quantity column, as printed.',
+                },
+                unit: {
+                  type: ['string', 'null'],
+                  description: 'The unit in that column — kg, g, L, each, case. As printed.',
+                },
+                lineTotal: {
+                  type: ['integer', 'null'],
+                  description:
+                    'The line total IN CENTS, as printed. EUR 45.00 is 4500. Read the total column; do not add up or work anything out.',
+                },
+              },
+              required: ['description', 'quantity', 'unit', 'lineTotal'],
+            },
+          },
+          uncertain: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                field: { type: 'string' },
+                saw: { type: ['string', 'null'] },
+              },
+              required: ['field', 'saw'],
+            },
+          },
+        },
+        required: ['supplier', 'invoiceDate', 'lines', 'uncertain'],
+      },
+    },
+  },
+];
+
+const INVOICE_SYSTEM = `You read photographs of supplier invoices and report the lines on them.
+
+YOU REPORT NUMBERS THAT ARE PRINTED. You do not calculate.
+
+DO NOT WORK OUT A PRICE PER UNIT OR PER PACK. There is no field for one, and there is no
+field for one on purpose. Report the quantity delivered and the line total exactly as they
+appear. Something else divides them, and it does it the same way every time.
+
+Do not add up columns, do not reconcile a total against its lines, do not apply VAT, do not
+convert units. If a figure is unreadable it is null and you name it in 'uncertain'.
+
+Line totals are IN CENTS: EUR 45.00 is 4500. Read the printed figure and convert only the
+decimal point.
+
+You are not given the owner's ingredients or suppliers. Report each description as printed.
+Matching happens elsewhere.
+
+Return the invoice tool. There is nothing else to return.`;
+
+/**
+ * The three modes.
+ *
+ * One function, because everything around the tool is identical — the same key,
+ * the same CORS, the same argument parse, the same error surface. Three
+ * deployments of the same skeleton would be three places to fix the next CORS
+ * bug.
+ */
+const MODES: Record<string, { tools: unknown; system: string; ask: string }> = {
+  job_sheet: { tools: JOB_SHEET_TOOL, system: JOB_SHEET_SYSTEM, ask: 'Read this job sheet.' },
+  recipe_card: { tools: RECIPE_CARD_TOOL, system: RECIPE_CARD_SYSTEM, ask: 'Read this recipe card.' },
+  invoice: { tools: INVOICE_TOOL, system: INVOICE_SYSTEM, ask: 'Read this invoice.' },
+};
+
 serve(async (request: Request): Promise<Response> => {
   const json = (body: unknown, status = 200): Response =>
     new Response(JSON.stringify(body), {
@@ -190,7 +390,7 @@ serve(async (request: Request): Promise<Response> => {
     return json({ reason: 'OPENAI_API_KEY is not set on this function.' }, 500);
   }
 
-  let payload: { image?: unknown };
+  let payload: { image?: unknown; mode?: unknown };
   try {
     payload = (await request.json()) as typeof payload;
   } catch {
@@ -205,6 +405,17 @@ serve(async (request: Request): Promise<Response> => {
     return json({ reason: 'No image was sent, or it was not an image data URL.' }, 400);
   }
 
+  // The mode picks the tool and the prompt. Resolved against MODES rather than
+  // trusted, so an unknown mode is refused rather than falling through to a
+  // default — silently reading an invoice with the job-sheet schema would return
+  // a confidently empty sheet.
+  const requested = typeof payload.mode === 'string' ? payload.mode : 'job_sheet';
+  const mode = MODES[requested];
+
+  if (mode === undefined) {
+    return json({ reason: `"${requested}" is not something this scanner can read.` }, 400);
+  }
+
   const upstream = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -213,14 +424,14 @@ serve(async (request: Request): Promise<Response> => {
     },
     body: JSON.stringify({
       model: MODEL,
-      tools: TOOLS,
+      tools: mode.tools,
       tool_choice: 'required',
       messages: [
-        { role: 'system', content: SYSTEM },
+        { role: 'system', content: mode.system },
         {
           role: 'user',
           content: [
-            { type: 'text', text: 'Read this job sheet.' },
+            { type: 'text', text: mode.ask },
             // The vision shape. Everything else about this request is the same
             // as ask-sous, which is the point — one provider, one auth header,
             // one error surface.

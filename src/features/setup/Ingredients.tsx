@@ -15,6 +15,7 @@
  */
 
 import { useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { supabaseDb } from '../../data/client';
 import {
   ingredientRepository,
@@ -68,6 +69,12 @@ export function Ingredients(): ReactNode {
       : undefined;
 
   return (
+    <>
+      {/* Scan lives here rather than in the tab bar: it produces ingredients, and
+          the bar is already at its width limit. */}
+      <p className="muted">
+        <Link to="/scan/invoice">Scan a supplier invoice to update prices</Link>
+      </p>
     <RecordScreen<Ingredient>
       title="Ingredients"
       addLabel="Add an ingredient"
@@ -102,6 +109,7 @@ export function Ingredients(): ReactNode {
         <IngredientForm ingredient={ingredient} done={done} />
       )}
     />
+    </>
   );
 }
 

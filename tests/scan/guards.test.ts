@@ -46,7 +46,7 @@ describe('RULE 2 — the scanner never calculates', () => {
   it('the EDGE FUNCTION does no arithmetic and imports no engine code', () => {
     const code = strip(readFileSync(EDGE, 'utf8'));
 
-    for (const token of ['Math.round', 'Math.ceil', 'Math.floor', '../../../src']) {
+    for (const token of ['Math.round', 'Math.ceil', 'Math.floor', 'toFixed', '../../../src']) {
       expect(code, `the function uses ${token}`).not.toContain(token);
     }
   });
@@ -55,6 +55,135 @@ describe('RULE 2 — the scanner never calculates', () => {
     const code = readFileSync(EDGE, 'utf8');
 
     expect(code).toMatch(/do not add/i);
+  });
+});
+
+/**
+ * THE INVOICE DIVISION — the one operation this function must never perform.
+ *
+ * An invoice reads "5 kg — EUR 45.00" and the useful figure is EUR 9.00 a kilo.
+ * Working that out is exactly the sort of helpful arithmetic a model performs and
+ * occasionally gets wrong, and a wrong price does not announce itself: it
+ * propagates into every recipe using the ingredient and shows up as a plausible
+ * margin. So the model reads two printed numbers, and `engine/costing.ts`
+ * divides.
+ *
+ * THE TRAP IN THE OBVIOUS CHECK: a bare search for "/" fires on
+ * `https://api.openai.com/v1/chat/completions`, on every comment, and on the
+ * regexes. Same shape as `ask-sous` containing `sk-`. So strings and comments are
+ * stripped BEFORE looking, and what is looked for is division between operands.
+ */
+describe('RULE 2 — the invoice division happens in the engine, not the function', () => {
+  /**
+   * Strip comments and string literals in ONE pass, tracking state.
+   *
+   * Regex passes are not good enough here and the failure is instructive: a
+   * line-comment regex eats `//api.openai.com/...` inside the endpoint URL,
+   * leaving an unterminated quote that mis-pairs every string after it. The
+   * guard then reported a division inside an HTTP header.
+   *
+   * A single left-to-right walk cannot make that mistake, because it knows it is
+   * inside a string when it meets the `//`.
+   */
+  const code = (): string => {
+    const src = readFileSync(EDGE, 'utf8');
+    let out = '';
+    let i = 0;
+
+    while (i < src.length) {
+      const two = src.slice(i, i + 2);
+
+      if (two === '/*') {
+        const end = src.indexOf('*/', i + 2);
+        i = end === -1 ? src.length : end + 2;
+        out += ' ';
+        continue;
+      }
+
+      if (two === '//') {
+        const end = src.indexOf('\n', i);
+        i = end === -1 ? src.length : end;
+        out += ' ';
+        continue;
+      }
+
+      const ch = src[i] as string;
+      if (ch === '"' || ch === "'" || ch === '`') {
+        i += 1;
+        while (i < src.length && src[i] !== ch) {
+          i += src[i] === '\\' ? 2 : 1;
+        }
+        i += 1;
+        // A quote-free placeholder: substituting '' would insert the very syntax
+        // being stripped.
+        out += ' S ';
+        continue;
+      }
+
+      out += ch;
+      i += 1;
+    }
+
+    return out;
+  };
+
+  it('divides nothing', () => {
+    // `x / y` between identifiers, numbers or closing brackets. A URL cannot
+    // reach here — it was a string literal and is now ''.
+    expect(code(), 'the edge function performs a division').not.toMatch(
+      /[\w)\]]\s*\/\s*[\w(]/,
+    );
+  });
+
+  it('names no price field it could have divided into', () => {
+    // The schema has no per-unit or per-pack field. A field a model could fill by
+    // dividing is a field it will fill by dividing.
+    const raw = readFileSync(EDGE, 'utf8');
+    const invoiceTool = raw.slice(raw.indexOf('INVOICE_TOOL'), raw.indexOf('INVOICE_SYSTEM'));
+
+    for (const forbidden of ['pricePerPack', 'pricePerUnit', 'unitPrice', 'perUnit']) {
+      expect(invoiceTool, `the invoice schema offers "${forbidden}"`).not.toContain(forbidden);
+    }
+  });
+
+  it('tells the model in words not to work a price out', () => {
+    const raw = readFileSync(EDGE, 'utf8');
+    const prompt = raw.slice(raw.indexOf('INVOICE_SYSTEM'), raw.indexOf('const MODES'));
+
+    expect(prompt.toUpperCase()).toContain('DO NOT WORK OUT A PRICE');
+  });
+});
+
+describe('the three modes', () => {
+  const raw = (): string => readFileSync(EDGE, 'utf8');
+
+  it.each(['job_sheet', 'recipe_card', 'invoice'])('offers %s', (mode) => {
+    expect(raw()).toContain(`name: '${mode}'`);
+  });
+
+  it('REFUSES an unknown mode rather than falling back to a default', () => {
+    // Reading an invoice with the job-sheet schema would return a confidently
+    // empty sheet — a silent wrong answer rather than a visible failure.
+    expect(raw()).toMatch(/mode === undefined/);
+    expect(raw()).toContain('is not something this scanner can read');
+  });
+
+  it('the recipe card yield is READ, not inferred', () => {
+    const raw2 = raw();
+    const tool = raw2.slice(raw2.indexOf('RECIPE_CARD_TOOL'), raw2.indexOf('RECIPE_CARD_SYSTEM'));
+
+    expect(tool).toContain('never worked out');
+    expect(tool).toContain('do NOT infer it');
+  });
+
+  it('the recipe card tool has no separate unquantified list for the model to choose', () => {
+    // Which list a component belongs in is decided in `reviewRecipeCard`, from
+    // whether the quantity survived. Asking the model to choose would put that
+    // judgement against a smudged photograph.
+    const raw2 = raw();
+    const tool = raw2.slice(raw2.indexOf('RECIPE_CARD_TOOL'), raw2.indexOf('RECIPE_CARD_SYSTEM'));
+
+    expect(tool).not.toContain('unquantified');
   });
 });
 

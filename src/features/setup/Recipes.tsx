@@ -15,6 +15,7 @@
  */
 
 import { useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { supabaseDb } from '../../data/client';
 import { ingredientRepository, recipeRepository } from '../../data/repositories';
 import { ChoiceField, Field } from '../../ui/Field';
@@ -59,6 +60,12 @@ export function Recipes(): ReactNode {
   const repo = recipeRepository(supabaseDb());
 
   return (
+    <>
+      {/* Scan lives here rather than in the tab bar: it produces recipes, and
+          the bar is already at its width limit. */}
+      <p className="muted">
+        <Link to="/scan/recipe-card">Scan a recipe card from a photo</Link>
+      </p>
     <RecordScreen<Recipe>
       title="Recipes"
       addLabel="Add a recipe"
@@ -91,6 +98,7 @@ export function Recipes(): ReactNode {
       )}
       renderForm={(recipe, done) => <RecipeForm recipe={recipe} done={done} />}
     />
+    </>
   );
 }
 

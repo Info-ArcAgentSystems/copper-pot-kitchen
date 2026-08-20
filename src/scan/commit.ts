@@ -28,9 +28,24 @@
  */
 
 import type { Db } from '../data/db';
-import { jobRepository } from '../data/repositories';
+import { ingredientRepository, jobRepository, recipeRepository } from '../data/repositories';
 import type { JobSheetReview } from './jobSheet';
-import type { CustomerId, IsoDate, IsoTime, Job, JobId, PropertyId } from '../engine/types';
+import type { InvoiceReview } from './invoice';
+import type { RecipeCardReview } from './recipeCard';
+import type {
+  CustomerId,
+  Ingredient,
+  IngredientId,
+  IsoDate,
+  IsoTime,
+  Job,
+  JobId,
+  KitchenId,
+  PropertyId,
+  Recipe,
+  RecipeId,
+  RecipeLineId,
+} from '../engine/types';
 
 export type ScanCommitResult =
   | { readonly ok: true; readonly jobId: JobId }
@@ -133,6 +148,146 @@ export async function commitScannedJob(
     return {
       ok: false,
       error: cause instanceof Error ? cause.message : 'Could not save the job.',
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Recipe cards and invoices
+// ---------------------------------------------------------------------------
+
+/**
+ * Turn a reviewed card into the recipe that would be saved.
+ *
+ * Unquantified components survive as NAMES, in `unquantified`, with no quantity
+ * field to hold a number. That is the shape `Recipe` already has for exactly this
+ * reason — Rule 8 treats an unmeasured item as first-class rather than as a
+ * missing measurement.
+ *
+ * Only MATCHED ingredients become components. A "new" one has no id to reference,
+ * and creating it here would be the silent creation the scanner exists to avoid —
+ * the owner adds it in Ingredients first.
+ */
+export function recipeFromReview(review: RecipeCardReview): Recipe {
+  const matched = review.components.filter(
+    (c): c is typeof c & { ingredient: { kind: 'matched'; record: Ingredient } } =>
+      c.ingredient.kind === 'matched',
+  );
+
+  return {
+    id: '' as RecipeId,
+    kitchenId: '' as KitchenId,
+    name: review.name ?? '',
+    course: (review.course as Recipe['course']) ?? null,
+    yieldType: review.yieldType ?? 'per_person',
+    portionsPerBatch: review.portionsPerBatch,
+    batchUnit: review.batchUnit,
+    // Scanned, therefore unconfirmed. He has confirmed the READING is fair, which
+    // is not the same as confirming the card was right.
+    confidence: 'confirm',
+    makeAheadDays: 0,
+    sameDayOnly: true,
+    freezable: false,
+    onsiteFinish: false,
+    method: review.method,
+    note: null,
+    components: matched.map((c, position) => ({
+      id: '' as RecipeLineId,
+      kind: 'ingredient' as const,
+      ingredientId: c.ingredient.record.id as IngredientId,
+      displayName: c.read,
+      qty: c.qty,
+      unit: c.unit,
+      position,
+    })),
+    unquantified: review.unquantified.map((u) => ({
+      id: '' as RecipeLineId,
+      item: u.name,
+      reason: u.reason,
+    })),
+  };
+}
+
+/** Its own type: a recipe id in a field called `jobId` is a trap for the reader. */
+export type RecipeCommitResult =
+  | { readonly ok: true; readonly recipeId: RecipeId }
+  | { readonly ok: false; readonly error: string };
+
+export async function commitScannedRecipe(
+  db: Db,
+  review: RecipeCardReview,
+): Promise<RecipeCommitResult> {
+  if (typeof review !== 'object' || review === null || !Array.isArray(review.gaps)) {
+    return { ok: false, error: 'That is not a review the owner was shown, so it cannot be saved.' };
+  }
+
+  if (!review.readyToSave || review.gaps.length > 0) {
+    return {
+      ok: false,
+      error: `${review.gaps.length} thing${review.gaps.length === 1 ? '' : 's'} still need confirming before this can be saved.`,
+    };
+  }
+
+  try {
+    return { ok: true, recipeId: await recipeRepository(db).save(recipeFromReview(review)) };
+  } catch (cause) {
+    return {
+      ok: false,
+      error: cause instanceof Error ? cause.message : 'Could not save the recipe.',
+    };
+  }
+}
+
+/**
+ * Write the prices an invoice established.
+ *
+ * ONLY the lines the engine could price. An unconvertible unit or an unmatched
+ * ingredient is left exactly as it was — the review already told him which, and
+ * writing a partial price would be worse than writing none.
+ *
+ * The old price moves to `previousPrice` and `priceChecked` is stamped, so a rise
+ * stays visible after the fact. `ingredient_price_history` also exists in the
+ * schema and is NOT written here — it has no repository, and adding one is its
+ * own change rather than something to slip into a scanner.
+ */
+export async function commitScannedPrices(
+  db: Db,
+  review: InvoiceReview,
+  today: string,
+): Promise<{ ok: true; updated: number } | { ok: false; error: string }> {
+  if (typeof review !== 'object' || review === null || !Array.isArray(review.lines)) {
+    return { ok: false, error: 'That is not a review the owner was shown, so it cannot be saved.' };
+  }
+
+  if (!review.readyToSave) {
+    return {
+      ok: false,
+      error: 'Some lines still need settling before these prices can be saved.',
+    };
+  }
+
+  const repo = ingredientRepository(db);
+  let updated = 0;
+
+  try {
+    for (const line of review.lines) {
+      if (line.price.kind !== 'priced' || line.ingredient.kind !== 'matched') continue;
+
+      const ingredient = line.ingredient.record;
+      await repo.update(ingredient.id, {
+        ...ingredient,
+        pricePerPack: line.price.pricePerPack,
+        previousPrice: ingredient.pricePerPack,
+        priceChecked: today as Ingredient['priceChecked'],
+      });
+      updated += 1;
+    }
+
+    return { ok: true, updated };
+  } catch (cause) {
+    return {
+      ok: false,
+      error: cause instanceof Error ? cause.message : 'Could not save the prices.',
     };
   }
 }

@@ -51,11 +51,38 @@ export interface InvoiceRead {
   readonly uncertain: readonly { readonly field: string; readonly saw: string | null }[];
 }
 
+/**
+ * Why a line carries no price.
+ *
+ * A STATE OF ITS OWN, and the reason it exists is a real defect: this case used
+ * to borrow the engine's `unreadable`, so a line whose ingredient simply is not
+ * in the owner's data reported "could not be read" — a sentence about the
+ * PHOTOGRAPH. It sent two days chasing the camera, the model and the parser while
+ * the numbers were being read perfectly and the ingredient book was empty.
+ *
+ * The engine's `InvoicePrice` is right not to model this. Not knowing an
+ * ingredient is not a costing outcome; it is a fact about the owner's data, and
+ * it belongs to the layer that does the matching. Borrowing a neighbouring state
+ * because it happens to be reachable is how a message comes to describe the wrong
+ * world.
+ */
+export interface NoIngredient {
+  readonly kind: 'no_ingredient';
+  /** Which resolution failed. Each reads differently and fixes differently. */
+  readonly reason: 'new' | 'ambiguous' | 'missing';
+}
+
+/** Every outcome a line can have: the engine's four, plus the unmatched case. */
+export type LinePrice = InvoicePrice | NoIngredient;
+
+/** The outcomes that need a sentence rather than a figure. */
+export type UnpricedLine = Exclude<LinePrice, { kind: 'priced' }>;
+
 export interface ReviewedLine {
   readonly description: string;
   readonly ingredient: Resolved<Ingredient>;
-  /** Straight from the engine. Four outcomes, each fixed somewhere different. */
-  readonly price: InvoicePrice;
+  /** The engine's four outcomes, or `no_ingredient` when there was nothing to price. */
+  readonly price: LinePrice;
   /** What is stored now, so a jump is visible BEFORE saving rather than after. */
   readonly previousPrice: Cents | null;
 }
@@ -134,14 +161,18 @@ export function reviewInvoice(read: InvoiceRead, owner: InvoiceOwnerData): Invoi
 
     // No matched ingredient means no pack, and no pack means nothing to convert
     // into. Pricing it anyway would mean inventing the pack as well.
-    const price: InvoicePrice =
+    //
+    // It reports `no_ingredient`, NOT `unreadable`. The numbers on this line may
+    // be perfectly legible; what is absent is the ingredient to price them
+    // against, and saying otherwise points the owner at his camera.
+    const price: LinePrice =
       ingredient.kind === 'matched'
         ? pricePerPackFromInvoice(ingredient.record, {
             quantity: line.quantity,
             unit: (line.unit ?? '') as StockUnit,
             lineTotal: line.lineTotalCents === null ? null : (line.lineTotalCents as Cents),
           })
-        : { kind: 'unreadable', missing: ['ingredient'] };
+        : { kind: 'no_ingredient', reason: ingredient.kind };
 
     if (price.kind === 'unconvertible') {
       // Surfaced in the owner's terms, naming BOTH units — the fix is either a

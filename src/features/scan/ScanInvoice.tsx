@@ -19,6 +19,7 @@ import { reviewInvoice, type InvoiceReview } from '../../scan/invoice';
 import { parseInvoice } from '../../scan/parseImage';
 import { toScaledDataUrl } from './scaleImage';
 import { formatMoney } from '../../ui/form';
+import { lineNote } from '../../ui/invoiceView';
 import { useAsync } from '../../ui/useAsync';
 import type { Cents } from '../../engine/types';
 
@@ -158,15 +159,11 @@ export function ScanInvoice(): ReactNode {
                       </span>
                     </>
                   ) : (
-                    <span className="unresolved">
-                      {' '}
-                      —{' '}
-                      {line.price.kind === 'unconvertible'
-                        ? `invoiced in ${line.price.invoiceUnit}, stocked in ${line.price.packUnit}`
-                        : line.price.kind === 'no_pack'
-                          ? 'no pack size recorded'
-                          : 'could not be read'}
-                    </span>
+                    // Every unpriced outcome gets its OWN sentence, from one
+                    // exhaustive function. The chain of ternaries this replaced
+                    // ended in a bare else that told the owner his photograph was
+                    // illegible when his ingredient book was empty.
+                    <span className="unresolved"> — {lineNote(line.price)}</span>
                   )}
                 </li>
               ))}

@@ -29,7 +29,7 @@ import {
   byName,
   formatMoney,
   moneyValue,
-  parseCount,
+  parsePack,
   parseMoney,
   parseQuantity,
   parseText,
@@ -170,6 +170,7 @@ function IngredientForm({
   const [saving, setSaving] = useState(false);
 
   const priceParse = parseMoney(price);
+  const packParse = parsePack(packSize, packUnit);
   const factorRequired = needsFactor(recipeUnit, stockUnit);
 
   const kitchenId =
@@ -180,12 +181,15 @@ function IngredientForm({
     const s = requireText(stockUnit, 'Stock unit');
     setNameError(n);
     setStockError(s);
-    if (n !== null || s !== null || priceParse.error !== null) return;
+    // A half-filled pack BLOCKS the save. It used to be discarded: the value was
+    // read and the error beside it thrown away, so the pack silently became null
+    // while the figure stayed on screen looking saved.
+    if (n !== null || s !== null || priceParse.error !== null || packParse.kind === 'error') {
+      return;
+    }
 
     setSaving(true);
     setError(null);
-
-    const size = parseCount(packSize).value;
     const value: Ingredient = {
       id: ingredient?.id ?? ('' as IngredientId),
       kitchenId,
@@ -196,15 +200,17 @@ function IngredientForm({
       // Blank stays null. `units.ts` then REFUSES a non-dimensional conversion
       // rather than assuming a factor of 1 — which is the whole point.
       recipeUnitsPerStockUnit: factor.trim() === '' ? null : Number(factor),
-      // A pack needs both a size and a unit. Half of one is not a pack.
+      // A pack needs both a size and a unit. Half of one is not a pack — and by
+      // here a half-filled one has already been refused above, so `none` really
+      // is the owner saying he does not know the pack.
       pack:
-        size === null || parseText(packUnit) === null
-          ? null
-          : {
-              size,
-              unit: (parseText(packUnit) ?? '') as PurchaseUnit,
+        packParse.kind === 'pack'
+          ? {
+              size: packParse.size,
+              unit: packParse.unit as PurchaseUnit,
               assumed: packAssumed,
-            },
+            }
+          : null,
       supplierId: supplierId === '' ? null : (supplierId as SupplierId),
       pricePerPack: priceParse.cents,
       previousPrice: ingredient?.previousPrice ?? null,
@@ -361,9 +367,15 @@ function IngredientForm({
           onChange={setPackSize}
           inputMode="decimal"
           numeric
-          hint="How much is in one pack."
+          hint="How much is in one pack. 2.5 for a 2.5 kg bag."
+          error={packParse.kind === 'error' ? packParse.sizeError : null}
         />
-        <Field label="Pack unit" value={packUnit} onChange={setPackUnit} />
+        <Field
+          label="Pack unit"
+          value={packUnit}
+          onChange={setPackUnit}
+          error={packParse.kind === 'error' ? packParse.unitError : null}
+        />
 
         {/* Shown until confirmed. An assumed pack size trusted silently is a
             wrong shopping quantity. */}

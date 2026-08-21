@@ -89,6 +89,72 @@ export interface CountParse {
   readonly error: string | null;
 }
 
+// ---------------------------------------------------------------------------
+// Packs
+// ---------------------------------------------------------------------------
+
+/**
+ * A pack, the absence of one, or a half-filled one.
+ *
+ * THREE states, and the third is the point. The form used to take
+ * `parseCount(packSize).value` and drop the error beside it, so a refused input
+ * became `null`, `null` became "no pack", and the save reported success. The pack
+ * size stayed in the box on screen, which is why it took a scan reporting "no
+ * pack size recorded" to notice it had never been stored.
+ *
+ * With only "value or nothing" there is nowhere for "you meant something and it
+ * did not survive" to go. `error` is that place.
+ */
+export type PackParse =
+  | { readonly kind: 'none' }
+  | { readonly kind: 'pack'; readonly size: number; readonly unit: string }
+  | {
+      readonly kind: 'error';
+      readonly sizeError: string | null;
+      readonly unitError: string | null;
+    };
+
+/**
+ * Both halves, or neither.
+ *
+ * A size is a MEASURED quantity, not a count: 2.5 kg packs are ordinary, and the
+ * field is marked `inputMode="decimal"` precisely because they are. `parseCount`
+ * was the wrong parser here — it exists for guests and eggs, where a fraction is
+ * genuinely meaningless.
+ *
+ * Zero is refused rather than stored. `pricePerPack` multiplies by the pack size,
+ * so a zero pack prices every recipe using the ingredient at nothing — and a
+ * confident 0 is harder to spot than a blank.
+ */
+export function parsePack(sizeInput: string, unitInput: string): PackParse {
+  const rawSize = sizeInput.trim();
+  const unit = unitInput.trim();
+
+  if (rawSize === '' && unit === '') return { kind: 'none' };
+
+  if (rawSize === '') {
+    return { kind: 'error', sizeError: 'Add the pack size — a pack needs both', unitError: null };
+  }
+
+  const size = Number(rawSize);
+  if (!Number.isFinite(size)) {
+    return { kind: 'error', sizeError: 'Enter a number, or leave blank', unitError: null };
+  }
+  if (size <= 0) {
+    return { kind: 'error', sizeError: 'Must be more than zero', unitError: null };
+  }
+
+  if (unit === '') {
+    return { kind: 'error', sizeError: null, unitError: 'Add the pack unit — a pack needs both' };
+  }
+
+  return { kind: 'pack', size, unit };
+}
+
+// ---------------------------------------------------------------------------
+// Whole numbers, continued
+// ---------------------------------------------------------------------------
+
 /** A count of things. Blank is null — a guest count is never guessed (Rule 8). */
 export function parseCount(input: string): CountParse {
   const trimmed = input.trim();

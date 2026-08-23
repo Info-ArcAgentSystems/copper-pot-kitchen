@@ -246,6 +246,90 @@ export interface BackupStatus {
   readonly message: string;
 }
 
+/**
+ * Where the device remembers its last backup.
+ *
+ * The KEY lives here, with the rest of the backup vocabulary; the
+ * `localStorage` call stays in the components, because this module is compiled
+ * without DOM types on purpose so it can be tested under plain Node.
+ *
+ * Shared rather than written out twice: two screens now read this, and a storage
+ * key that exists in two string literals is one rename away from a reminder that
+ * silently never fires.
+ */
+export const BACKUP_STORAGE_KEY = 'copper-pot.last-backup';
+
+export interface BackupReminder {
+  readonly state: 'never' | 'known';
+  readonly at: string | null;
+  readonly daysAgo: number | null;
+  readonly message: string;
+}
+
+/**
+ * What the DASHBOARD says about backups — deliberately less than Setup says.
+ *
+ * `backupStatus` above can report `current` because it has a fingerprint of the
+ * live data to compare against. Producing that fingerprint means reading all
+ * nineteen exported tables, which is a reasonable thing to do on a screen the
+ * owner opened in order to back up, and an unreasonable thing to do on the screen
+ * that opens every time he launches the app.
+ *
+ * So this one reports only what it can see from the device: whether a backup was
+ * ever taken, and how long ago. IT NEVER SAYS "UP TO DATE." Without the
+ * fingerprint it does not know, and a screen claiming currency it has not checked
+ * is the same failure as a guessed number — worse here, because the whole point
+ * of the reminder is that he can rely on it.
+ */
+export function backupReminder(
+  saved: { fingerprint: string; at: string } | null,
+  today: string,
+): BackupReminder {
+  if (saved === null) {
+    return {
+      state: 'never',
+      at: null,
+      daysAgo: null,
+      message: 'No backup has ever been saved from this device.',
+    };
+  }
+
+  const at = saved.at.slice(0, 10);
+  const days = daysBetween(at, today);
+
+  const when =
+    days === null
+      ? `on ${at}`
+      : days <= 0
+        ? 'today'
+        : days === 1
+          ? 'yesterday'
+          : `${days} days ago`;
+
+  return {
+    state: 'known',
+    at,
+    daysAgo: days,
+    // "Last saved", not "backed up" — the second would imply it still matches.
+    message: `Last backup saved ${when}. Check it in Setup.`,
+  };
+}
+
+/**
+ * Whole calendar days between two YYYY-MM-DD dates.
+ *
+ * UTC accessors, and no timezone: these are calendar dates rather than instants,
+ * and mixing a zone into date-only arithmetic is how off-by-one-day bugs start.
+ * The engine's own date handling makes the same choice for the same reason.
+ */
+function daysBetween(from: string, to: string): number | null {
+  const a = Date.parse(`${from}T00:00:00Z`);
+  const b = Date.parse(`${to}T00:00:00Z`);
+  if (Number.isNaN(a) || Number.isNaN(b)) return null;
+
+  return Math.round((b - a) / 86400000);
+}
+
 /** What the Setup screen says about the state of his backups. */
 export function backupStatus(
   currentFingerprint: string,

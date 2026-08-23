@@ -1,9 +1,80 @@
 /*
- * Shell layout. Everything here obeys the tokens; nothing redefines them.
+ * Shell layout and the shared primitives. Everything here obeys the tokens;
+ * nothing redefines them.
  *
  * Layout is a fixed header, a scrolling main, and a bottom tab bar inside the
  * safe area — the thumb-reachable third of a phone.
  */
+
+/* ---------------------------------------------------------------------------
+   TYPE — three global rules, replacing ten near-identical component ones.
+
+   `.impact h2`, `.supplier-group h2`, `.prep-day h2`, `.money-summary h2`,
+   `.pack-job h2`, `.needs-fixing h2`, `.sous-answer h2` and the rest each said
+   roughly the same thing in slightly different words. Stating it once is the
+   difference between a design system and a pile of local decisions.
+
+   h1 had NO rule at all, so every screen title rendered at the browser default
+   of 2em with browser margins. That single omission is most of why the app
+   looked unfinished.
+   --------------------------------------------------------------------------- */
+
+h1 {
+  font-size: var(--size-h1);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.01em;
+  margin: 0 0 var(--space-2);
+}
+
+h2 {
+  font-size: var(--size-lead);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-tight);
+  margin: 0 0 var(--space-2);
+}
+
+/* A heading that OPENS a card gets no top margin; one that starts a new section
+   further down the page needs air above it, or the sections run together. Being
+   the first child is exactly the difference between the two. */
+h2:not(:first-child),
+h3:not(:first-child) {
+  margin-top: var(--space-5);
+}
+
+h3 {
+  font-size: var(--size-body);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-tight);
+  margin: 0 0 var(--space-2);
+}
+
+/* The small uppercase label over a group — a supplier, a prep day, a section of
+   a packing list. Three screens had their own copy of this. */
+.eyebrow {
+  font-size: var(--size-micro);
+  font-weight: var(--weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+/* ---------------------------------------------------------------------------
+   CARD — one primitive, composed by the section classes below.
+
+   Every grouped thing on every screen was previously a bare border, so the whole
+   app sat on one flat plane and nothing read as an object. The page is now
+   faintly tinted and cards are the only white, which is what makes a list of
+   them scannable at arm's length.
+   --------------------------------------------------------------------------- */
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  box-shadow: var(--shadow-card);
+}
 
 #root {
   display: flex;
@@ -20,7 +91,23 @@
   padding-top: max(var(--space-3), env(safe-area-inset-top));
   border-bottom: 1px solid var(--border);
   background: var(--surface);
-  font-weight: 600;
+  font-weight: var(--weight-medium);
+}
+
+/* At 375px the kitchen name, the Ask Sous link and Sign out do not all fit, and
+   every one of them was wrapping mid-phrase. The name is the only part that can
+   afford to be cut, so it is the only part allowed to. */
+.app-header > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-header a.tap,
+.app-header button {
+  white-space: nowrap;
+  flex: none;
 }
 
 .app-main {
@@ -59,7 +146,7 @@
   padding: var(--space-3) var(--space-2);
   color: var(--text-muted);
   text-decoration: none;
-  font-size: 15px;
+  font-size: var(--size-small);
 }
 
 .tabs a[aria-current='page'] {
@@ -101,21 +188,36 @@ input,
 select,
 textarea {
   padding: var(--space-3);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-  background: var(--bg);
+  /* `--card`, not `--bg`: a field is a thing you type into, so it sits above the
+     page rather than merging with it. */
+  background: var(--card);
   color: var(--text);
   width: 100%;
 }
 
+/* ---------------------------------------------------------------------------
+   BUTTONS — four levels, one set of rules.
+
+   The base is the SECONDARY button: bordered, on the card surface. `.primary`
+   and `.danger` fill; `.link` strips to text. A pressed state exists now, which
+   matters more on touch than on a mouse — there is no hover to tell you the
+   press registered.
+   --------------------------------------------------------------------------- */
+
 button {
   padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-  background: var(--surface);
+  background: var(--card);
   color: var(--text);
-  font-weight: 600;
+  font-weight: var(--weight-medium);
   cursor: pointer;
+}
+
+button:active {
+  background: var(--surface);
 }
 
 .signin button[type='submit'] {
@@ -181,13 +283,18 @@ button:disabled {
   text-align: left;
   text-decoration: none;
   color: var(--text);
-  background: var(--surface);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+}
+
+.record:active {
+  background: var(--surface);
 }
 
 .record .muted {
-  font-size: 14px;
+  font-size: var(--size-small);
 }
 
 .field {
@@ -202,12 +309,12 @@ button:disabled {
 }
 
 .hint {
-  font-size: 14px;
+  font-size: var(--size-small);
   margin: 0;
 }
 
 .field .error {
-  font-size: 14px;
+  font-size: var(--size-small);
   margin: 0;
 }
 
@@ -231,9 +338,14 @@ button.primary {
   border-color: var(--accent);
 }
 
+button.primary:active {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
 button.danger {
   background: var(--danger);
-  color: var(--bg);
+  color: #ffffff;
   border-color: var(--danger);
 }
 
@@ -260,6 +372,7 @@ fieldset.units {
   border-radius: var(--radius);
   padding: var(--space-3);
   margin: 0 0 var(--space-4);
+  background: var(--card);
 }
 
 fieldset.units legend {
@@ -274,7 +387,7 @@ fieldset.units legend {
   border-radius: var(--radius);
   padding: var(--space-3);
   margin-bottom: var(--space-3);
-  background: var(--bg);
+  background: var(--card);
 }
 
 .check {
@@ -322,16 +435,11 @@ button.link {
    --------------------------------------------------------------------------- */
 
 .impact {
-  border: 2px solid var(--accent);
+  border: 1px solid var(--accent);
   border-radius: var(--radius);
   padding: var(--space-3);
   margin: 0 0 var(--space-4);
-  background: var(--surface);
-}
-
-.impact h2 {
-  font-size: 1rem;
-  margin: 0 0 var(--space-3);
+  background: var(--accent-subtle);
 }
 
 .impact-table {
@@ -347,7 +455,7 @@ button.link {
 }
 
 .impact-table thead th {
-  font-size: 0.8125rem;
+  font-size: var(--size-small);
   color: var(--text-muted);
   font-weight: 600;
 }
@@ -377,6 +485,7 @@ button.link {
 .unresolved-block {
   margin-top: var(--space-3);
   padding: var(--space-3);
+  border: 1px solid var(--unresolved-border);
   border-radius: var(--radius);
   background: var(--unresolved-bg);
   color: var(--unresolved);
@@ -400,12 +509,16 @@ button.link {
   margin-bottom: var(--space-5);
 }
 
-.supplier-group h2 {
-  font-size: 1rem;
+/* A supplier and a prep day are the same kind of heading, and now say so once.
+   `.eyebrow` carries the type; this adds only the rule beneath it. */
+.supplier-group h2,
+.prep-day h2 {
+  font-size: var(--size-micro);
+  font-weight: var(--weight-medium);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   color: var(--text-muted);
-  border-bottom: 2px solid var(--border);
+  border-bottom: 1px solid var(--border-strong);
   padding-bottom: var(--space-2);
   margin-bottom: var(--space-2);
 }
@@ -427,7 +540,7 @@ button.link {
 }
 
 .shop-line .buy {
-  font-size: 1.125rem;
+  font-size: var(--size-figure);
   font-weight: 700;
   font-variant-numeric: var(--num);
   white-space: nowrap;
@@ -438,7 +551,7 @@ button.link {
 }
 
 .shop-line .workings {
-  font-size: 0.8125rem;
+  font-size: var(--size-small);
   font-variant-numeric: var(--num);
   padding-left: calc(var(--touch-min) + var(--space-3));
 }
@@ -456,12 +569,8 @@ button.link {
   border-radius: var(--radius);
   padding: var(--space-3);
   margin-bottom: var(--space-4);
-}
-
-.needs-fixing h2,
-.unresolved-block h2 {
-  font-size: 1rem;
-  margin: 0 0 var(--space-2);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
 }
 
 .needs-fixing ul,
@@ -487,16 +596,6 @@ button.link {
   margin-bottom: var(--space-5);
 }
 
-.prep-day h2 {
-  font-size: 1rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
-  border-bottom: 2px solid var(--border);
-  padding-bottom: var(--space-2);
-  margin-bottom: var(--space-2);
-}
-
 .prep-day .today {
   color: var(--accent);
   font-weight: 700;
@@ -517,7 +616,7 @@ button.link {
 }
 
 .prep-line .batch {
-  font-size: 1.125rem;
+  font-size: var(--size-figure);
   font-weight: 700;
   font-variant-numeric: var(--num);
   white-space: nowrap;
@@ -528,7 +627,7 @@ button.link {
 }
 
 .prep-total {
-  font-size: 0.8125rem;
+  font-size: var(--size-small);
   font-variant-numeric: var(--num);
   padding-left: calc(var(--touch-min) + var(--space-3));
 }
@@ -544,7 +643,7 @@ button.link {
   list-style: none;
   margin: var(--space-1) 0 0;
   padding-left: calc(var(--touch-min) + var(--space-3));
-  font-size: 0.875rem;
+  font-size: var(--size-small);
   color: var(--text-muted);
 }
 
@@ -580,15 +679,17 @@ button.link {
   border-radius: var(--radius);
   padding: var(--space-3);
   margin-bottom: var(--space-4);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
 }
 
 .pack-job h2 {
-  font-size: 1.0625rem;
+  font-size: var(--size-lead);
   margin: 0 0 var(--space-2);
 }
 
 .pack-section {
-  font-size: 0.8125rem;
+  font-size: var(--size-small);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-muted);
@@ -638,16 +739,11 @@ button.link {
    --------------------------------------------------------------------------- */
 
 .money-summary {
-  border: 2px solid var(--accent);
+  border: 1px solid var(--accent);
   border-radius: var(--radius);
   padding: var(--space-3);
   margin-bottom: var(--space-4);
-  background: var(--surface);
-}
-
-.money-summary h2 {
-  font-size: 1rem;
-  margin: 0 0 var(--space-3);
+  background: var(--accent-subtle);
 }
 
 .money-row {
@@ -655,10 +751,12 @@ button.link {
   border-radius: var(--radius);
   padding: var(--space-3);
   margin-bottom: var(--space-3);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
 }
 
 .money-row h3 {
-  font-size: 0.9375rem;
+  font-size: var(--size-lead);
   margin: 0 0 var(--space-2);
 }
 
@@ -680,7 +778,7 @@ button.link {
 }
 
 .money-figures dt {
-  font-size: 0.75rem;
+  font-size: var(--size-micro);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
@@ -688,13 +786,13 @@ button.link {
 
 .money-figures dd {
   margin: 0;
-  font-size: 1.0625rem;
+  font-size: var(--size-lead);
   font-weight: 700;
   font-variant-numeric: var(--num);
 }
 
 .money-figures dd.note {
-  font-size: 0.75rem;
+  font-size: var(--size-micro);
   font-weight: 400;
   max-width: 22rem;
 }
@@ -702,7 +800,7 @@ button.link {
 .blockers {
   margin: var(--space-3) 0 0;
   padding-left: var(--space-5);
-  font-size: 0.875rem;
+  font-size: var(--size-small);
 }
 
 .blockers li {
@@ -720,17 +818,12 @@ button.link {
 
 .backup-text {
   width: 100%;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--size-body);
   line-height: 1.4;
   white-space: pre;
   overflow-wrap: normal;
   overflow-x: auto;
-}
-
-section.units h2 {
-  font-size: 1rem;
-  margin: 0 0 var(--space-2);
 }
 
 /* The destructive block reads as one, rather than as another section with a
@@ -751,11 +844,8 @@ section.danger-zone h2 {
   border-radius: var(--radius);
   padding: var(--space-3);
   margin-top: var(--space-4);
-}
-
-.sous-answer h2 {
-  font-size: 1rem;
-  margin: 0 0 var(--space-2);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
 }
 
 .app-header a.tap {
@@ -783,7 +873,7 @@ section.danger-zone h2 {
 }
 
 .sous-lead {
-  font-size: 1.0625rem;
+  font-size: var(--size-lead);
   font-weight: 600;
   margin: 0 0 var(--space-2);
 }

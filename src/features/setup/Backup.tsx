@@ -24,6 +24,7 @@ import { backupRepository } from '../../data/repositories';
 import {
   backupFilename,
   backupStatus,
+  BACKUP_STORAGE_KEY,
   backupToText,
   buildBackup,
   EXPORTED_TABLES,
@@ -43,7 +44,8 @@ import { useKitchen } from '../../auth/kitchenState';
  * reminder rather than data. The cost is stated on screen: it is per device, so
  * exporting on the phone leaves the laptop still reminding.
  */
-const STORAGE_KEY = 'copper-pot.last-backup';
+/** Shared with the dashboard's reminder, so the two cannot drift. */
+const STORAGE_KEY = BACKUP_STORAGE_KEY;
 
 interface SavedBackup {
   readonly fingerprint: string;

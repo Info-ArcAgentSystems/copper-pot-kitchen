@@ -14,6 +14,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  backupReminder,
   backupFilename,
   backupStatus,
   buildBackup,
@@ -295,5 +296,59 @@ describe('what the Setup screen says', () => {
     // with every recipe rewritten since is not. Time alone gets both wrong.
     const old = backupStatus('abc', { fingerprint: 'abc', at: '2020-01-01T00:00:00.000Z' });
     expect(old.state).toBe('current');
+  });
+});
+
+/**
+ * The DASHBOARD's backup line, which knows less than Setup's and says less.
+ *
+ * `backupStatus` can report "current" because it holds a fingerprint of the live
+ * data. Producing that means reading all nineteen exported tables — fine on the
+ * screen the owner opened in order to back up, not fine on the screen that opens
+ * every time he launches the app.
+ *
+ * So this one reports only what the device can see. The property worth pinning is
+ * the thing it must NOT do: claim currency it has not checked. A reminder that
+ * says "backed up" when it means "backed up at some point" is worse than no
+ * reminder, because the whole point is that he can rely on it.
+ */
+describe('backupReminder', () => {
+  it('NEVER claims the backup is current, whatever the date', () => {
+    for (const at of ['2026-08-23', '2026-08-22', '2020-01-01']) {
+      const r = backupReminder({ fingerprint: 'f', at }, '2026-08-23');
+
+      expect(r.message).not.toMatch(/up to date|current|matches|in sync|safe/i);
+    }
+  });
+
+  it('never backed up is its own state, not nought days ago', () => {
+    const r = backupReminder(null, '2026-08-23');
+
+    expect(r.state).toBe('never');
+    expect(r.daysAgo).toBeNull();
+    expect(r.at).toBeNull();
+  });
+
+  it('reads as a person would say it', () => {
+    const on = (at: string) => backupReminder({ fingerprint: 'f', at }, '2026-08-23').message;
+
+    expect(on('2026-08-23')).toContain('today');
+    expect(on('2026-08-22')).toContain('yesterday');
+    expect(on('2026-08-20')).toContain('3 days ago');
+  });
+
+  it('counts whole calendar days, ignoring any time on the stamp', () => {
+    // The stored value is an ISO timestamp; only the date part is meaningful for
+    // "how long ago", and a zone offset here is how off-by-one-day bugs start.
+    const r = backupReminder({ fingerprint: 'f', at: '2026-08-20T23:45:00.000Z' }, '2026-08-23');
+
+    expect(r.daysAgo).toBe(3);
+  });
+
+  it('survives a stamp it cannot parse rather than showing NaN days', () => {
+    const r = backupReminder({ fingerprint: 'f', at: 'not-a-date' }, '2026-08-23');
+
+    expect(r.daysAgo).toBeNull();
+    expect(r.message).not.toContain('NaN');
   });
 });

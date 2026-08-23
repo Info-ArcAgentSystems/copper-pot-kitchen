@@ -134,6 +134,25 @@ export function courseDerivable(course: string | null): boolean {
   return course !== null && DERIVABLE.has(course);
 }
 
+/**
+ * Statuses with work still to do against them.
+ *
+ * Shopping, Prep, Packing and Ask Sous each carried their own
+ * `new Set(['confirmed', 'in_prep'])` — five copies of one business rule, free to
+ * drift the day a sixth status appears. The dashboard would have been the sixth,
+ * so the rule is stated here instead.
+ *
+ * The existing five are deliberately NOT rewritten in the same change that adds
+ * this: they work, they are covered, and swapping them is a separate edit with
+ * its own test run behind it.
+ */
+const OPERATIONAL: ReadonlySet<string> = new Set(['confirmed', 'in_prep']);
+
+/** Is there still work to do on this job? */
+export function isOperational(job: Job): boolean {
+  return OPERATIONAL.has(job.status);
+}
+
 export function applyBuffetSplit(
   guests: number,
   dishes: readonly JobDish[],

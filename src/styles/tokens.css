@@ -8,9 +8,28 @@
  * Those are requirements, not preferences, so they are defined once here rather
  * than remembered per screen. `tests/ui/tokens.test.ts` checks the ones that can
  * be checked.
+ *
+ * ---------------------------------------------------------------------------
+ * THE PALETTE IS COOL AND THE WARNINGS ARE WARM, AND THAT IS THE WHOLE IDEA.
+ *
+ * The most important signal in this app is an unresolved value — a price nobody
+ * entered, a quantity that could not be worked out, a dietary requirement in the
+ * owner's own words. Rule 8 says those are surfaced rather than zeroed, and the
+ * amber treatment is how the eye finds them.
+ *
+ * The previous palette put a burnt-orange accent next to that amber, so the
+ * thing he must not miss sat in the same colour family as ordinary chrome. Every
+ * surface, tab and button is now cool, and amber appears nowhere except where
+ * something genuinely needs him. Nothing else on the screen is warm.
+ * ---------------------------------------------------------------------------
  */
 
 :root {
+  /* Native controls follow the mode too. Without this a checkbox, a date picker
+     and the scrollbar all render in the light palette on a dark screen — an
+     unticked box was a solid white square, the loudest thing on the page. */
+  color-scheme: light dark;
+
   /* The floor for anything tappable, not a target to aim at. A wet thumb in a
      supermarket is not a mouse pointer. */
   --touch-min: 44px;
@@ -21,6 +40,28 @@
 
   /* System stack: no webfont to fetch. This screen loads on 4G in a shop. */
   --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* -------------------------------------------------------------------------
+     TYPE — one ramp, named.
+     Six steps rather than the ten ad-hoc sizes these replace, and `1rem` and
+     `16px` are no longer two names for one size. `--size-figure` is a semantic
+     step, not a type step: it is the loudest number on a list row, the thing
+     that goes in the trolley or on the tray.
+     ------------------------------------------------------------------------- */
+  --size-micro: 0.75rem; /* 12px — eyebrows, captions */
+  --size-small: 0.875rem; /* 14px — workings, hints */
+  --size-body: 1rem; /* 16px — everything else */
+  --size-lead: 1.0625rem; /* 17px — h2, h3, an answer's first line */
+  --size-figure: 1.125rem; /* 18px — the quantity on a row */
+  --size-h1: 1.3125rem; /* 21px — the screen's name */
+
+  --weight-normal: 400;
+  --weight-medium: 600;
+  --weight-bold: 700;
+
+  --leading-tight: 1.25;
+  --leading-body: 1.45;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -30,39 +71,62 @@
   --space-6: 32px;
 
   --radius: 10px;
+  --radius-pill: 999px;
 
-  /* High contrast: this is read in daylight through a kitchen window. */
-  --bg: #ffffff;
-  --surface: #f5f5f4;
-  --border: #d6d3d1;
-  --text: #1c1917;
-  --text-muted: #57534e;
+  /* -------------------------------------------------------------------------
+     COLOUR — light.
+     High contrast: this is read in daylight through a kitchen window.
+     ------------------------------------------------------------------------- */
+  --bg: #f7f8f9; /* the page */
+  --surface: #eef1f4; /* chrome — header, tabs */
+  --card: #ffffff; /* anything that reads as one object */
+  --border: #e2e6ea;
+  --border-strong: #d4dae0;
+  --text: #15181d;
+  --text-muted: #5b6470;
 
-  --accent: #9a3412;
+  --accent: #115e59;
+  --accent-strong: #0d4b47; /* pressed */
+  --accent-subtle: #e6f2f1; /* a selected or tinted surface */
   --accent-text: #ffffff;
 
   --danger: #b91c1c;
-  --warning: #a16207;
+  --danger-subtle: #fef2f2;
+  --warning: #b45309;
 
   /* Unresolved and unpriced values are surfaced, never silently zeroed (Rule 8).
-     They get their own colour so the eye finds them. */
-  --unresolved: #a16207;
+     The only warm thing in the app, so the eye goes straight to it. */
+  --unresolved: #78500a;
   --unresolved-bg: #fef3c7;
+  --unresolved-border: #f0dfa8;
+
+  --shadow-card: 0 1px 2px rgb(21 24 29 / 6%);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #1c1917;
-    --surface: #292524;
-    --border: #44403c;
-    --text: #fafaf9;
-    --text-muted: #a8a29e;
-    --accent: #ea580c;
-    --accent-text: #1c1917;
+    --bg: #14171a;
+    --surface: #1c2024;
+    --card: #21262b;
+    --border: #2e353b;
+    --border-strong: #3d454c;
+    --text: #eef1f4;
+    --text-muted: #9aa4b0;
+
+    --accent: #2dd4bf;
+    --accent-strong: #5eead4;
+    --accent-subtle: #12332f;
+    --accent-text: #14171a;
+
     --danger: #f87171;
+    --danger-subtle: #2a1414;
     --warning: #fbbf24;
+
     --unresolved: #fbbf24;
-    --unresolved-bg: #422006;
+    --unresolved-bg: #3a2408;
+    --unresolved-border: #6b3f0a;
+
+    --shadow-card: none;
   }
 }
 
@@ -79,6 +143,8 @@ body,
 
 body {
   font-family: var(--font);
+  font-size: var(--size-body);
+  line-height: var(--leading-body);
   background: var(--bg);
   color: var(--text);
   /* Stops iOS Safari inflating text in landscape. */
@@ -108,6 +174,14 @@ input[type='date'] {
   -webkit-appearance: none;
   appearance: none;
   text-align: left;
+}
+
+/* A ticked box is the owner's own mark on a derived list — the one thing on these
+   screens he puts there himself, so it carries the accent rather than the
+   browser's default blue, which belonged to no palette at all. */
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--accent);
 }
 
 /* Quantities, money, counts. */

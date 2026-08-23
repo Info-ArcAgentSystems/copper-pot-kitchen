@@ -47,6 +47,19 @@ const DERIVED = [
     view: 'prepView.ts',
   },
   {
+    /*
+     * The STRICTEST case: it persists nothing at all, not even a tick.
+     * `write: null` switches the assertions below from "writes only its own tick"
+     * to "writes nothing whatever", which is a stronger claim and the one that
+     * matters for a screen the app opens to.
+     */
+    feature: 'dashboard',
+    tickTable: null,
+    write: null,
+    engine: ['readinessCheck', 'anomalyScan', 'rangeMoney', 'historicalAggregate'],
+    view: 'dashboardView.ts',
+  },
+  {
     feature: 'packing',
     tickTable: 'packing_state',
     // Shares a method NAME with prep. They are different repositories, so the
@@ -103,10 +116,22 @@ describe.each(DERIVED)(
       }
     });
 
-    it(`writes through ${write} on its own repository`, () => {
+    it(`writes through ${write ?? 'nothing at all'}`, () => {
       const all = sources()
         .map((s) => s.code)
         .join('\n');
+
+      if (write === null) {
+        // Nothing to tick means nothing to write. A screen that later grows a
+        // "mark as done" needs a tick table and a row here, not a quiet upsert.
+        for (const other of DERIVED) {
+          if (other.tickTable === null) continue;
+          const repo = `${other.feature === 'shopping' ? 'purchase' : other.feature}StateRepository`;
+          expect(all, `${feature} writes through ${repo}`).not.toContain(repo);
+        }
+        expect(all, `${feature} calls upsert`).not.toContain('.upsert(');
+        return;
+      }
 
       expect(all, `${feature} must tick through ${write}`).toContain(write);
 
@@ -132,7 +157,7 @@ describe.each(DERIVED)(
         }
         // And never the other feature's tick table either.
         for (const other of DERIVED) {
-          if (other.tickTable === tickTable) continue;
+          if (other.tickTable === null || other.tickTable === tickTable) continue;
           expect(code, `${file} references ${other.tickTable}`).not.toContain(other.tickTable);
         }
       }
@@ -158,7 +183,12 @@ describe.each(DERIVED)(
       // Without this, a screen could satisfy every "writes nothing" assertion above
       // by rendering a stored or hardcoded list and writing nothing at all.
       for (const fn of engine) {
-        expect(all, `${feature}'s list must come from ${fn}`).toContain(fn);
+        // `${fn}(` — the CALL, not the name. A bare `toContain(fn)` was satisfied
+        // by the import statement alone, so a screen could stop calling the
+        // engine entirely and keep this green as long as it still imported it.
+        // Found by inverting the dashboard: replacing an engine call with a
+        // literal `[]` left the suite passing.
+        expect(all, `${feature}'s list must come from ${fn}`).toContain(`${fn}(`);
       }
     });
   },

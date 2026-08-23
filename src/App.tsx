@@ -26,6 +26,7 @@ import { BackupScreen } from './features/setup/Backup';
 import { Ingredients } from './features/setup/Ingredients';
 import { Recipes } from './features/setup/Recipes';
 import { Jobs } from './features/jobs/Jobs';
+import { Dashboard } from './features/dashboard/Dashboard';
 import { ScanJobSheet } from './features/scan/ScanJobSheet';
 import { ScanRecipeCard } from './features/scan/ScanRecipeCard';
 import { ScanInvoice } from './features/scan/ScanInvoice';
@@ -35,8 +36,18 @@ import { Packing } from './features/packing/Packing';
 import { Money } from './features/money/Money';
 import { AskSous } from './features/sous/AskSous';
 
+/*
+ * EIGHT, and eight is the ceiling: a ninth puts every tab under the 44px floor
+ * the rest of the app holds to (see `.tabs` in app.css).
+ *
+ * So the dashboard takes the home slot rather than being added, and Jobs moves to
+ * `/jobs` — reached by tapping any job on the dashboard, or by the "All jobs"
+ * link beside them. That ordering matches what actually happens: he opens the
+ * app to find out what is next, not to browse a list. The cost is honest and
+ * worth stating — Jobs is now one tap deeper than it was.
+ */
 const TABS = [
-  { to: '/', label: 'Jobs' },
+  { to: '/', label: 'Today' },
   { to: '/shopping', label: 'Shopping' },
   { to: '/prep', label: 'Prep' },
   { to: '/packing', label: 'Packing' },
@@ -89,7 +100,8 @@ export default function App(): ReactNode {
         <Header />
         <main className="app-main">
           <Routes>
-            <Route path="/" element={<Jobs />} />
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/jobs" element={<Jobs />} />
             {/* Scan is NOT a tab. It produces jobs, so it is an action on the
                 Jobs screen — and a ninth tab would put every tab under the 44px
                 floor the rest of the app holds to. See ARCHITECTURE.md. */}

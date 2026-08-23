@@ -13,6 +13,7 @@
  * exposes no boolean verdict of any kind.
  */
 
+import { applyBuffetSplit } from './rules';
 import type {
   DietarySeverity,
   GuestRef,
@@ -259,6 +260,16 @@ export interface ReadinessContext {
   readonly revenueKnown: boolean;
   /** From `outstandingShopping`: how many lines still need buying. */
   readonly outstandingCount: number;
+  /**
+   * From `requirementsForRange().gaps`: how many quantities could NOT be worked
+   * out at all.
+   *
+   * Separate from `outstandingCount` because a dropped line counts ZERO there. A
+   * job whose dish left the cascade would otherwise score as having nothing left
+   * to buy — readier than one whose shopping is merely unfinished, and pointing
+   * the exact opposite way from the truth.
+   */
+  readonly blockedCount: number;
   /** From `dietaryCrossCheck`: how many issues remain. */
   readonly dietaryIssues: number;
 }
@@ -285,6 +296,19 @@ export interface ReadinessResult {
  * nothing: money comes from `jobRevenue`, quantities from `outstandingShopping`.
  * A second orchestration path here would drift from the real cascade (Rule 5).
  */
+function shoppingDetail(context: ReadinessContext): string | null {
+  const parts: string[] = [];
+
+  if (context.outstandingCount > 0) parts.push(`${context.outstandingCount} still to buy`);
+  if (context.blockedCount > 0) {
+    parts.push(
+      `${context.blockedCount} ${context.blockedCount === 1 ? 'quantity' : 'quantities'} could not be worked out`,
+    );
+  }
+
+  return parts.length === 0 ? null : parts.join(', ');
+}
+
 export function readinessCheck(job: Job, context: ReadinessContext): ReadinessResult {
   const items: ReadinessItem[] = [
     {
@@ -321,9 +345,10 @@ export function readinessCheck(job: Job, context: ReadinessContext): ReadinessRe
     {
       key: 'shopping_done',
       label: 'Shopping complete',
-      met: context.outstandingCount === 0,
-      detail:
-        context.outstandingCount === 0 ? null : `${context.outstandingCount} still to buy`,
+      // Blocked is WORSE than outstanding, never better. An empty list because
+      // nothing could be computed is not an empty list because nothing is needed.
+      met: context.outstandingCount === 0 && context.blockedCount === 0,
+      detail: shoppingDetail(context),
     },
     {
       key: 'revenue_known',
@@ -358,6 +383,7 @@ export type AnomalyReason =
   | 'no_guest_count'
   | 'no_service_time'
   | 'no_menu'
+  | 'unallocated_portions'
   | 'unallocated_dietary';
 
 export interface Anomaly {
@@ -429,7 +455,14 @@ export function anomalyScan(
 
     const courses = { main: 0, side: 0, dessert: 0 };
 
-    for (const d of job.dishes) {
+    // THE SAME DERIVATION THE CASCADE RUNS (Rule 5), so this scan sees the menu
+    // productionBuckets will see. Checking `job.dishes` raw would flag every
+    // blank main — the normal, working case — and a flag that fires on normal
+    // data is one he learns to ignore.
+    const dishes =
+      job.guests === null ? job.dishes : applyBuffetSplit(job.guests, job.dishes, recipes);
+
+    for (const d of dishes) {
       const recipe = recipeById.get(d.recipeId);
       if (recipe === undefined) {
         add('missing_recipe', 'critical', `no recipe record for dish "${d.recipeId}"`);
@@ -440,7 +473,27 @@ export function anomalyScan(
       if (recipe.course === 'side') courses.side += 1;
       if (recipe.course === 'dessert') courses.dessert += 1;
 
-      if (job.guests === null || d.portions === null) continue;
+      /**
+       * STILL NULL AFTER THE SPLIT — so the dish leaves the cascade.
+       *
+       * `applyBuffetSplit` fills a blank main, dessert or side from the guest
+       * count. It cannot for a recipe with no course, or for breakfast, and it
+       * cannot for anything when the guest count is unknown. What it leaves null
+       * `productionBuckets` drops: no prep, no shopping, no food cost.
+       *
+       * The dish is still on the menu and absent from every number derived from
+       * it. Nothing said so until this flag existed.
+       */
+      if (d.portions === null) {
+        add(
+          'unallocated_portions',
+          'high',
+          `${recipe.name}: portions not allocated, so it is left out of prep, shopping and cost`,
+        );
+        continue;
+      }
+
+      if (job.guests === null) continue;
 
       // Sides feed everyone. This is the guard for the original defect.
       if (recipe.course === 'side' && d.portions < job.guests) {

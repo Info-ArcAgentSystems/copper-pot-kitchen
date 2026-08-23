@@ -263,3 +263,66 @@ function consolidate(lines: readonly ScaledLine[]): ScaledLine[] {
 function round(value: number): number {
   return Math.round(value * 1e6) / 1e6;
 }
+
+// ---------------------------------------------------------------------------
+// ingredientsUsedBy
+// ---------------------------------------------------------------------------
+
+/**
+ * Every ingredient a recipe touches, transitively through sub-recipes.
+ *
+ * A REACHABILITY question, not a quantity one — it does no arithmetic and returns
+ * no numbers, so it is not a second version of any step in the Rule 5 cascade.
+ *
+ * WHY IT EXISTS: "there is no requirement line for X" has two completely different
+ * causes — nothing uses X, or something uses X and the engine could not quantify
+ * it. `requirementsForRange` reports the second as a gap, but a caller looking only
+ * at `lines` cannot tell them apart, and Ask Sous was answering "no beef mince
+ * needed" for a confirmed job whose lasagne listed 4 kg of it.
+ *
+ * QUANTITIES ARE DELIBERATELY IGNORED. A component with `qty: null` produces no
+ * scaled line and still uses the ingredient — that is the case most likely to leave
+ * no line at all, so skipping it would reintroduce the exact denial this function
+ * exists to prevent.
+ *
+ * A missing sub-recipe contributes nothing: what it used is unknowable, and
+ * inventing a guess is Rule 8. The caller still has `missing_sub_recipe` from
+ * `scaleRecipe` to surface.
+ */
+export function ingredientsUsedBy(
+  recipe: Recipe,
+  lookup: RecipeLookup,
+): ReadonlySet<IngredientId> {
+  const found = new Set<IngredientId>();
+  collectInto(recipe, lookup, found, new Set());
+  return found;
+}
+
+/**
+ * `path` holds the recipes open above this one, the same discipline `scaleInto`
+ * uses: a cycle stops, a diamond does not. A diamond reached twice adds the same
+ * id to a Set twice, which is the identity operation — unlike scaling, where both
+ * branches must contribute to the total.
+ */
+function collectInto(
+  recipe: Recipe,
+  lookup: RecipeLookup,
+  found: Set<IngredientId>,
+  path: ReadonlySet<RecipeId>,
+): void {
+  const nextPath = new Set(path).add(recipe.id);
+
+  for (const component of recipe.components) {
+    if (component.kind === 'ingredient') {
+      found.add(component.ingredientId);
+      continue;
+    }
+
+    if (path.has(component.subRecipeId)) continue;
+
+    const sub = lookup(component.subRecipeId);
+    if (sub === undefined) continue;
+
+    collectInto(sub, lookup, found, nextPath);
+  }
+}

@@ -11,8 +11,14 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { portionsToUnits, scaleRecipe } from '../../src/engine/scaling';
-import { ingredientLine, lookupFor, makeRecipe, subRecipeLine } from './factories';
+import { ingredientsUsedBy, portionsToUnits, scaleRecipe } from '../../src/engine/scaling';
+import {
+  ingredientId,
+  ingredientLine,
+  lookupFor,
+  makeRecipe,
+  subRecipeLine,
+} from './factories';
 
 const noRecipes = lookupFor([]);
 
@@ -298,5 +304,87 @@ describe('scaleRecipe — a recipe with nothing in it', () => {
 
     expect(result.gaps.map((g) => g.reason)).not.toContain('no_components');
     expect(result.gaps.map((g) => g.reason)).toContain('named_unquantified');
+  });
+});
+
+/**
+ * ingredientsUsedBy — "does this menu touch that ingredient at all?"
+ *
+ * A REACHABILITY question, not a quantity one. It exists so a caller can tell a
+ * genuinely zero requirement apart from one the engine could not compute: without
+ * it, "no line for beef mince" and "nothing uses beef mince" are the same fact,
+ * and Ask Sous reported the second when the first was true.
+ *
+ * It deliberately ignores quantities. An unquantified component still USES the
+ * ingredient — it is the case most likely to produce no line, so treating it as
+ * "not used" would reintroduce exactly the denial this function exists to prevent.
+ */
+describe('ingredientsUsedBy', () => {
+  it('finds a direct component', () => {
+    expect([...ingredientsUsedBy(curry, noRecipes)]).toEqual([
+      ingredientId('chicken breast'),
+      ingredientId('curry sauce'),
+      ingredientId('rice'),
+    ]);
+  });
+
+  it('finds an ingredient only a sub-recipe uses', () => {
+    // The parent names no mince anywhere. Reached one level down, it does.
+    const ragu = makeRecipe('Ragu', { components: [ingredientLine('mince', 2, 'kg')] });
+    const bake = makeRecipe('Pasta Bake', {
+      components: [subRecipeLine('Ragu', 4), ingredientLine('pasta', 500, 'g')],
+    });
+
+    const used = ingredientsUsedBy(bake, lookupFor([ragu, bake]));
+
+    expect(used.has(ingredientId('mince'))).toBe(true);
+    expect(used.has(ingredientId('pasta'))).toBe(true);
+  });
+
+  it('counts an UNQUANTIFIED component as used', () => {
+    // The whole point. A null qty produces no scaled line, so if this returned
+    // false the caller would say "none needed" about an ingredient the recipe
+    // plainly lists.
+    const vague = makeRecipe('Stew', { components: [ingredientLine('beef', null, null)] });
+
+    expect(ingredientsUsedBy(vague, noRecipes).has(ingredientId('beef'))).toBe(true);
+  });
+
+  it('reports an ingredient reached down two branches once', () => {
+    // A diamond is legitimate. This returns a SET, so it appears once — unlike
+    // scaleRecipe, where both branches must contribute to the quantity.
+    const stock = makeRecipe('Stock', { components: [ingredientLine('onion', 1, 'kg')] });
+    const soup = makeRecipe('Soup', {
+      components: [subRecipeLine('Stock', 4), ingredientLine('onion', 2, 'kg')],
+    });
+
+    const used = [...ingredientsUsedBy(soup, lookupFor([stock, soup]))];
+
+    expect(used.filter((i) => i === ingredientId('onion'))).toHaveLength(1);
+  });
+
+  it('terminates on a cycle instead of recursing forever', () => {
+    // Same `path` discipline as scaleInto. A cycle is bad data, not a reason to
+    // hang the shopping screen.
+    const a = makeRecipe('A', {
+      components: [ingredientLine('salt', 1, 'g'), subRecipeLine('B', 1)],
+    });
+    const b = makeRecipe('B', {
+      components: [ingredientLine('pepper', 1, 'g'), subRecipeLine('A', 1)],
+    });
+
+    const used = ingredientsUsedBy(a, lookupFor([a, b]));
+
+    expect(used.has(ingredientId('salt'))).toBe(true);
+    expect(used.has(ingredientId('pepper'))).toBe(true);
+  });
+
+  it('returns empty for a missing sub-recipe rather than throwing', () => {
+    // The sub-recipe is absent from the lookup. Whatever it used is unknowable,
+    // so it contributes nothing — and the caller still has requirementsForRange's
+    // missing_sub_recipe gap to surface.
+    const orphan = makeRecipe('Orphan', { components: [subRecipeLine('Gone', 1)] });
+
+    expect([...ingredientsUsedBy(orphan, noRecipes)]).toEqual([]);
   });
 });

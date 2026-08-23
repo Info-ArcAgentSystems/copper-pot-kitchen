@@ -89,8 +89,16 @@ export function jobFromReview(review: JobSheetReview): Job {
               id: '' as Job['dishes'][number]['id'],
               jobId: '' as JobId,
               recipeId: d.record.id,
-              // Null lets applyBuffetSplit derive portions from the guest count.
-              // Zero would mean "make none of this dish".
+              // Null ASKS applyBuffetSplit to derive portions from the guest
+              // count. It can only answer for a main, a side or a dessert — for
+              // breakfast or a recipe with no course it leaves the dish null and
+              // `productionBuckets` drops it, so the dish sits on the menu
+              // contributing no prep, no shopping and no cost. `portionsDerivable`
+              // is the predicate for that, and `anomalyScan` flags what it catches.
+              //
+              // Null is still right here: the scanner read a menu, not a portion
+              // count, and inventing one would be Rule 8. Zero would be worse
+              // again — it means "make none of this dish".
               portions: null,
               note: null,
               position,

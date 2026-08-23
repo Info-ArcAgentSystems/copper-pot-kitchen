@@ -198,6 +198,20 @@ export function ScanRecipeCard(): ReactNode {
             </section>
           )}
 
+          {/* NOT under "needs settling" — these do not stop the save. A recipe
+              with no course is legal; what it cannot do is have its portions
+              derived from a guest count, and that is what goes unsaid. */}
+          {review.warnings.length > 0 && (
+            <section className="unresolved-block">
+              <h2>Worth knowing before you save</h2>
+              <ul>
+                {review.warnings.map((w) => (
+                  <li key={w}>{w}</li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {review.newThings.length > 0 && (
             <section className="unresolved-block">
               <h2>New to your ingredients</h2>

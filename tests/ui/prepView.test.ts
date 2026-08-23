@@ -211,11 +211,26 @@ describe('the per-job allocation — how he splits the tray', () => {
   });
 });
 
+/**
+ * A gap literal.
+ *
+ * `recipeId` / `ingredientId` default to null: these tests are about ROUTING BY
+ * REASON, and the identity fields are what Ask Sous uses to tell a blocked
+ * quantity from a zero one. Naming them here would suggest routing depends on
+ * them, which it does not.
+ */
+const gap = (reason: RequirementGap['reason'], detail: string): RequirementGap => ({
+  reason,
+  recipeId: null,
+  ingredientId: null,
+  detail,
+});
+
 describe('gap flags — the same vocabulary as Shopping', () => {
   it('routes an unquantified component to check-yourself', () => {
     // Genuinely a prep concern: he has to judge the seasoning at the stove.
     const { checkYourself } = view([], [
-      { reason: 'unquantified', detail: 'Tapas: "seasoning" has no quantity' },
+      gap('unquantified', 'Tapas: "seasoning" has no quantity'),
     ]);
 
     expect(checkYourself).toHaveLength(1);
@@ -224,7 +239,7 @@ describe('gap flags — the same vocabulary as Shopping', () => {
 
   it('routes a missing recipe to needs-fixing, naming where to fix it', () => {
     const { needsFixing } = view([], [
-      { reason: 'missing_recipe', detail: 'no recipe found for dish "x"' },
+      gap('missing_recipe', 'no recipe found for dish "x"'),
     ]);
 
     expect(needsFixing[0]?.where).toBe('Recipes');
@@ -232,7 +247,7 @@ describe('gap flags — the same vocabulary as Shopping', () => {
 
   it('routes a missing portions-per-batch to Recipes', () => {
     const { needsFixing } = view([], [
-      { reason: 'no_portions_per_batch', detail: 'Lasagne: batch recipe with no portions per batch' },
+      gap('no_portions_per_batch', 'Lasagne: batch recipe with no portions per batch'),
     ]);
 
     expect(needsFixing[0]?.where).toBe('Recipes');
@@ -246,7 +261,7 @@ describe('gap flags — the same vocabulary as Shopping', () => {
     ];
 
     for (const reason of all) {
-      const { checkYourself, needsFixing } = view([], [{ reason, detail: 'x' }]);
+      const { checkYourself, needsFixing } = view([], [gap(reason, 'x')]);
       expect(
         checkYourself.length + needsFixing.length,
         `reason "${reason}" was routed nowhere`,
@@ -256,8 +271,8 @@ describe('gap flags — the same vocabulary as Shopping', () => {
 
   it('collapses duplicates, which consolidation across jobs produces plenty of', () => {
     const { needsFixing } = view([], [
-      { reason: 'missing_recipe', detail: 'same detail' },
-      { reason: 'missing_recipe', detail: 'same detail' },
+      gap('missing_recipe', 'same detail'),
+      gap('missing_recipe', 'same detail'),
     ]);
 
     expect(needsFixing).toHaveLength(1);

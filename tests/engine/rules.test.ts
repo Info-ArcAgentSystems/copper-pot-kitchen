@@ -10,7 +10,12 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { applyBuffetSplit, meatEatingGuests } from '../../src/engine/rules';
+import {
+  applyBuffetSplit,
+  courseDerivable,
+  meatEatingGuests,
+  portionsDerivable,
+} from '../../src/engine/rules';
 import { portionsToUnits } from '../../src/engine/scaling';
 import { allocated, dish, makeJob, makeRecipe, unresolved } from './factories';
 
@@ -299,4 +304,101 @@ describe('applyBuffetSplit', () => {
 
     expect(dishes.map((d) => d.portions)).toEqual([null, null]);
   });
+});
+
+/**
+ * portionsDerivable — "will leaving this blank actually work?"
+ *
+ * The Portions field on a job tells the owner: "Leave blank to let the guest
+ * count decide." For a recipe with no course that sentence is FALSE, and the
+ * consequence is invisible — `applyBuffetSplit` leaves the dish null,
+ * `productionBuckets` drops it, and it silently contributes no prep, no shopping
+ * and no cost. He followed the instruction on screen and lost the dish.
+ *
+ * The screen therefore needs to ask, before promising anything.
+ */
+describe('portionsDerivable', () => {
+  it.each(['main', 'side', 'dessert'] as const)('%s: blank is derivable', (course) => {
+    expect(portionsDerivable(makeRecipe('R', { course }))).toBe(true);
+  });
+
+  it('breakfast is NOT derivable — the owner records a choice, not a division', () => {
+    // CALC-SWEETPEA-BREAKFAST: 12 guests across three dishes at 5 / 3 / 4. An
+    // even split would say 4 / 4 / 4 and be wrong.
+    expect(portionsDerivable(makeRecipe('R', { course: 'breakfast' }))).toBe(false);
+  });
+
+  it('no course is NOT derivable — the reported case', () => {
+    expect(portionsDerivable(makeRecipe('R', { course: null }))).toBe(false);
+  });
+
+  it('no recipe at all is not derivable', () => {
+    expect(portionsDerivable(undefined)).toBe(false);
+  });
+
+  /**
+   * THE ANTI-DRIFT TEST.
+   *
+   * This predicate and `applyBuffetSplit` encode one rule. They are separate
+   * functions because the screen needs to ask the question before the split runs,
+   * and two encodings of one rule drift silently — the screen would keep promising
+   * derivation after the split stopped doing it.
+   *
+   * So: for every course, the prediction must match what the split actually does.
+   */
+  it.each(['main', 'side', 'dessert', 'breakfast', null] as const)(
+    'agrees with applyBuffetSplit for course %s',
+    (course) => {
+      const recipe = makeRecipe('Solo', { course });
+      const [only] = applyBuffetSplit(12, [dish('Solo', null)], [recipe]);
+
+      expect(only?.portions !== null).toBe(portionsDerivable(recipe));
+    },
+  );
+});
+
+/**
+ * courseDerivable — the same rule, asked of a COURSE rather than a recipe.
+ *
+ * Two callers have no `Recipe` to hand and would otherwise re-list the courses
+ * themselves: the recipe-card scanner holds a string read off a photograph, and
+ * the Recipes form holds a `<select>` value mid-edit, before any recipe exists.
+ *
+ * Both need the answer at exactly the moment the owner can still act on it, and a
+ * third copy of `{main, side, dessert}` is how a rule starts disagreeing with
+ * itself. So the set is defined once and `portionsDerivable` is expressed in terms
+ * of this.
+ */
+describe('courseDerivable', () => {
+  it.each(['main', 'side', 'dessert'] as const)('%s is derivable', (course) => {
+    expect(courseDerivable(course)).toBe(true);
+  });
+
+  it('BOTH non-derivable cases, which is the point of the predicate', () => {
+    // A warning that names only the null case leaves half the hole open: a card
+    // that genuinely says "Breakfast" drops its dish just as silently.
+    expect(courseDerivable(null)).toBe(false);
+    expect(courseDerivable('breakfast')).toBe(false);
+  });
+
+  it('a course nobody recognises is not derivable', () => {
+    // The scanner passes through whatever the model read. An unknown string must
+    // not be treated as splittable on the strength of being non-null.
+    expect(courseDerivable('pudding')).toBe(false);
+    expect(courseDerivable('')).toBe(false);
+  });
+
+  /**
+   * THE ANTI-DRIFT TEST, second half.
+   *
+   * `portionsDerivable` must be this function plus "and the recipe exists".
+   * Anything else means two encodings of one rule again — the thing the first
+   * anti-drift test above exists to prevent.
+   */
+  it.each(['main', 'side', 'dessert', 'breakfast', null] as const)(
+    'agrees with portionsDerivable for course %s',
+    (course) => {
+      expect(portionsDerivable(makeRecipe('R', { course }))).toBe(courseDerivable(course));
+    },
+  );
 });

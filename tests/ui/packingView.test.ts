@@ -319,10 +319,25 @@ describe('job headings', () => {
   });
 });
 
+/**
+ * A gap literal.
+ *
+ * `recipeId` / `ingredientId` default to null: these tests are about ROUTING BY
+ * REASON, and the identity fields are what Ask Sous uses to tell a blocked
+ * quantity from a zero one. Naming them here would suggest routing depends on
+ * them, which it does not.
+ */
+const gap = (reason: RequirementGap['reason'], detail: string): RequirementGap => ({
+  reason,
+  recipeId: null,
+  ingredientId: null,
+  detail,
+});
+
 describe('gap flags — the shared vocabulary', () => {
   it('routes a missing recipe to Recipes', () => {
     const { needsFixing } = view(undefined, undefined, undefined, undefined, undefined, [
-      { reason: 'missing_recipe', detail: 'no recipe found' },
+      gap('missing_recipe', 'no recipe found'),
     ]);
 
     expect(needsFixing[0]?.where).toBe('Recipes');
@@ -330,7 +345,7 @@ describe('gap flags — the shared vocabulary', () => {
 
   it('routes an unquantified component to check-yourself', () => {
     const { checkYourself } = view(undefined, undefined, undefined, undefined, undefined, [
-      { reason: 'unquantified', detail: 'Tapas: "seasoning" has no quantity' },
+      gap('unquantified', 'Tapas: "seasoning" has no quantity'),
     ]);
 
     expect(checkYourself).toHaveLength(1);
@@ -346,7 +361,7 @@ describe('gap flags — the shared vocabulary', () => {
     for (const reason of all) {
       const { checkYourself, needsFixing } = view(
         undefined, undefined, undefined, undefined, undefined,
-        [{ reason, detail: 'x' }],
+        [gap(reason, 'x')],
       );
       expect(
         checkYourself.length + needsFixing.length,

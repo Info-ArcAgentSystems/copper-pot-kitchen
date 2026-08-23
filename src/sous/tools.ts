@@ -30,15 +30,17 @@ import { changeImpact } from '../engine/impact';
 import { prepPlanByDay, productionBuckets } from '../engine/production';
 import { applyBuffetSplit } from '../engine/rules';
 import { matchByName, nearestNames } from '../engine/nameMatch';
-import { outstandingShopping, requirementsForRange } from '../engine/shopping';
+import { ingredientsUsedBy } from '../engine/scaling';
+import { blocksQuantity, outstandingShopping, requirementsForRange } from '../engine/shopping';
 import { TOOL_NAMES, type Intent, type ToolName } from './intent';
-import type { OutstandingLine } from '../engine/shopping';
+import type { OutstandingLine, RequirementGap } from '../engine/shopping';
 import type {
   ClientRate,
   Customer,
   Ingredient,
   Job,
   Recipe,
+  RecipeId,
   ServiceTemplate,
   StockLevel,
 } from '../engine/types';
@@ -103,10 +105,22 @@ export interface Proposal {
  *   no_such_ingredient   nothing by that name is recorded at all
  *   ambiguous            several match — names them, never picks (Rule 8)
  *   none_needed          it exists, and nothing in the window uses it
+ *   blocked              something uses it, and no quantity could be worked out
  *   needed               here is the quantity
  *
  * `none_needed` is the one the old code could not express. A zero requirement is
  * a real answer and has to be said out loud.
+ *
+ * `blocked` is the one that was being SAID AS `none_needed`. Both look identical
+ * from `lines` alone — neither has one — and they are opposite answers. A
+ * confirmed job with beef lasagne on the menu whose dish had no portions
+ * allocated produced no requirement line, and the owner was told no beef mince
+ * was needed. The engine had reported the gap; nothing here read it.
+ *
+ * Distinguishing them is a POSITIVE test, not a guess: `ingredientsUsedBy` walks
+ * the menu and answers whether anything uses the ingredient at all. That is
+ * exactly the claim `none_needed` makes, so it is the right question to ask
+ * before making it.
  */
 export type HowMuch =
   | {
@@ -128,6 +142,21 @@ export type HowMuch =
       readonly name: string;
       readonly from: string;
       readonly to: string;
+    }
+  | {
+      readonly state: 'blocked';
+      readonly name: string;
+      readonly from: string;
+      readonly to: string;
+      /** Dishes in the window whose recipe uses it. Never empty in this state. */
+      readonly usedBy: readonly string[];
+      /**
+       * Why no quantity came out — the gaps that concern THIS ingredient or a
+       * recipe using it, never every gap in the window. An unrelated recipe's
+       * missing quantity is not a reason his mince is blocked, and offering it as
+       * one sends him to the wrong screen.
+       */
+      readonly blockers: readonly RequirementGap[];
     }
   | {
       readonly state: 'needed';
@@ -215,6 +244,9 @@ function jobDetails(data: SousData, jobId: string) {
     readiness: readinessCheck(job, {
       revenueKnown: money.revenue.total !== null,
       outstandingCount: outstanding.filter((l) => l.outstanding.value > 0).length,
+      // A dropped line counts ZERO in `outstandingCount`, so without this the
+      // job would read as having nothing left to buy.
+      blockedCount: requirements.gaps.filter(blocksQuantity).length,
       dietaryIssues: 0,
     }),
   };
@@ -259,13 +291,65 @@ function howMuch(data: SousData, asked: string, from: string, to: string): HowMu
   const lines = outstandingShopping(requirements.lines, data.stock, [], data.ingredients);
   const line = lines.find((l) => l.ingredientId === ingredient.id);
 
-  // Nothing in the window uses it. A REAL answer, and the one the old routing
-  // replaced with an unrelated object.
-  if (line === undefined) {
+  if (line !== undefined) {
+    return { state: 'needed', name: ingredient.name, from, to, line, pack: ingredient.pack };
+  }
+
+  // NO LINE HAS TWO OPPOSITE CAUSES. Ask which one before answering.
+  const recipeById = new Map(data.recipes.map((r) => [r.id, r]));
+  const lookup = (id: RecipeId): Recipe | undefined => recipeById.get(id);
+
+  /** Does this recipe, or anything below it, use the ingredient? */
+  const uses = (id: RecipeId | null): boolean => {
+    if (id === null) return false;
+    const recipe = recipeById.get(id);
+    return recipe !== undefined && ingredientsUsedBy(recipe, lookup).has(ingredient.id);
+  };
+
+  // The same jobs the requirements were computed from, so the two cannot
+  // disagree about what is on the menu. Cancelled jobs are already excluded by
+  // OPERATIONAL — a cancelled job must not block an answer forever.
+  const usedBy: string[] = [];
+  for (const job of jobs) {
+    for (const d of job.dishes) {
+      const recipe = recipeById.get(d.recipeId);
+      if (recipe === undefined || !uses(recipe.id)) continue;
+      if (!usedBy.includes(recipe.name)) usedBy.push(recipe.name);
+    }
+  }
+
+  /**
+   * A dish pointing at a recipe that is not there.
+   *
+   * Whatever it used is unknowable, so "nothing uses it" cannot be claimed.
+   * `job_dishes.recipe_id` is `on delete restrict`, so this should be
+   * unreachable — this is the guard for when it is not.
+   */
+  const unreadable = requirements.gaps.filter((g) => g.reason === 'missing_recipe');
+
+  if (usedBy.length === 0 && unreadable.length === 0) {
+    // Nothing in the window uses it. A REAL answer, and the one the old routing
+    // replaced with an unrelated object.
     return { state: 'none_needed', name: ingredient.name, from, to };
   }
 
-  return { state: 'needed', name: ingredient.name, from, to, line, pack: ingredient.pack };
+  // Something uses it and no quantity came out. Say so, and say why.
+  const seen = new Set<string>();
+  const blockers = requirements.gaps.filter((gap) => {
+    if (gap.ingredientId !== null && gap.ingredientId !== ingredient.id) return false;
+    if (gap.ingredientId === null && !uses(gap.recipeId) && gap.reason !== 'missing_recipe') {
+      return false;
+    }
+
+    // Consolidation emits the same gap once per contributing job. He needs to
+    // know it happened, not how many times.
+    const key = `${gap.reason} ${gap.detail}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  return { state: 'blocked', name: ingredient.name, from, to, usedBy, blockers };
 }
 
 // ---------------------------------------------------------------------------

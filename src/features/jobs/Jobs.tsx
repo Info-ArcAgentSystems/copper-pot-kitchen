@@ -34,6 +34,7 @@ import { RecordForm, RecordScreen } from '../../ui/RecordScreen';
 import { useAsync, type AsyncState } from '../../ui/useAsync';
 import { formatMoney, moneyValue, parseCount, parseMoney, parseText, textValue } from '../../ui/form';
 import { jobRevenue } from '../../engine/costing';
+import { portionsDerivable } from '../../engine/rules';
 import type { JobChanges } from '../../engine/impact';
 import { ImpactPreview } from './ImpactPreview';
 import { useKitchen } from '../../auth/kitchenState';
@@ -53,6 +54,7 @@ import type {
   JobStatus,
   KitchenId,
   PropertyId,
+  Recipe,
   RecipeId,
   UnresolvedDietary,
 } from '../../engine/types';
@@ -144,6 +146,34 @@ interface ExtraDraft {
 
 let seq = 0;
 const newKey = (): string => `j${(seq += 1)}`;
+
+/**
+ * What "Portions" promises, told truthfully for THIS recipe.
+ *
+ * The field used to say "leave blank to let the guest count decide" for every
+ * dish. `applyBuffetSplit` only does that for a main, a side or a dessert — for a
+ * breakfast or an uncoursed recipe it leaves the dish null, `productionBuckets`
+ * drops it, and it contributes no prep, no shopping and no food cost while still
+ * sitting on the menu.
+ *
+ * So the owner followed the instruction on screen and silently lost the dish.
+ * Rule 12: the need for a figure has to be obvious AT THE POINT OF USE, not
+ * buried in a screen he has no reason to open.
+ */
+function portionsHint(recipe: Recipe | undefined): string {
+  // Nothing chosen yet — do not warn about a recipe he has not picked.
+  if (recipe === undefined) {
+    return 'Leave blank to let the guest count decide. Type a number and yours wins.';
+  }
+
+  if (portionsDerivable(recipe)) {
+    return 'Leave blank to let the guest count decide. Type a number and yours wins.';
+  }
+
+  return recipe.course === null
+    ? `Type a number — ${recipe.name} has no course, so the guest count cannot decide for it. Left blank, this dish is left out of prep, shopping and cost.`
+    : `Type a number — a ${recipe.course} is a choice, not an even split, so the guest count cannot decide for it. Left blank, this dish is left out of prep, shopping and cost.`;
+}
 
 function JobForm({ job, done }: { job: Job | null; done: () => void }): ReactNode {
   const { state } = useKitchen();
@@ -319,6 +349,10 @@ function JobForm({ job, done }: { job: Job | null; done: () => void }): ReactNod
       : []),
   ];
 
+  const recipeById = new Map(
+    recipes.state.status === 'ready' ? recipes.state.data.map((r) => [r.id as string, r]) : [],
+  );
+
   const customer =
     customers.state.status === 'ready'
       ? customers.state.data.find((c) => c.id === customerId)
@@ -442,7 +476,7 @@ function JobForm({ job, done }: { job: Job | null; done: () => void }): ReactNod
               onChange={(v) => patchDish(d.key, { portions: v })}
               inputMode="numeric"
               numeric
-              hint="Leave blank to let the guest count decide. Type a number and yours wins."
+              hint={portionsHint(recipeById.get(d.recipeId))}
             />
             <button type="button" onClick={() => setDishes((all) => all.filter((x) => x.key !== d.key))}>
               Remove dish

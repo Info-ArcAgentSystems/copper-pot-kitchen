@@ -19,6 +19,7 @@
  */
 
 import { matchByName } from '../engine/nameMatch';
+import { courseDerivable } from '../engine/rules';
 import type { Ingredient, RecipeUnit, YieldType } from '../engine/types';
 import type { Gap, Resolved } from './jobSheet';
 
@@ -83,9 +84,24 @@ export interface RecipeCardReview {
   readonly gaps: readonly Gap[];
   readonly newThings: readonly NewIngredient[];
   /**
+   * Consequences of what was read, NOT reasons to refuse it.
+   *
+   * A gap means "this cannot be saved". A warning means "this saves fine, and
+   * here is what it will do". They are opposite instructions, and
+   * `tests/scan/recipeCard.test.ts` asserts no sentence is ever both.
+   *
+   * The distinction is load-bearing rather than tidy. A recipe with no course is
+   * legal; it simply cannot have its portions derived from a guest count, and the
+   * review screen has no course picker — so blocking here would refuse a
+   * legitimate recipe from a screen offering no way to fix it.
+   */
+  readonly warnings: readonly string[];
+  /**
    * Unquantified components do NOT block this. Rule 8 treats them as a normal
    * state — a recipe carrying "seasoning" with no figure is complete and honest,
    * not half-entered.
+   *
+   * Neither do `warnings`. Blocking comes from `gaps`, and only from `gaps`.
    */
   readonly readyToSave: boolean;
 }
@@ -199,6 +215,35 @@ export function reviewRecipeCard(
     method: read.method,
     gaps,
     newThings,
+    warnings: courseWarnings(read.course),
+    // Warnings are deliberately absent from this. See `warnings` on the type.
     readyToSave: gaps.length === 0,
   };
+}
+
+/**
+ * What a non-derivable course will cost him, said before he saves it.
+ *
+ * THE RECIPE THAT STARTED THIS came off this scanner with `course: null`, because
+ * nothing on the card said "main". `applyBuffetSplit` could then not fill the
+ * dish's blank portions on a confirmed job for 20 guests, `productionBuckets`
+ * dropped it, and the beef mince it needed never appeared on any shopping list.
+ * Every screen downstream was correct and every one of them was silent.
+ *
+ * Asks `courseDerivable` rather than testing for null, so the breakfast case —
+ * which fails identically and is easy to forget — is covered by construction.
+ *
+ * Two sentences, not one: the consequence is shared but the cause is not, and
+ * telling an owner whose card says "Breakfast" to go and set a course would send
+ * him to look at a field that is already filled in.
+ */
+function courseWarnings(course: string | null): readonly string[] {
+  if (courseDerivable(course)) return [];
+
+  const consequence =
+    'the guest count cannot fill in its portions, so every job using it needs a portions figure typed in — otherwise the dish is left off prep, shopping and cost.';
+
+  return course === null || course.trim() === ''
+    ? [`No course was read off the card. Set one in Recipes after saving: without it, ${consequence}`]
+    : [`This was read as a ${course}. A ${course} is a choice rather than an even split, so ${consequence}`];
 }

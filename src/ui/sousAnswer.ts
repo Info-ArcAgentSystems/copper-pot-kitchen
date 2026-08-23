@@ -18,6 +18,7 @@
  */
 
 import { formatMoney } from './form';
+import { routeGaps } from './gapRouting';
 import { buildPrepView } from './prepView';
 import { buildShoppingView } from './shoppingView';
 import type { HowMuch, SousData, ToolResult } from '../sous/tools';
@@ -82,6 +83,31 @@ function howMuchAnswer(v: HowMuch): Answer {
         detail: ['Nothing on the confirmed jobs in those dates uses it.'],
         flags: [],
       };
+
+    case 'blocked': {
+      // THE ANSWER THAT WAS BEING GIVEN AS `none_needed`.
+      //
+      // Nothing here may read as a zero. "No beef mince needed" ends the matter;
+      // this has to send him to the thing that is stopping the figure. The window
+      // is named for the same reason every other branch names it — a figure, or
+      // the absence of one, that does not say what it covers cannot be checked.
+      const routed = routeGaps(v.blockers);
+
+      const detail =
+        v.usedBy.length === 0
+          ? []
+          : [
+              `${v.usedBy.join(', ')} ${plural(v.usedBy.length, 'uses', 'use')} it ${range(v.from, v.to)}.`,
+            ];
+
+      return {
+        lead: `I can't work out how much ${v.name} you need ${range(v.from, v.to)}.`,
+        detail: [...detail, ...routed.checkYourself.map((c) => c.label)],
+        // Routed through the SAME map the Shopping screen uses, so one gap never
+        // sends him to two different screens.
+        flags: routed.needsFixing.map((f) => `${f.label} — fix in ${f.where}.`),
+      };
+    }
 
     case 'needed': {
       const line = v.line;

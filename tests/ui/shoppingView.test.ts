@@ -214,10 +214,25 @@ describe('an assumed pack size is visible where he acts on it', () => {
   });
 });
 
+/**
+ * A gap literal.
+ *
+ * `recipeId` / `ingredientId` default to null: these tests are about ROUTING BY
+ * REASON, and the identity fields are what Ask Sous uses to tell a blocked
+ * quantity from a zero one. Naming them here would suggest routing depends on
+ * them, which it does not.
+ */
+const gap = (reason: RequirementGap['reason'], detail: string): RequirementGap => ({
+  reason,
+  recipeId: null,
+  ingredientId: null,
+  detail,
+});
+
 describe('check these yourself — the engine cannot give a number', () => {
   it('routes an unquantified component here, not to the buy list', () => {
     const { checkYourself, groups } = view([], [
-      { reason: 'unquantified', detail: 'Tapas: "seasoning" has no quantity' },
+      gap('unquantified', 'Tapas: "seasoning" has no quantity'),
     ]);
 
     expect(checkYourself).toHaveLength(1);
@@ -227,7 +242,7 @@ describe('check these yourself — the engine cannot give a number', () => {
 
   it('routes a named unquantified item here too', () => {
     const { checkYourself } = view([], [
-      { reason: 'named_unquantified', detail: 'Tapas: "eight tapas dishes" has no quantity' },
+      gap('named_unquantified', 'Tapas: "eight tapas dishes" has no quantity'),
     ]);
 
     expect(checkYourself).toHaveLength(1);
@@ -274,7 +289,7 @@ describe('needs fixing — something is absent from the records', () => {
 
   for (const [reason, where] of cases) {
     it(`routes ${reason} to ${where}`, () => {
-      const { needsFixing } = view([], [{ reason, detail: `${reason} happened` }]);
+      const { needsFixing } = view([], [gap(reason, `${reason} happened`)]);
 
       expect(needsFixing).toHaveLength(1);
       expect(needsFixing[0]?.where).toBe(where);
@@ -292,7 +307,7 @@ describe('needs fixing — something is absent from the records', () => {
     ];
 
     for (const reason of all) {
-      const { checkYourself, needsFixing } = view([], [{ reason, detail: 'x' }]);
+      const { checkYourself, needsFixing } = view([], [gap(reason, 'x')]);
       expect(
         checkYourself.length + needsFixing.length,
         `reason "${reason}" was routed nowhere`,
@@ -302,7 +317,7 @@ describe('needs fixing — something is absent from the records', () => {
 
   it('keeps the engine’s own wording rather than rewriting it', () => {
     const { needsFixing } = view([], [
-      { reason: 'missing_recipe', detail: 'job j1 references a recipe that does not exist' },
+      gap('missing_recipe', 'job j1 references a recipe that does not exist'),
     ]);
 
     expect(needsFixing[0]?.label).toBe('job j1 references a recipe that does not exist');
@@ -310,8 +325,8 @@ describe('needs fixing — something is absent from the records', () => {
 
   it('collapses duplicate gaps, which consolidation across jobs produces a lot of', () => {
     const { needsFixing } = view([], [
-      { reason: 'no_pack_size', detail: 'mince: no pack size set' },
-      { reason: 'no_pack_size', detail: 'mince: no pack size set' },
+      gap('no_pack_size', 'mince: no pack size set'),
+      gap('no_pack_size', 'mince: no pack size set'),
     ]);
 
     expect(needsFixing).toHaveLength(1);

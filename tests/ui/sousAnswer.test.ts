@@ -96,6 +96,71 @@ describe('"how much X do I need" — the question that started this', () => {
     expect(answer.lead).not.toContain('anomal');
   });
 
+  /**
+   * BLOCKED MUST NOT READ LIKE ZERO.
+   *
+   * The two states differ by one field in the tool result and by everything on
+   * screen. "No beef mince needed" ends the matter; "I cannot work this out, and
+   * here is the reason" sends him to fix it. Rendering them alike would put the
+   * defect back at the last layer.
+   */
+  const blocked = (over: Record<string, unknown> = {}): HowMuch =>
+    ({
+      state: 'blocked',
+      name: 'beef mince',
+      from: '2026-08-20',
+      to: '2026-08-27',
+      usedBy: ['BEEF LASAGNE'],
+      blockers: [
+        {
+          reason: 'no_portions',
+          recipeId: 'lasagne' as never,
+          ingredientId: null,
+          detail: 'BEEF LASAGNE: portions not allocated',
+        },
+      ],
+      ...over,
+    }) as HowMuch;
+
+  it('NEVER says "no beef mince needed" when the quantity is merely blocked', () => {
+    const answer = renderAnswer(howMuch(blocked()), data);
+
+    expect(answer.lead).not.toMatch(/^No beef mince needed/);
+    expect(answer.lead.toLowerCase()).not.toContain('nothing');
+  });
+
+  it('says it cannot work the figure out, and names the window', () => {
+    const answer = renderAnswer(howMuch(blocked()), data);
+
+    expect(answer.lead).toContain('beef mince');
+    expect(answer.lead).toContain('between 2026-08-20 and 2026-08-27');
+    expect(answer.lead).toMatch(/can't|cannot/i);
+  });
+
+  it('names the dish that uses it, so he knows where to look', () => {
+    const answer = renderAnswer(howMuch(blocked()), data);
+
+    expect(answer.detail.join(' ')).toContain('BEEF LASAGNE');
+  });
+
+  it('flags what needs fixing, and where — not just that something is wrong', () => {
+    // Routed through the SAME map the Shopping screen uses, so Ask Sous and the
+    // screen cannot send him to two different places for one gap.
+    const answer = renderAnswer(howMuch(blocked()), data);
+
+    expect(answer.flags.join(' ')).toContain('portions not allocated');
+    expect(answer.flags.join(' ')).toContain('Jobs');
+  });
+
+  it('still answers when the blockers list is empty', () => {
+    // A gap the filter could not attribute leaves nothing to show. The lead is
+    // still the honest answer, and it must not render as a zero.
+    const answer = renderAnswer(howMuch(blocked({ blockers: [] })), data);
+
+    expect(answer.lead).toMatch(/can't|cannot/i);
+    expect(answer.lead).not.toContain('No beef mince needed');
+  });
+
   it('distinguishes "no such ingredient" from "none needed"', () => {
     // Different problems with different fixes. Blurring them sends him looking in
     // the wrong place.

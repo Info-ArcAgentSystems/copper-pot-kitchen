@@ -325,6 +325,7 @@ describe('readinessCheck', () => {
   const ctx = (over = {}) => ({
     revenueKnown: true,
     outstandingCount: 0,
+    blockedCount: 0,
     dietaryIssues: 0,
     ...over,
   });
@@ -347,6 +348,34 @@ describe('readinessCheck', () => {
     const result = readinessCheck(ready(), ctx({ outstandingCount: 3 }));
 
     expect(result.items.find((i) => i.key === 'shopping_done')?.met).toBe(false);
+  });
+
+  /**
+   * "SHOPPING COMPLETE" MUST NOT BE MET BECAUSE THE LIST COULD NOT BE BUILT.
+   *
+   * `outstandingCount` counts lines still to buy. A dish the cascade DROPPED
+   * produces no line at all, so it counts zero — and the job then reads as more
+   * ready than one whose shopping is merely unfinished.
+   *
+   * That was live: a confirmed job whose only dish had no portions allocated
+   * reported "Shopping complete" and 71% ready, with no anomaly. Absence
+   * presented as completeness is the same defect as a guessed number (Rule 8),
+   * and it points the exact opposite way from the truth.
+   */
+  it('does NOT report shopping complete when quantities were blocked', () => {
+    const result = readinessCheck(ready(), ctx({ outstandingCount: 0, blockedCount: 1 }));
+
+    const item = result.items.find((i) => i.key === 'shopping_done');
+    expect(item?.met, 'a blocked shopping list was reported as complete').toBe(false);
+    expect(item?.detail).toContain('could not be worked out');
+  });
+
+  it('a blocked job never scores higher than the same job with shopping to do', () => {
+    // The direction that matters. Blocked is WORSE than outstanding, not better.
+    const blocked = readinessCheck(ready(), ctx({ blockedCount: 1 }));
+    const outstanding = readinessCheck(ready(), ctx({ outstandingCount: 3 }));
+
+    expect(blocked.percentage).toBeLessThanOrEqual(outstanding.percentage);
   });
 
   it('counts unknown revenue as unmet', () => {
@@ -418,6 +447,78 @@ describe('anomalyScan — the BBQ guards, generalised', () => {
     const found = anomalyScan([job], [meat, baps, slaw]);
 
     expect(found.map((a) => a.reason)).not.toContain('mains_below_guests');
+  });
+
+  /**
+   * A DISH THAT SILENTLY LEAVES THE CASCADE.
+   *
+   * `portions: null` normally means "derive from the guest count", and
+   * `applyBuffetSplit` does exactly that — for a main, a dessert or a side. For a
+   * recipe with NO COURSE it cannot, and leaves the dish null. `productionBuckets`
+   * then drops it, so it contributes no prep, no shopping and no food cost.
+   *
+   * Nothing told the owner. The live case: a confirmed job, 20 guests, one
+   * uncoursed lasagne, reporting zero anomalies and "Shopping complete". The dish
+   * was on the menu and absent from every number derived from it.
+   *
+   * This scan runs the SAME `applyBuffetSplit` the cascade runs (Rule 5), so it
+   * flags exactly the dishes that will really be dropped — never one the guest
+   * count would have filled in.
+   */
+  it('flags a dish whose portions cannot be derived, so it does not vanish silently', () => {
+    const uncoursed = makeRecipe('Lasagne', { course: null });
+    const job = makeJob({
+      guests: 20,
+      serviceDate: isoDate('2026-08-23'),
+      dishes: [dish('Lasagne', null)],
+    });
+
+    const found = anomalyScan([job], [uncoursed]);
+    const flagged = found.filter((a) => a.reason === 'unallocated_portions');
+
+    expect(flagged).toHaveLength(1);
+    expect(flagged[0]?.detail).toContain('Lasagne');
+    expect(flagged[0]?.severity).toBe('high');
+  });
+
+  it('does NOT flag a blank main — the guest count fills that one in', () => {
+    // The normal, working case. Flagging it would train him to ignore the flag.
+    const job = makeJob({
+      guests: 27,
+      serviceDate: isoDate('2026-07-22'),
+      dishes: [dish('Burgers', null), dish('Baps', null)],
+    });
+
+    const found = anomalyScan([job], [meat, baps]);
+
+    expect(found.map((a) => a.reason)).not.toContain('unallocated_portions');
+  });
+
+  it('does not flag an uncoursed dish the owner gave an explicit figure', () => {
+    // His number always wins, and nothing is dropped.
+    const uncoursed = makeRecipe('Lasagne', { course: null });
+    const job = makeJob({
+      guests: 20,
+      serviceDate: isoDate('2026-08-23'),
+      dishes: [dish('Lasagne', 20)],
+    });
+
+    expect(anomalyScan([job], [uncoursed]).map((a) => a.reason)).not.toContain(
+      'unallocated_portions',
+    );
+  });
+
+  it('flags an unallocated dish even when the guest count is unknown', () => {
+    // No guest count means nothing can be derived for ANY course, so the dish is
+    // dropped just the same. `no_guest_count` explains why; it does not say that
+    // a dish is going missing because of it.
+    const job = makeJob({
+      guests: null,
+      serviceDate: isoDate('2026-07-22'),
+      dishes: [dish('Burgers', null)],
+    });
+
+    expect(anomalyScan([job], [meat]).map((a) => a.reason)).toContain('unallocated_portions');
   });
 
   it('flags a menu with mains and no sides at all', () => {

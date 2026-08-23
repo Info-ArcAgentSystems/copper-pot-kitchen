@@ -31,6 +31,7 @@ import type {
   IngredientId,
   Job,
   Recipe,
+  RecipeId,
   StockLevel,
   StockQuantity,
   StockUnit,
@@ -58,6 +59,23 @@ export type RequirementGapReason =
 
 export interface RequirementGap {
   readonly reason: RequirementGapReason;
+  /**
+   * WHAT THIS GAP IS ABOUT, as ids rather than prose.
+   *
+   * `detail` is a sentence written for the owner. It reads well and it is not
+   * something another module can safely match on — so a caller needing to know
+   * which recipe or which ingredient a gap concerned had no option but to parse
+   * it, or to treat every gap in the window as relevant to every question.
+   *
+   * That is the gap in the gaps that let Ask Sous answer "no beef mince needed"
+   * for a confirmed job whose lasagne lists 4 kg of it. The `no_portions` gap was
+   * present and correct; nothing could tie it to the ingredient it dropped.
+   *
+   * Both are nullable but always present. An optional field drifts — half the
+   * construction sites set it and nobody notices which half.
+   */
+  readonly recipeId: RecipeId | null;
+  readonly ingredientId: IngredientId | null;
   readonly detail: string;
 }
 
@@ -152,7 +170,12 @@ export function requirementsForRange(
   const plan = productionBuckets(jobs, recipes);
 
   for (const gap of plan.gaps) {
-    gaps.push({ reason: gap.reason, detail: gap.detail });
+    gaps.push({
+      reason: gap.reason,
+      recipeId: gap.recipeId,
+      ingredientId: null,
+      detail: gap.detail,
+    });
   }
 
   for (const bucket of plan.buckets) {
@@ -163,7 +186,15 @@ export function requirementsForRange(
     const scaled = scaleRecipe(recipe, bucket.portions, lookup);
 
     for (const gap of scaled.gaps) {
-      gaps.push({ reason: gap.reason, detail: gap.detail });
+      // `ScaleGap` already carries the recipe it came from, including for a
+      // sub-recipe reached below the bucket's own — which is the one that matters,
+      // not the bucket's.
+      gaps.push({
+        reason: gap.reason,
+        recipeId: gap.recipeId,
+        ingredientId: null,
+        detail: gap.detail,
+      });
     }
 
     for (const line of scaled.lines) {
@@ -171,6 +202,8 @@ export function requirementsForRange(
       if (ingredient === undefined) {
         gaps.push({
           reason: 'missing_ingredient',
+          recipeId: bucket.recipeId,
+          ingredientId: line.ingredientId,
           detail: `no ingredient record for "${line.displayName}"`,
         });
         continue;
@@ -179,6 +212,8 @@ export function requirementsForRange(
       if (line.unit === null) {
         gaps.push({
           reason: 'unresolved_conversion',
+          recipeId: bucket.recipeId,
+          ingredientId: ingredient.id,
           detail: `${ingredient.name}: quantity has no unit`,
         });
         continue;
@@ -188,6 +223,8 @@ export function requirementsForRange(
       if (inStock.kind === 'unresolved') {
         gaps.push({
           reason: 'unresolved_conversion',
+          recipeId: bucket.recipeId,
+          ingredientId: ingredient.id,
           detail: `${ingredient.name}: ${inStock.reason} — ${inStock.detail}`,
         });
         continue;
@@ -210,7 +247,11 @@ export function requirementsForRange(
 
     if (packs.kind === 'unresolved') {
       gaps.push({
+        // No recipe: this is consolidated across every bucket that contributed,
+        // so naming one of them would be arbitrary.
         reason: packs.reason === 'no_pack_size' ? 'no_pack_size' : 'unresolved_conversion',
+        recipeId: null,
+        ingredientId: ingredient.id,
         detail: `${ingredient.name}: ${packs.reason} — ${packs.detail}`,
       });
     }
@@ -330,3 +371,51 @@ function round(value: number): number {
 }
 
 export type { UnresolvedReason };
+
+// ---------------------------------------------------------------------------
+// blocksQuantity
+// ---------------------------------------------------------------------------
+
+/**
+ * A TOTAL map over the reasons, not a switch with a default.
+ *
+ * Same discipline as `GAP_ROUTING` in src/ui/gapRouting.ts, and deliberately a
+ * SECOND map rather than a reuse of it: that one answers "which screen fixes
+ * this", this one answers "does a number exist". They overlap and are not the
+ * same question — `no_pack_size` needs fixing in Ingredients and does not stop
+ * him buying 0.4 kg of flour.
+ *
+ * A reason added to the engine and not classified here stops the build.
+ */
+const BLOCKS_QUANTITY: Record<RequirementGapReason, boolean> = {
+  // The cascade dropped something. There is no figure at all.
+  missing_recipe: true,
+  missing_sub_recipe: true,
+  no_components: true,
+  no_portions_per_batch: true,
+  cycle: true,
+  missing_ingredient: true,
+  unresolved_conversion: true,
+  no_service_date: true,
+  no_portions: true,
+
+  // The figure stands; something beside it was never measured. These are the
+  // "check this yourself" items, and they are PERMANENT for the recipe that has
+  // them — treating them as blockers would mean a job whose card says "salt and
+  // pepper" could never read as ready, which trains him to ignore the signal.
+  unquantified: false,
+  named_unquantified: false,
+  no_pack_size: false,
+};
+
+/**
+ * Did this gap PREVENT a quantity, or merely annotate one that exists?
+ *
+ * Callers asking "is this ready" need the difference. `outstandingShopping`
+ * counts lines still to buy, and a DROPPED line counts zero there — so a job
+ * whose dish left the cascade reads as having nothing left to buy. Absence
+ * presented as completeness is the same defect as a guessed number (Rule 8).
+ */
+export function blocksQuantity(gap: RequirementGap): boolean {
+  return BLOCKS_QUANTITY[gap.reason];
+}

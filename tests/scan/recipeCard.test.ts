@@ -240,3 +240,102 @@ describe('what makes it ready to save', () => {
     expect(review.gaps.some((g) => g.saw === 'La?agne')).toBe(true);
   });
 });
+
+/**
+ * A COURSE THE CARD DID NOT STATE.
+ *
+ * The scanner created the recipe that started all this: a lasagne with
+ * `course: null`, because nothing on the card said "main". Downstream,
+ * `applyBuffetSplit` could not fill the dish's blank portions, `productionBuckets`
+ * dropped it, and a confirmed job for 20 guests produced no beef mince at all.
+ *
+ * WHY THIS WARNS RATHER THAN BLOCKS. `gaps` sets `readyToSave: false`, and the
+ * review screen has no course picker — a gap here would make a perfectly legal
+ * recipe permanently unsaveable with no way to fix it from the screen showing the
+ * refusal. A recipe with no course is legitimate. It simply has a consequence, and
+ * the consequence is what the owner was never told.
+ *
+ * So the warning has to be genuinely non-blocking, and that is the property most
+ * likely to erode: the easiest way to "strengthen" this later is to push it into
+ * `gaps`, which would break saving. Hence the assertions on `readyToSave`.
+ */
+describe('a card with no course warns, and still saves', () => {
+  it('WARNS when the card states no course', () => {
+    const review = reviewRecipeCard(read({ course: null }), owner);
+
+    expect(review.warnings).toHaveLength(1);
+    expect(review.warnings[0]).toMatch(/course/i);
+  });
+
+  it('names the consequence, not just the absence', () => {
+    // "No course was read" alone is a fact about the photograph. What the owner
+    // needs is what it will DO — the thing nobody told him for two days.
+    const [warning = ''] = reviewRecipeCard(read({ course: null }), owner).warnings;
+
+    expect(warning).toMatch(/prep/i);
+    expect(warning).toMatch(/shopping/i);
+    expect(warning).toMatch(/cost/i);
+  });
+
+  it('DOES NOT BLOCK — the recipe is still saveable', () => {
+    const review = reviewRecipeCard(read({ course: null }), owner);
+
+    expect(review.readyToSave).toBe(true);
+    expect(review.gaps).toHaveLength(0);
+  });
+
+  it('WARNS on breakfast too — the other non-derivable course', () => {
+    // The case a null-only check would miss. Breakfast is a choice the owner
+    // records, not a division, so its portions cannot be derived either.
+    const review = reviewRecipeCard(read({ course: 'breakfast' }), owner);
+
+    expect(review.warnings).toHaveLength(1);
+    expect(review.readyToSave).toBe(true);
+  });
+
+  it('says something DIFFERENT for breakfast than for no course', () => {
+    // Same consequence, different cause. One sentence for both would tell the
+    // owner with a breakfast card to go and set a course it already has.
+    const none = reviewRecipeCard(read({ course: null }), owner).warnings[0];
+    const breakfast = reviewRecipeCard(read({ course: 'breakfast' }), owner).warnings[0];
+
+    expect(none).not.toBe(breakfast);
+  });
+
+  it.each(['main', 'side', 'dessert'])('is SILENT for a %s', (course) => {
+    // A warning that fires on the normal case is one he learns to scroll past.
+    expect(reviewRecipeCard(read({ course }), owner).warnings).toHaveLength(0);
+  });
+});
+
+/**
+ * THE DISTINCTNESS GUARD.
+ *
+ * A warning and a gap are opposite instructions: one says "save this and tidy it
+ * after", the other says "this cannot be saved". The same sentence appearing as
+ * both would mean the owner cannot tell which he is being given — the identical
+ * defect as the invoice screen printing "could not be read" for an ingredient it
+ * had simply never heard of.
+ */
+describe('warnings and gaps never say the same thing', () => {
+  it('no warning text appears as a gap label, on any course', () => {
+    for (const course of ['main', 'side', 'dessert', 'breakfast', null]) {
+      // A card with a real gap AND a warning at once, so both lists are populated
+      // and a collision has somewhere to show up.
+      const review = reviewRecipeCard(read({ course, yieldType: null }), owner);
+      const labels = new Set(review.gaps.map((g) => g.label));
+
+      for (const warning of review.warnings) {
+        expect(labels.has(warning), `course ${String(course)}: "${warning}"`).toBe(false);
+      }
+    }
+  });
+
+  it('a warning never makes the recipe unsaveable on its own', () => {
+    // The blocking must come from gaps and only from gaps.
+    const review = reviewRecipeCard(read({ course: null }), owner);
+
+    expect(review.warnings.length).toBeGreaterThan(0);
+    expect(review.readyToSave).toBe(review.gaps.length === 0);
+  });
+});

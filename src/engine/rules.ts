@@ -83,6 +83,57 @@ export function meatEatingGuests(job: Job): number | null {
  * and has real consequences: with 19 guests, a batch dish listed first takes 10 and
  * needs two trays, listed second it takes 9 and needs one.
  */
+/**
+ * Courses `applyBuffetSplit` can fill a blank for.
+ *
+ * `breakfast` is absent on evidence, not by omission — see the note on
+ * `applyBuffetSplit`. A recipe with no course is absent because there is nothing
+ * to divide across: whether two uncoursed dishes are alternatives or are both
+ * served to everyone is not knowable from the record, and guessing either way is
+ * a wrong quantity (Rule 8).
+ */
+const DERIVABLE: ReadonlySet<string> = new Set(['main', 'side', 'dessert']);
+
+/**
+ * Would `applyBuffetSplit` fill this dish's blank portions?
+ *
+ * ---------------------------------------------------------------------------
+ * FOR SCREENS TO ASK BEFORE THEY PROMISE ANYTHING.
+ *
+ * The Portions field says "leave blank to let the guest count decide". For a
+ * recipe this returns false for, that sentence is false, and the consequence is
+ * silent: the dish stays null, `productionBuckets` drops it, and it contributes
+ * no prep, no shopping and no food cost while still sitting on the menu.
+ *
+ * `tests/engine/rules.test.ts` asserts this agrees with `applyBuffetSplit` for
+ * every course, so the two cannot drift apart.
+ * ---------------------------------------------------------------------------
+ */
+export function portionsDerivable(recipe: Recipe | undefined): boolean {
+  return recipe !== undefined && courseDerivable(recipe.course);
+}
+
+/**
+ * The same rule, asked of a COURSE rather than a recipe.
+ *
+ * Two callers have no `Recipe` to hand and would otherwise re-list the courses
+ * themselves: the recipe-card scanner holds a string read off a photograph, and
+ * the Recipes form holds a `<select>` value mid-edit, before any recipe exists.
+ * Both need the answer while the owner can still act on it.
+ *
+ * Takes `string | null` rather than `Course | null` deliberately — the scanner's
+ * value came from a model reading a photograph and is not yet known to be a
+ * course at all. An unrecognised string is NOT derivable: treating it as
+ * splittable on the strength of being non-null is how "pudding" would silently
+ * become a dessert.
+ *
+ * `tests/engine/rules.test.ts` asserts this agrees with both `portionsDerivable`
+ * and `applyBuffetSplit` for every course, so the three cannot drift apart.
+ */
+export function courseDerivable(course: string | null): boolean {
+  return course !== null && DERIVABLE.has(course);
+}
+
 export function applyBuffetSplit(
   guests: number,
   dishes: readonly JobDish[],

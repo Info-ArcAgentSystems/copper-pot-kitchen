@@ -113,24 +113,44 @@ export function ChoiceField({
   value,
   options,
   onChange,
+  hint,
 }: {
   label: string;
   value: string;
   options: readonly { value: string; label: string }[];
   onChange: (value: string) => void;
+  /**
+   * Shown under the control, and wired to it for a screen reader.
+   *
+   * `Field` has carried one since the start; a select had no way to say what a
+   * choice would DO. "No course" was offered as a neutral option with a silent
+   * consequence, which is how a lasagne came to be left off every shopping list.
+   */
+  hint?: string;
 }): ReactNode {
   const id = nextId();
+  const hintId = hint === undefined ? undefined : `${id}-hint`;
 
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
-      <select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
+      <select
+        id={id}
+        value={value}
+        aria-describedby={hintId}
+        onChange={(e) => onChange(e.target.value)}
+      >
         {options.map((o) => (
           <option key={o.value} value={o.value}>
             {o.label}
           </option>
         ))}
       </select>
+      {hint !== undefined && (
+        <p id={hintId} className="hint muted">
+          {hint}
+        </p>
+      )}
     </div>
   );
 }

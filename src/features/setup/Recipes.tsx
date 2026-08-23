@@ -22,6 +22,7 @@ import { ChoiceField, Field } from '../../ui/Field';
 import { RecordForm, RecordScreen } from '../../ui/RecordScreen';
 import { useAsync } from '../../ui/useAsync';
 import { byName, parseCount, parseText, requireText, textValue } from '../../ui/form';
+import { courseDerivable } from '../../engine/rules';
 import { useKitchen } from '../../auth/kitchenState';
 import type {
   Course,
@@ -44,6 +45,30 @@ const COURSES = [
   { value: 'side', label: 'Side' },
   { value: 'dessert', label: 'Dessert' },
 ];
+
+/**
+ * What THIS choice will do, shown only when the choice is consequential.
+ *
+ * A main, a side or a dessert says nothing: a hint that fires on the normal case
+ * is one the owner learns to scroll past, and then misses on the day it matters.
+ * Rule 12 wants the need for a figure obvious AT THE POINT OF USE — which means
+ * when the selection actually costs him something, not permanently.
+ *
+ * `courseDerivable` is asked rather than testing for `''`, so breakfast — which
+ * fails in exactly the same way — is covered without being listed here. A second
+ * copy of {main, side, dessert} in this file is how the form would start
+ * disagreeing with the engine.
+ */
+function courseHint(course: string): string | undefined {
+  if (courseDerivable(course === '' ? null : course)) return undefined;
+
+  const consequence =
+    'the guest count cannot fill in portions, so every job using this recipe needs a portions figure typed in — otherwise the dish is left off prep, shopping and cost.';
+
+  return course === ''
+    ? `Without a course, ${consequence}`
+    : `Breakfast is a choice rather than an even split, so ${consequence}`;
+}
 
 const YIELDS = [
   { value: 'per_person', label: 'Per person' },
@@ -274,7 +299,13 @@ function RecipeForm({ recipe, done }: { recipe: Recipe | null; done: () => void 
       deleteWarningText="Delete this recipe? If another recipe uses it as a sub-recipe, or a job has it on the menu, the database will refuse."
     >
       <Field label="Name" value={name} onChange={setName} required error={nameError} />
-      <ChoiceField label="Course" value={course} options={COURSES} onChange={setCourse} />
+      <ChoiceField
+        label="Course"
+        value={course}
+        options={COURSES}
+        onChange={setCourse}
+        hint={courseHint(course)}
+      />
 
       <ChoiceField label="Yield" value={yieldType} options={YIELDS} onChange={setYieldType} />
       {isBatch && (

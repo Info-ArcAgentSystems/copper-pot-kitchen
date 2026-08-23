@@ -44,6 +44,17 @@ export type ProductionGapReason =
 export interface ProductionGap {
   readonly reason: ProductionGapReason;
   readonly jobId: JobId;
+  /**
+   * The recipe the dropped work belongs to.
+   *
+   * `detail` is a sentence for the owner and must never be the thing another
+   * module matches on. A caller needs to know WHICH recipe was dropped: an
+   * ingredient with no requirement line because its recipe was dropped here, and
+   * one no menu in the window mentions at all, are opposite answers that look
+   * identical without this field. For `missing_recipe` it is the id that failed
+   * to resolve, which is all there is — the recipe is absent by definition.
+   */
+  readonly recipeId: RecipeId;
   readonly detail: string;
 }
 
@@ -162,6 +173,7 @@ export function productionBuckets(
         gaps.push({
           reason: 'missing_recipe',
           jobId: job.id,
+          recipeId: d.recipeId,
           detail: `no recipe found for dish "${d.recipeId}"`,
         });
         continue;
@@ -171,6 +183,7 @@ export function productionBuckets(
         gaps.push({
           reason: 'no_portions',
           jobId: job.id,
+          recipeId: recipe.id,
           detail: `${recipe.name}: portions not allocated`,
         });
         continue;
@@ -181,6 +194,7 @@ export function productionBuckets(
         gaps.push({
           reason: 'no_service_date',
           jobId: job.id,
+          recipeId: recipe.id,
           detail: `${recipe.name}: job has no service date, so no prep date`,
         });
         continue;
@@ -233,6 +247,7 @@ export function productionBuckets(
           gaps.push({
             reason: 'no_portions_per_batch',
             jobId: jid,
+            recipeId: acc.recipe.id,
             detail: `${acc.recipe.name}: batch recipe with no usable portions per batch`,
           });
         }

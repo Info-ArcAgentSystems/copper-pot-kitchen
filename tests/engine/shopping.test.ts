@@ -16,10 +16,12 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  blocksQuantity,
   outstandingShopping,
   requirementsForRange,
   toPurchaseUnits,
 } from '../../src/engine/shopping';
+import type { RequirementGap } from '../../src/engine/shopping';
 import {
   dish,
   ingredientId,
@@ -30,6 +32,7 @@ import {
   makeJob,
   makeRecipe,
   purchaseUnit,
+  recipeId,
   stockLevel,
   stockQty,
   stockUnit,
@@ -250,6 +253,86 @@ describe('requirementsForRange — gaps, never a zero line', () => {
     expect(gaps.map((g) => g.reason)).toContain('missing_recipe');
   });
 
+  /**
+   * GAPS CARRY IDENTITY, not just prose.
+   *
+   * `detail` is a sentence for the owner. It is not something another module can
+   * safely match on — and a caller that needs to know WHICH recipe or WHICH
+   * ingredient a gap concerns had no option but to parse that sentence.
+   *
+   * That is what let Ask Sous answer "no beef mince needed" for a job whose
+   * lasagne lists 4 kg of it: the gap saying the lasagne had no portions was
+   * present and correct, and unattributable to the ingredient it dropped.
+   */
+  it('attributes a dropped recipe to its recipe id', () => {
+    const jobs = [jobOn('a', '2026-07-22', [dish('Vague', null)])];
+    const uncoursed = makeRecipe('Vague', {
+      course: null,
+      yieldType: 'per_person',
+      sameDayOnly: true,
+      components: [
+        ingredientLine('flour', 400, 'g', { ingredientId: ingredientId('flour') }),
+      ],
+    });
+
+    const { gaps } = requirementsForRange(jobs, [uncoursed], [flour]);
+    const gap = gaps.find((g) => g.reason === 'no_portions');
+
+    expect(gap?.recipeId).toBe(recipeId('Vague'));
+    expect(gap?.ingredientId).toBeNull();
+  });
+
+  it('attributes an unresolvable conversion to the ingredient it dropped', () => {
+    const noFactor = makeIngredient({
+      id: ingredientId('mystery'),
+      name: 'mystery',
+      stockUnit: stockUnit('kg'),
+      recipeUnit: 'each' as never,
+      recipeUnitsPerStockUnit: null,
+    });
+    const recipe = makeRecipe('R', {
+      yieldType: 'per_person',
+      sameDayOnly: true,
+      components: [
+        ingredientLine('mystery', 3, 'each', { ingredientId: ingredientId('mystery') }),
+      ],
+    });
+    const jobs = [jobOn('a', '2026-07-22', [dish('R', 1)])];
+
+    const gap = requirementsForRange(jobs, [recipe], [noFactor]).gaps.find(
+      (g) => g.reason === 'unresolved_conversion',
+    );
+
+    expect(gap?.ingredientId).toBe(ingredientId('mystery'));
+    expect(gap?.recipeId).toBe(recipeId('R'));
+  });
+
+  it('attributes a missing ingredient record to the id that had no record', () => {
+    const orphan = makeRecipe('Orphan', {
+      yieldType: 'per_person',
+      sameDayOnly: true,
+      components: [ingredientLine('ghost', 100, 'g', { ingredientId: ingredientId('ghost') })],
+    });
+    const jobs = [jobOn('a', '2026-07-22', [dish('Orphan', 1)])];
+
+    const gap = requirementsForRange(jobs, [orphan], [flour]).gaps.find(
+      (g) => g.reason === 'missing_ingredient',
+    );
+
+    expect(gap?.ingredientId).toBe(ingredientId('ghost'));
+  });
+
+  it('attributes a dangling dish to the recipe id that did not resolve', () => {
+    const jobs = [jobOn('a', '2026-07-22', [dish('Nonexistent', 4)])];
+
+    const gap = requirementsForRange(jobs, [], [flour]).gaps.find(
+      (g) => g.reason === 'missing_recipe',
+    );
+
+    // The id is all there is — the recipe itself is absent by definition.
+    expect(gap?.recipeId).toBe(recipeId('Nonexistent'));
+  });
+
   it('still lists an ingredient with no pack size, gapping only the pack count', () => {
     const unpacked = makeIngredient({
       id: ingredientId('flour'),
@@ -361,5 +444,65 @@ describe('outstandingShopping', () => {
 
     expect(out?.outstanding).toEqual({ value: 2.5, unit: 'kg' });
     expect(out?.unreconciled).toBe(0);
+  });
+});
+
+/**
+ * blocksQuantity — did this gap PREVENT a number, or merely annotate one?
+ *
+ * The two kinds look alike in the gaps list and mean opposite things to anything
+ * asking "is this job ready".
+ *
+ *   prevented  — the cascade dropped something. There is no figure, and there is
+ *                a screen that fixes it.
+ *   annotated  — the figure is fine; a named item was never measured, or a pack
+ *                size is unset. He judges it, and it is PERMANENT for that
+ *                recipe. Counting it as a blocker would mean a job with salt and
+ *                pepper on the card could never read as ready.
+ *
+ * A TOTAL map, like GAP_ROUTING: a reason added to the engine and not classified
+ * here stops the build, rather than silently becoming one or the other.
+ */
+describe('blocksQuantity', () => {
+  const gap = (reason: RequirementGap['reason']): RequirementGap => ({
+    reason,
+    recipeId: null,
+    ingredientId: null,
+    detail: 'x',
+  });
+
+  it.each([
+    'missing_recipe',
+    'missing_sub_recipe',
+    'no_components',
+    'no_portions_per_batch',
+    'cycle',
+    'missing_ingredient',
+    'unresolved_conversion',
+    'no_service_date',
+    'no_portions',
+  ] as const)('%s prevented a quantity', (reason) => {
+    expect(blocksQuantity(gap(reason))).toBe(true);
+  });
+
+  it.each(['unquantified', 'named_unquantified', 'no_pack_size'] as const)(
+    '%s annotates a quantity that still exists',
+    (reason) => {
+      expect(blocksQuantity(gap(reason))).toBe(false);
+    },
+  );
+
+  it('classifies EVERY reason — none falls through', () => {
+    const all: RequirementGap['reason'][] = [
+      'unquantified', 'named_unquantified', 'missing_sub_recipe', 'no_portions_per_batch',
+      'no_components', 'cycle', 'missing_recipe', 'no_service_date', 'no_portions',
+      'missing_ingredient', 'unresolved_conversion', 'no_pack_size',
+    ];
+
+    for (const reason of all) {
+      expect(typeof blocksQuantity(gap(reason)), `"${reason}" was not classified`).toBe(
+        'boolean',
+      );
+    }
   });
 });

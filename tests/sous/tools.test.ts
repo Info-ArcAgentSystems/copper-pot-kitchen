@@ -25,6 +25,7 @@ import type {
   PurchaseUnit,
   Recipe,
   RecipeId,
+  RecipeIngredientLine,
   RecipeLineId,
   RecipeUnit,
   StockUnit,
@@ -543,5 +544,241 @@ describe('RULE 7 — committing', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error).toContain('database refused');
+  });
+});
+
+/**
+ * A BLOCKED QUANTITY IS NOT A ZERO ONE.
+ *
+ * The reported defect: Ask Sous answered "no beef mince needed" for a CONFIRMED
+ * job, 20 guests, Beef Lasagne on the menu, beef mince priced and listed on the
+ * recipe at 4 kg.
+ *
+ * Nothing in the data was wrong in the way the answer implied. The dish carried
+ * no explicit portions — the normal state, meaning "derive from the guest count"
+ * — and the recipe had no `course`, so `applyBuffetSplit` could not derive them
+ * and left them null. `productionBuckets` then dropped the dish with a
+ * `no_portions` gap, so no bucket existed, so `requirementsForRange` produced no
+ * line for the mince.
+ *
+ * The ENGINE was right at every step: it reported the gap. `howMuch` looked only
+ * at `lines`, found nothing, and said `none_needed` — whose own sentence claims
+ * "nothing on the confirmed jobs in those dates uses it". That is a false
+ * statement about the kitchen, and the exact class of defect Rules 8 and 12 exist
+ * to prevent: an unresolved input presented as a settled figure.
+ */
+describe('how_much_ingredient — blocked is not zero', () => {
+  const uncoursedLasagne: Recipe = { ...lasagne, course: null };
+
+  /** The mince line off `lasagne`, typed, so a variant can restate one field. */
+  const minceLine = lasagne.components[0] as RecipeIngredientLine;
+
+  const askAbout = (d: SousData, ingredient = 'mince') => {
+    const result = runIntent(d, {
+      tool: 'how_much_ingredient',
+      args: { ingredient, from: '2026-08-01' as IsoDate, to: '2026-08-31' as IsoDate },
+    });
+
+    expect(result?.kind).toBe('how_much');
+    return result?.kind === 'how_much' ? result.value : null;
+  };
+
+  /** The reported case, reduced: portions unallocated, recipe uncoursed. */
+  const unallocated = (over: Partial<Job> = {}): SousData =>
+    data({
+      recipes: [uncoursedLasagne],
+      jobs: [
+        job({
+          status: 'confirmed',
+          guests: 20,
+          dishes: [
+            {
+              id: 'd1' as JobDishId,
+              jobId: 'j1' as JobId,
+              recipeId: 'lasagne' as RecipeId,
+              portions: null,
+              note: null,
+              position: 0,
+            },
+          ],
+          ...over,
+        }),
+      ],
+    });
+
+  it('REGRESSION: does not say "none needed" when the recipe uses it', () => {
+    const value = askAbout(unallocated());
+
+    expect(value?.state, 'a blocked quantity was reported as zero').not.toBe('none_needed');
+    expect(value?.state).toBe('blocked');
+  });
+
+  it('names the recipe that uses it, so the answer is actionable', () => {
+    const value = askAbout(unallocated());
+
+    if (value?.state !== 'blocked') return;
+    expect(value.name).toBe('mince');
+    expect(value.usedBy).toEqual(['Lasagne']);
+  });
+
+  it('carries only the gaps that actually blocked THIS ingredient', () => {
+    // A gap about an unrelated recipe is not a reason his mince is blocked.
+    // Without gap identity the honest fallback is to dump every gap in the
+    // window, and "Salt & pepper has no quantity" would be offered as the reason.
+    const unrelated: Recipe = {
+      ...lasagne,
+      id: 'trifle' as RecipeId,
+      name: 'Trifle',
+      course: null,
+      components: [],
+      unquantified: [{ id: 'u1' as never, item: 'Salt & pepper', reason: null }],
+    };
+
+    const d = data({
+      recipes: [uncoursedLasagne, unrelated],
+      jobs: [
+        job({
+          status: 'confirmed',
+          guests: 20,
+          dishes: [
+            {
+              id: 'd1' as JobDishId,
+              jobId: 'j1' as JobId,
+              recipeId: 'lasagne' as RecipeId,
+              portions: null,
+              note: null,
+              position: 0,
+            },
+            {
+              id: 'd2' as JobDishId,
+              jobId: 'j1' as JobId,
+              recipeId: 'trifle' as RecipeId,
+              portions: null,
+              note: null,
+              position: 1,
+            },
+          ],
+        }),
+      ],
+    });
+
+    const value = askAbout(d);
+
+    if (value?.state !== 'blocked') return;
+    expect(value.blockers.map((g) => g.reason)).toEqual(['no_portions']);
+    expect(value.blockers[0]?.detail).toContain('Lasagne');
+    expect(value.blockers.some((g) => g.detail.includes('Trifle'))).toBe(false);
+  });
+
+  it('blocks when the component itself has no quantity', () => {
+    // The other route to no line. The recipe plainly lists mince; the card just
+    // never said how much. "None needed" would be as wrong here as above.
+    const vague: Recipe = {
+      ...lasagne,
+      components: [{ ...minceLine, qty: null, unit: null }],
+    };
+
+    const value = askAbout(data({ recipes: [vague] }));
+
+    expect(value?.state).toBe('blocked');
+    if (value?.state !== 'blocked') return;
+    expect(value.blockers.map((g) => g.reason)).toContain('unquantified');
+  });
+
+  it('blocks when the ingredient cannot be converted into its stock unit', () => {
+    // Rule 4's failure mode: the line exists on the recipe and cannot cross into
+    // stock units, so requirementsForRange drops it with a gap.
+    const noFactor: Ingredient = {
+      ...mince,
+      recipeUnit: 'each' as RecipeUnit,
+      recipeUnitsPerStockUnit: null,
+    };
+    const perEach: Recipe = {
+      ...lasagne,
+      components: [{ ...minceLine, unit: 'each' as RecipeUnit }],
+    };
+
+    const value = askAbout(data({ recipes: [perEach], ingredients: [noFactor] }));
+
+    expect(value?.state).toBe('blocked');
+    if (value?.state !== 'blocked') return;
+    expect(value.blockers.map((g) => g.reason)).toContain('unresolved_conversion');
+  });
+
+  it('STILL says none_needed when nothing in the window genuinely uses it', () => {
+    // The other half of the fix. `none_needed` is a real answer and must survive
+    // — replacing it with a blanket "cannot say" would be its own defect.
+    const saffron: Ingredient = { ...mince, id: 'saffron' as IngredientId, name: 'saffron' };
+    const value = askAbout(data({ ingredients: [mince, saffron] }), 'saffron');
+
+    expect(value?.state).toBe('none_needed');
+  });
+
+  it('says none_needed when the window holds no jobs at all', () => {
+    const result = runIntent(data({ jobs: [] }), {
+      tool: 'how_much_ingredient',
+      args: { ingredient: 'mince', from: '2026-08-01' as IsoDate, to: '2026-08-31' as IsoDate },
+    });
+
+    expect(result?.kind).toBe('how_much');
+    if (result?.kind !== 'how_much') return;
+    expect(result.value.state).toBe('none_needed');
+  });
+
+  it('finds an ingredient only a SUB-recipe uses', () => {
+    // The usage walk goes through sub-recipes, so a parent that never names the
+    // mince still counts as using it.
+    const ragu: Recipe = { ...lasagne, id: 'ragu' as RecipeId, name: 'Ragu', course: null };
+    const bake: Recipe = {
+      ...lasagne,
+      id: 'bake' as RecipeId,
+      name: 'Pasta Bake',
+      course: null,
+      components: [
+        {
+          id: 'b1' as RecipeLineId,
+          kind: 'sub_recipe',
+          subRecipeId: 'ragu' as RecipeId,
+          displayName: 'Ragu',
+          qty: 1,
+          unit: null,
+          position: 0,
+        },
+      ],
+    };
+
+    const d = data({
+      recipes: [ragu, bake],
+      jobs: [
+        job({
+          status: 'confirmed',
+          guests: 20,
+          dishes: [
+            {
+              id: 'd1' as JobDishId,
+              jobId: 'j1' as JobId,
+              recipeId: 'bake' as RecipeId,
+              portions: null,
+              note: null,
+              position: 0,
+            },
+          ],
+        }),
+      ],
+    });
+
+    const value = askAbout(d);
+
+    expect(value?.state).toBe('blocked');
+    if (value?.state !== 'blocked') return;
+    expect(value.usedBy).toEqual(['Pasta Bake']);
+  });
+
+  it('ignores a cancelled job when deciding that nothing uses it', () => {
+    // productionBuckets drops cancelled jobs, so no line exists for one — and the
+    // usage walk must agree, or a cancelled job would block every answer forever.
+    const value = askAbout(unallocated({ status: 'cancelled' }));
+
+    expect(value?.state).toBe('none_needed');
   });
 });

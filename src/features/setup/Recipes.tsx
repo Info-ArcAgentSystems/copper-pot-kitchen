@@ -15,7 +15,7 @@
  */
 
 import { useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabaseDb } from '../../data/client';
 import { ingredientRepository, recipeRepository } from '../../data/repositories';
 import { ChoiceField, Field } from '../../ui/Field';
@@ -83,6 +83,30 @@ const CONFIDENCE = [
 
 export function Recipes(): ReactNode {
   const repo = recipeRepository(supabaseDb());
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  /*
+   * A DRAFT ARRIVING FROM THE MENU SEARCH.
+   *
+   * Carried in router state rather than saved anywhere: a web recipe is someone
+   * else's portions, and it must not reach shopping, prep or cost before he has
+   * looked at it. `confidence` cannot enforce that — nothing in the engine reads
+   * it — so the guarantee is that no row exists until he presses save here.
+   *
+   * The cost is honest: navigating away loses the draft. That is the same trade
+   * the Ask Sous proposal makes, and for the same reason.
+   */
+  const draft = (location.state as { draft?: Recipe } | null)?.draft ?? null;
+
+  if (draft !== null) {
+    return (
+      <RecipeForm
+        recipe={draft}
+        done={() => navigate('/recipes', { replace: true, state: null })}
+      />
+    );
+  }
 
   return (
     <>
@@ -90,6 +114,8 @@ export function Recipes(): ReactNode {
           the bar is already at its width limit. */}
       <p className="muted">
         <Link to="/scan/recipe-card">Scan a recipe card from a photo</Link>
+        {' · '}
+        <Link to="/scan/menu">Find recipes from a menu</Link>
       </p>
     <RecordScreen<Recipe>
       title="Recipes"

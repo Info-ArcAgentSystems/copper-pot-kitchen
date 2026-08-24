@@ -19,7 +19,7 @@
  */
 
 import { matchByName } from '../engine/nameMatch';
-import { courseDerivable } from '../engine/rules';
+import { courseWarnings } from './courseWarning';
 import type { Ingredient, RecipeUnit, YieldType } from '../engine/types';
 import type { Gap, Resolved } from './jobSheet';
 
@@ -215,35 +215,9 @@ export function reviewRecipeCard(
     method: read.method,
     gaps,
     newThings,
-    warnings: courseWarnings(read.course),
+    warnings: courseWarnings(read.course, 'off the card'),
     // Warnings are deliberately absent from this. See `warnings` on the type.
     readyToSave: gaps.length === 0,
   };
 }
 
-/**
- * What a non-derivable course will cost him, said before he saves it.
- *
- * THE RECIPE THAT STARTED THIS came off this scanner with `course: null`, because
- * nothing on the card said "main". `applyBuffetSplit` could then not fill the
- * dish's blank portions on a confirmed job for 20 guests, `productionBuckets`
- * dropped it, and the beef mince it needed never appeared on any shopping list.
- * Every screen downstream was correct and every one of them was silent.
- *
- * Asks `courseDerivable` rather than testing for null, so the breakfast case —
- * which fails identically and is easy to forget — is covered by construction.
- *
- * Two sentences, not one: the consequence is shared but the cause is not, and
- * telling an owner whose card says "Breakfast" to go and set a course would send
- * him to look at a field that is already filled in.
- */
-function courseWarnings(course: string | null): readonly string[] {
-  if (courseDerivable(course)) return [];
-
-  const consequence =
-    'the guest count cannot fill in its portions, so every job using it needs a portions figure typed in — otherwise the dish is left off prep, shopping and cost.';
-
-  return course === null || course.trim() === ''
-    ? [`No course was read off the card. Set one in Recipes after saving: without it, ${consequence}`]
-    : [`This was read as a ${course}. A ${course} is a choice rather than an even split, so ${consequence}`];
-}

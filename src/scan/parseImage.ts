@@ -36,6 +36,11 @@ export type RecipeCardReply =
   | { readonly kind: 'read'; readonly read: RecipeCardRead }
   | { readonly kind: 'unresolved'; readonly reason: string };
 
+/** The menu mode: dish NAMES only, and nothing about what they contain. */
+export type MenuReply =
+  | { readonly kind: 'read'; readonly dishes: readonly string[] }
+  | { readonly kind: 'unresolved'; readonly reason: string };
+
 export type InvoiceReply =
   | { readonly kind: 'read'; readonly read: InvoiceRead }
   | { readonly kind: 'unresolved'; readonly reason: string };
@@ -217,7 +222,7 @@ export interface ScanOptions {
  */
 async function postScan(
   image: string,
-  mode: 'job_sheet' | 'recipe_card' | 'invoice',
+  mode: 'job_sheet' | 'recipe_card' | 'invoice' | 'menu',
   options: ScanOptions,
 ): Promise<{ ok: true; body: unknown } | { ok: false; reason: string }> {
   const send = options.send ?? fetch;
@@ -401,4 +406,35 @@ export function validateInvoice(raw: unknown): InvoiceReply {
 export async function parseInvoice(image: string, options: ScanOptions): Promise<InvoiceReply> {
   const sent = await postScan(image, 'invoice', options);
   return sent.ok ? validateInvoice(sent.body) : { kind: 'unresolved', reason: sent.reason };
+}
+
+
+// ---------------------------------------------------------------------------
+// Menu — names only
+// ---------------------------------------------------------------------------
+
+/**
+ * The narrowest validator here, and deliberately so.
+ *
+ * A menu gives NAMES. Anything the model might add about what a dish contains
+ * would be memory rather than reading, and this mode has no field for it to land
+ * in. Blank entries are dropped rather than kept as empty strings: a nameless
+ * dish is nothing to search for.
+ */
+export function validateMenu(raw: unknown): MenuReply {
+  const envelope = unwrap(raw);
+  if (!envelope.ok) return { kind: 'unresolved', reason: envelope.reason };
+
+  const dishes = Array.isArray(envelope.read['dishes'])
+    ? envelope.read['dishes']
+        .map((d) => text(d))
+        .filter((d): d is string => d !== null)
+    : [];
+
+  return { kind: 'read', dishes };
+}
+
+export async function parseMenu(image: string, options: ScanOptions): Promise<MenuReply> {
+  const sent = await postScan(image, 'menu', options);
+  return sent.ok ? validateMenu(sent.body) : { kind: 'unresolved', reason: sent.reason };
 }

@@ -355,8 +355,63 @@ Matching happens elsewhere.
 
 Return the invoice tool. There is nothing else to return.`;
 
+
 /**
- * The three modes.
+ * MENU — names only.
+ *
+ * The narrowest mode in the function, and deliberately so. It reads what the
+ * dishes are CALLED and nothing else: no ingredients, no quantities, no guesses
+ * about what a dish contains. Those come later, from a page with an address,
+ * where the owner can check them.
+ *
+ * A menu that says "Lasagne" tells you a name. Anything more is the model filling
+ * in from memory, which is the one thing this whole feature has to refuse.
+ */
+const MENU_TOOL = [
+  {
+    type: 'function',
+    function: {
+      name: 'read_menu',
+      description: 'Report the dish names printed on this menu. Names only.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['dishes', 'uncertain'],
+        properties: {
+          dishes: {
+            type: 'array',
+            description:
+              'Each dish name EXACTLY as printed, in order. Do not expand, translate, correct or describe them.',
+            items: { type: 'string' },
+          },
+          uncertain: {
+            type: 'array',
+            description: 'Anything you could not read clearly.',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['field', 'saw'],
+              properties: {
+                field: { type: 'string' },
+                saw: { type: ['string', 'null'] },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+];
+
+const MENU_SYSTEM = `You read menus. You report the dish NAMES and nothing else.
+
+You do not list ingredients. You do not say what a dish contains. You do not
+guess at a dish you cannot read — it goes in uncertain.
+
+Return the read_menu tool. There is nothing else to return.`;
+
+/**
+ * The four modes.
  *
  * One function, because everything around the tool is identical — the same key,
  * the same CORS, the same argument parse, the same error surface. Three
@@ -367,6 +422,7 @@ const MODES: Record<string, { tools: unknown; system: string; ask: string }> = {
   job_sheet: { tools: JOB_SHEET_TOOL, system: JOB_SHEET_SYSTEM, ask: 'Read this job sheet.' },
   recipe_card: { tools: RECIPE_CARD_TOOL, system: RECIPE_CARD_SYSTEM, ask: 'Read this recipe card.' },
   invoice: { tools: INVOICE_TOOL, system: INVOICE_SYSTEM, ask: 'Read this invoice.' },
+  menu: { tools: MENU_TOOL, system: MENU_SYSTEM, ask: 'Read the dish names off this menu.' },
 };
 
 serve(async (request: Request): Promise<Response> => {

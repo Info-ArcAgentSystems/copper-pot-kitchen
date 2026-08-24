@@ -30,6 +30,7 @@ import { Dashboard } from './features/dashboard/Dashboard';
 import { ScanJobSheet } from './features/scan/ScanJobSheet';
 import { ScanRecipeCard } from './features/scan/ScanRecipeCard';
 import { ScanInvoice } from './features/scan/ScanInvoice';
+import { ScanMenu } from './features/scan/ScanMenu';
 import { Shopping } from './features/shopping/Shopping';
 import { Prep } from './features/prep/Prep';
 import { Packing } from './features/packing/Packing';
@@ -113,6 +114,7 @@ export default function App(): ReactNode {
               <Route path="/scan/job-sheet" element={<ScanJobSheet />} />
               <Route path="/scan/recipe-card" element={<ScanRecipeCard />} />
               <Route path="/scan/invoice" element={<ScanInvoice />} />
+              <Route path="/scan/menu" element={<ScanMenu />} />
               <Route path="/prep" element={<Prep />} />
               <Route path="/shopping" element={<Shopping />} />
               <Route path="/packing" element={<Packing />} />

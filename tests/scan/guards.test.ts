@@ -377,3 +377,61 @@ describe('RULE 8 — a malformed reply becomes a gap, never a value', () => {
     expect(reply.read.dishes).toEqual([]);
   });
 });
+
+/**
+ * `find-recipes` — the search function, and the two things it must never offer.
+ *
+ * The schema is where a temptation becomes a capability. A field the model could
+ * fill by computing is a field it will fill by computing, and the invoice mode
+ * already proved that: asking for cents inside a prompt saying "you do not
+ * calculate" produced exactly the calculation it forbade.
+ */
+describe('find-recipes offers the model nothing to compute with', () => {
+  const source = readFileSync(
+    fileURLToPath(new URL('../../supabase/functions/find-recipes/index.ts', import.meta.url)),
+    'utf8',
+  );
+
+  it.each(['guests', 'scaleTo', 'targetPortions', 'portionsWanted', 'servings_needed'])(
+    'has no %s field for a scaled quantity',
+    (field) => {
+      expect(source).not.toContain(field);
+    },
+  );
+
+  it('REQUIRES a source URL on every candidate', () => {
+    // The one guard between "found on a page" and "recalled from memory". The
+    // client refuses a candidate without one; this makes the schema ask for it
+    // too, so the refusal is not the only thing standing there.
+    expect(source).toContain("'sourceUrl'");
+    expect(source).toMatch(/required:\s*\[[^\]]*'sourceUrl'/);
+  });
+
+  it('does not ask for the method text', () => {
+    // Ingredient lists and quantities are facts. Instructions are someone's
+    // writing, and copying them into a private database is reproduction. The
+    // owner gets the link instead.
+    const schema = source.slice(source.indexOf('const FIND_TOOL'), source.indexOf('const SYSTEM'));
+
+    expect(schema).not.toContain('method');
+    expect(schema).not.toContain('instructions');
+    expect(schema).not.toContain('steps');
+  });
+
+  it('answers the CORS preflight before the method check', () => {
+    // The failure that broke the first ask-sous deploy, invisible to curl.
+    const preflight = source.indexOf("request.method === 'OPTIONS'");
+    const methodCheck = source.indexOf("request.method !== 'POST'");
+
+    expect(preflight).toBeGreaterThan(-1);
+    expect(preflight).toBeLessThan(methodCheck);
+  });
+
+  it('does no arithmetic of its own', () => {
+    const stripped = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+
+    for (const token of ['Math.round', 'Math.ceil', 'Math.floor', '* ', ' / ']) {
+      expect(stripped, `find-recipes uses ${token}`).not.toContain(token);
+    }
+  });
+});

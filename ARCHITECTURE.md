@@ -80,6 +80,7 @@ session reads to work out where things stand.
 | 23 Aug 2026 | Phase 7 — **the dashboard**, the last §4 feature. Assembly only: it adds no arithmetic and no engine code. Fourth row on the derived guard and the strictest — it persists **nothing at all**, not even a tick. Dashboard takes `/` and the first tab ("Today"); Jobs moves to `/jobs`, one tap deeper, to hold the bar at eight. **1116 unit** |
 | 23 Aug 2026 | **Ask Sous keeps its conversation across tabs, and reads as a chat.** Transcript in a provider above the router; the live proposal stays in the component so it cannot outlive the snapshot it was computed from. Chat transcript styling in the new design system — and no new surface for model output: question is the owner's text, preamble is digit-free and pre-engine, everything else is `renderAnswer` over engine output. A streamed reply was declined for that reason. **1129 unit** |
 | 23 Aug 2026 | Phase 6 closes — **recipe search from a menu**, the last AI feature. Fourth `parse-image` mode (`menu`, names only) plus a NEW `find-recipes` function on OpenAI hosted search. `webRecipe.ts` is the hardest flag-never-invent surface built: "1 onion" and "a splash of oil" go to unquantified by name, "2 cups" keeps its own unit for `units.ts` to refuse later, and **a candidate with no source URL never becomes a review at all**. Nothing is written — a draft opens in the recipe editor for Paul to save himself, because `confidence` cannot enforce "not until confirmed". Method prose is not imported; the link goes in `note`. **1164 unit** |
+| 23 Aug 2026 | **Recipe search fixed, and a diagnostics hole closed.** `find-recipes` returned 404 on every call: `gpt-4o-search-preview` was shut down 2026-07-23, and that family does not support function calling anyway. Moved to `/v1/responses` + `gpt-5.6-terra` + `tools: [{type:'web_search'}]`. `webRecipe.ts` and its 26 tests were untouched — the review layer never knew where the JSON came from. All three functions now surface the upstream error body; a status with no body had cost two diagnoses. **1170 unit** |
 | | *Next: the four owner questions — two block golden tests; and the `confidence` decision above* |
 
 ---
@@ -144,6 +145,60 @@ needed**. It reports parse errors as `error` and exits 1.
 imports, which is why the projects include only `src`, `tests` and `vite.config.ts`. So type
 errors inside a function are not caught locally — syntax errors are, and that is the failure
 mode that actually bites.
+
+### `find-recipes` IS ON A DATED DEPENDENCY — RE-CHECK IT
+
+**This is the one file in the repo whose correctness expires.** Every other module
+is right or wrong on its own terms; this one names a third-party model that OpenAI
+retires on its own schedule.
+
+It has already happened once. The first version named `gpt-4o-search-preview`,
+which was correct when written and **shut down on 2026-07-23** — so the feature
+shipped and returned `404 model_not_found` on every call, a fortnight after the
+model went away. Fixing the name alone would not have been enough either: the
+search-preview family supports `streaming`, `structured_outputs` and `image_input`
+but **not function calling**, so the structured candidate list would then have
+failed with a 400.
+
+Current shape, and why each part:
+
+| | |
+|---|---|
+| endpoint | `https://api.openai.com/v1/responses` — hosted search does not exist on chat completions |
+| model | `gpt-5.6-terra` — OpenAI's named replacement for the retired search-preview models |
+| tool | `tools: [{ type: 'web_search' }]` — **not** `web_search_preview`, which remains for legacy callers and lacks the newer controls |
+| output | Responses-API structured output (`text.format.json_schema`, `strict: true`) |
+
+`tests/scan/guards.test.ts` pins the model string and forbids any name containing
+`preview`. That makes a change deliberate and visible in review; **it cannot prove
+OpenAI still serves the model**, and no unit test can without making a live call.
+
+**When to re-check:** any time this function starts returning 502, and otherwise
+whenever the deprecations page is being read for another reason. The symptom is
+unmistakable now that the body is surfaced — the error text will say
+`model_not_found` in as many words.
+
+`ask-sous` and `parse-image` are on `gpt-4o`, which is **not** deprecated as of
+23 Aug 2026 — only the dated snapshot `gpt-4o-2024-05-13` has a shutdown date
+(2026-10-23), and neither function pins a snapshot.
+
+### NEVER SWALLOW AN UPSTREAM ERROR
+
+All three functions now read the OpenAI error body, truncate it to 600 characters,
+`console.error` it and return it in `reason`. A guard asserts all four steps in
+each file.
+
+This cost two diagnoses. `parse-image` reported "the model could not be reached
+(404)" in August and `find-recipes` reported "refused the request (404)" in the
+same month. Both messages were true and both were useless: a status alone does not
+distinguish a retired model from a revoked key from a malformed payload, and the
+second diagnosis had to be done from OpenAI's documentation because the answer had
+been read and thrown away.
+
+The helper is written out in each function rather than imported from `_shared/`.
+Two of the three WORK and the owner depends on them; a bundling mistake on a
+shared import would take them down, and twelve duplicated lines is the cheaper
+risk.
 
 ### The AI provider is OpenAI
 

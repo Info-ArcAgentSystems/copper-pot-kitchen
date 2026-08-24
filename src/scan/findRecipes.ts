@@ -1,6 +1,14 @@
 /**
  * Asking the search function for candidate recipes.
  *
+ * THE SHAPE THIS PARSES IS THE FUNCTION'S, NOT OPENAI'S. `find-recipes` unwraps
+ * the Responses-API envelope server-side and hands back `{candidates}` or
+ * `{reason}`. That boundary is why moving from chat completions to
+ * `/v1/responses` — a different endpoint, a different model, a different
+ * response shape — changed nothing below this comment, and nothing at all in
+ * `webRecipe.ts` or its tests. The review layer never knew where the JSON came
+ * from, which is the point of having one.
+ *
  * Node-pure: no browser globals, so the narrowing below is testable without a
  * network. Mirrors `parseImage.ts` — one transport, a validator that reports a
  * bad shape rather than swallowing it, and a refusal returned as a value rather

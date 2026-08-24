@@ -432,6 +432,40 @@ serve(async (request: Request): Promise<Response> => {
       headers: { 'content-type': 'application/json', ...CORS },
     });
 
+  /**
+   * WHAT THE UPSTREAM ACTUALLY SAID.
+   *
+   * This hole cost two diagnoses. This function reported "the model could not be
+   * reached (404)" in August and `find-recipes` reported "refused the request
+   * (404)" a fortnight later — both true, both useless, because a status alone
+   * does not distinguish a retired model from a revoked key from a malformed
+   * payload. The answer was in a body that was read and thrown away.
+   *
+   * Truncated, because an upstream error page can be a megabyte of HTML. Logged
+   * as well as returned, so it survives in the dashboard after the screen has
+   * moved on.
+   *
+   * Written out here rather than imported from `_shared/`: this function WORKS and
+   * the owner depends on it, and a bundling mistake on a shared import would take
+   * it down. Twelve duplicated lines is the cheaper risk.
+   */
+  const upstreamFailed = async (upstream: Response): Promise<Response> => {
+    let said = '(the error body could not be read)';
+    try {
+      const raw = await upstream.text();
+      if (raw.trim() !== '') said = raw.slice(0, 600);
+    } catch {
+      // A failure to read the failure is not worth a throw.
+    }
+
+    console.error(`parse-image: OpenAI ${upstream.status} — ${said}`);
+    return json(
+      { reason: `The model could not be reached (${upstream.status}). It said: ${said}` },
+      502,
+    );
+  };
+
+
   // The preflight. Answered before anything else, including the method check —
   // an OPTIONS falling through to "POST only" is what broke the first ask-sous
   // deploy, and it is invisible to curl.
@@ -500,9 +534,7 @@ serve(async (request: Request): Promise<Response> => {
     }),
   });
 
-  if (!upstream.ok) {
-    return json({ reason: `The model could not be reached (${upstream.status}).` }, 502);
-  }
+  if (!upstream.ok) return upstreamFailed(upstream);
 
   const result = (await upstream.json()) as {
     choices?: {

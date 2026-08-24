@@ -435,3 +435,87 @@ describe('find-recipes offers the model nothing to compute with', () => {
     }
   });
 });
+
+/**
+ * THE DATED DEPENDENCY.
+ *
+ * `find-recipes` is the one file in this repo whose correctness expires. The
+ * first version named `gpt-4o-search-preview`, which was correct when it was
+ * written and SHUT DOWN on 2026-07-23 — so the feature shipped broken and
+ * returned 404 on every call, a fortnight after the model went away.
+ *
+ * What a test can do here is narrow. It cannot prove OpenAI still serves a model;
+ * only a live call can, and a unit suite must not make one. What it CAN do is
+ * make the string a deliberate, visible choice rather than something that drifts:
+ * a change here fails a test and has to be argued for in review, and the
+ * "preview" ban stops the same class of model being reached for again.
+ *
+ * The rest is a calendar problem, and ARCHITECTURE.md says when to re-check.
+ */
+describe('find-recipes names a model on purpose', () => {
+  /*
+   * COMMENTS STRIPPED FIRST. The file's header explains why it left
+   * `/v1/chat/completions` and why it does not use `web_search_preview`, so a
+   * check over the raw text fires on the very prose that documents the fix — the
+   * same false positive as a guard matching "window" inside `windowFrom`. The
+   * comments are worth more than the convenience of a substring search.
+   */
+  const source = readFileSync(
+    fileURLToPath(new URL('../../supabase/functions/find-recipes/index.ts', import.meta.url)),
+    'utf8',
+  )
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    // Only line comments that START a line. A bare `\/\/.*$` eats the `//` inside
+    // `https://api.openai.com/...` and deletes the very endpoint being checked —
+    // the same trap that broke the string-stripper in the August guard work.
+    .replace(/^\s*\/\/.*$/gm, '');
+
+  it('pins the model string', () => {
+    expect(source).toContain("const MODEL = 'gpt-5.6-terra'");
+  });
+
+  it('NEVER names a preview-class model', () => {
+    // These are retired on short notice — OpenAI's own docs say as little as two
+    // weeks. One already took this feature down.
+    const model = /const MODEL = '([^']+)'/.exec(source)?.[1] ?? '';
+
+    expect(model).not.toContain('preview');
+  });
+
+  it('uses the Responses endpoint, which is where hosted search lives', () => {
+    expect(source).toContain('https://api.openai.com/v1/responses');
+    expect(source).not.toContain('/v1/chat/completions');
+  });
+
+  it('asks for web_search, not the legacy web_search_preview', () => {
+    // `web_search_preview` remains for legacy callers and lacks newer controls.
+    expect(source).toContain("type: 'web_search'");
+    expect(source).not.toContain('web_search_preview');
+  });
+});
+
+/**
+ * NEVER SWALLOW AN UPSTREAM ERROR AGAIN.
+ *
+ * Twice now a 404 from OpenAI reached the owner as a status code with no body:
+ * `parse-image` in August, `find-recipes` in the same month. Both messages were
+ * true and both were useless, because a status alone does not distinguish a
+ * retired model from a revoked key from a malformed payload. The second diagnosis
+ * had to be done from documentation because the answer had been read and thrown
+ * away.
+ */
+describe('every function surfaces what the upstream actually said', () => {
+  it.each(['parse-image', 'ask-sous', 'find-recipes'])('%s reports the error body', (fn) => {
+    const source = readFileSync(
+      fileURLToPath(new URL(`../../supabase/functions/${fn}/index.ts`, import.meta.url)),
+      'utf8',
+    );
+
+    // Read the body, cap it, log it, and return it. All four, or the next
+    // diagnosis is another documentation trawl.
+    expect(source, `${fn} does not read the error body`).toMatch(/upstream\.text\(\)/);
+    expect(source, `${fn} does not truncate it`).toMatch(/\.slice\(0, \d+\)/);
+    expect(source, `${fn} does not log it`).toContain('console.error');
+    expect(source, `${fn} does not return it`).toContain('It said:');
+  });
+});

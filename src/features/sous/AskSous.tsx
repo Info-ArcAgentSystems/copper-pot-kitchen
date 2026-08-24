@@ -29,30 +29,14 @@ import {
   stockRepository,
 } from '../../data/repositories';
 import { askSous, buildContext } from '../../sous/askSous';
-import { renderAnswer, type Answer } from '../../ui/sousAnswer';
-import type { Turn } from '../../sous/intent';
+import { renderAnswer } from '../../ui/sousAnswer';
+import { turnsOf } from '../../ui/transcript';
+import { useSousStore } from './SousContext';
 import { commitProposal } from '../../sous/commit';
-import { runIntent, type Proposal, type SousData, type ToolResult } from '../../sous/tools';
+import { runIntent, type Proposal, type SousData } from '../../sous/tools';
 import { Field } from '../../ui/Field';
 import { useAsync } from '../../ui/useAsync';
 import { supabaseClient } from '../../data/client';
-
-/**
- * One question and what came back.
- *
- * `tool` is the part that goes back to the model next turn — and it holds no
- * answer. `answer` and `result` stay on THIS side of the boundary, for rendering
- * only.
- */
-interface Exchange {
-  readonly question: string;
-  /** The model's own words. Digit-free by validation, written before the engine ran. */
-  readonly preamble: string | null;
-  readonly answer: Answer | null;
-  readonly refusal: string | null;
-  readonly result: ToolResult | null;
-  readonly tool: Turn | null;
-}
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
@@ -78,21 +62,32 @@ export function AskSous(): ReactNode {
   const [outcome, setOutcome] = useState<string | null>(null);
 
   /**
-   * The conversation, session-only.
-   *
-   * Not persisted: there is no schema for a transcript, and inventing one to
-   * store chat history is not something to do quietly. Closing the app is a
-   * clean slate, which for a kitchen assistant is the right default anyway.
+   * The conversation, held above the router so it survives leaving this tab.
+   * In memory only — a reload is a clean slate.
    */
-  const [exchanges, setExchanges] = useState<Exchange[]>([]);
+  const { transcript, add } = useSousStore();
+  const exchanges = transcript.exchanges;
+
+  /**
+   * THE LIVE PROPOSAL, AND WHY IT IS NOT IN THE TRANSCRIPT.
+   *
+   * A `Proposal` carries a diff and a job-as-it-would-be-saved, both worked out
+   * from one snapshot of the data. Keeping it here means it dies when this screen
+   * unmounts — so it cannot outlive its snapshot, be confirmed after the owner
+   * changed a guest count on another screen, and write a job built from figures
+   * nobody re-checked.
+   *
+   * The transcript keeps a record that a proposal happened. It keeps nothing that
+   * `commitProposal` would accept, which is why the refusal is structural rather
+   * than a check somebody has to remember (see `ui/transcript.ts`).
+   */
+  const [live, setLive] = useState<{ at: number; proposal: Proposal } | null>(null);
 
   /**
    * What goes BACK to the model: questions and the tools they used, never the
    * answers. See `Turn` in intent.ts — that omission is the whole design.
    */
-  const turns: Turn[] = exchanges
-    .filter((e): e is Exchange & { tool: Turn } => e.tool !== null)
-    .map((e) => e.tool);
+  const turns = turnsOf(transcript);
 
   const ready =
     jobs.state.status === 'ready' &&
@@ -152,10 +147,7 @@ export function AskSous(): ReactNode {
       );
 
       if (reply.kind === 'unresolved') {
-        setExchanges((prior) => [
-          ...prior,
-          { question: asked, preamble: null, answer: null, refusal: reply.reason, result: null, tool: null },
-        ]);
+        add({ question: asked, preamble: null, answer: null, refusal: reply.reason, proposal: null, tool: null });
         return;
       }
 
@@ -163,35 +155,39 @@ export function AskSous(): ReactNode {
       // the preamble safe: the model wrote its line before any of this existed.
       const ran = runIntent(data, reply.intent);
       if (ran === null) {
-        setExchanges((prior) => [
-          ...prior,
-          {
-            question: asked,
-            preamble: null,
-            answer: null,
-            refusal: 'Sous asked for something that does not exist here.',
-            result: null,
-            tool: null,
-          },
-        ]);
+        add({
+          question: asked,
+          preamble: null,
+          answer: null,
+          refusal: 'Sous asked for something that does not exist here.',
+          proposal: null,
+          tool: null,
+        });
         return;
       }
 
-      setExchanges((prior) => [
-        ...prior,
-        {
+      // Only the CHANGES are persisted — the owner's own request, which reads
+      // correctly however old it gets. The diff is derived from data that may
+      // move, so it stays with the live proposal below and goes when this screen
+      // does.
+      const proposed = ran.kind === 'proposal' ? ran.value : null;
+
+      add({
+        question: asked,
+        preamble: reply.preamble,
+        answer: renderAnswer(ran, data),
+        refusal: null,
+        proposal: proposed === null ? null : { jobId: proposed.jobId, changes: proposed.changes },
+        tool: {
           question: asked,
-          preamble: reply.preamble,
-          answer: renderAnswer(ran, data),
-          refusal: null,
-          result: ran,
-          tool: {
-            question: asked,
-            tool: reply.intent.tool,
-            args: reply.intent.args as unknown as Record<string, unknown>,
-          },
+          tool: reply.intent.tool,
+          args: reply.intent.args as unknown as Record<string, unknown>,
         },
-      ]);
+      });
+
+      // One live proposal at a time: a new ask replaces the last, so an earlier
+      // one can never still be sitting there confirmable.
+      setLive(proposed === null ? null : { at: exchanges.length, proposal: proposed });
     } finally {
       setAsking(false);
     }
@@ -206,84 +202,116 @@ export function AskSous(): ReactNode {
 
     setOutcome(done.ok ? 'Saved, and the change is in the job history.' : done.error);
     if (done.ok) {
-      // The proposal is spent. Clearing it stops a second tap re-saving.
-      setExchanges((prior) => prior.map((e) => ({ ...e, result: null })));
+      // The proposal is spent. The transcript keeps the record of it; what goes
+      // is the only thing that was committable.
+      setLive(null);
       jobs.reload();
     }
     setCommitting(false);
   };
 
   return (
-    <div>
+    <div className="chat">
       <h1>Ask Sous</h1>
 
-      <Field
-        label="What do you want to know?"
-        value={question}
-        onChange={setQuestion}
-        multiline
-        hint="Sous can look at shopping, prep, packing, money and job readiness, and can propose a change to a job for you to confirm."
-      />
+      {exchanges.length === 0 && (
+        <p className="muted">
+          Sous can look at shopping, prep, packing, money and job readiness, and can propose a
+          change to a job for you to confirm. Every figure comes from your own data.
+        </p>
+      )}
 
-      <button
-        type="button"
-        className="primary"
-        disabled={asking || !ready || question.trim() === ''}
-        onClick={() => void ask()}
-      >
-        {asking ? 'Asking…' : 'Ask'}
-      </button>
+      {/* The conversation. Oldest first, newest nearest the composer. */}
+      <div className="chat-log">
+        {exchanges.map((exchange, i) => (
+          <section key={`${i}-${exchange.question}`} className="chat-turn">
+            <p className="chat-asked">{exchange.question}</p>
+
+            <div className="chat-said">
+              {/* The model's own words — written BEFORE the engine ran, and
+                  rejected by validation if they contained a digit. Conversational
+                  glue only: every figure below comes from the engine. */}
+              {exchange.preamble !== null && <p className="muted">{exchange.preamble}</p>}
+
+              {/* A refusal is shown as itself, not as a failure. Asking again is
+                  cheap; acting on the wrong job is not. */}
+              {exchange.refusal !== null && <p className="unresolved">{exchange.refusal}</p>}
+
+              {exchange.answer !== null && (
+                <>
+                  <p className="sous-lead">{exchange.answer.lead}</p>
+
+                  {exchange.answer.detail.length > 0 && (
+                    <ul className="sous-detail num">
+                      {exchange.answer.detail.map((d) => (
+                        <li key={d}>{d}</li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {exchange.answer.flags.length > 0 && (
+                    <ul className="unresolved-block">
+                      {exchange.answer.flags.map((flagText) => (
+                        <li key={flagText}>{flagText}</li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+
+              {/* Rule 7: a proposal is a suggestion until he taps confirm — and
+                  ONLY the one from the current ask can still be confirmed. An
+                  earlier one shows what was asked for and offers to ask again,
+                  because its figures were worked out from data that may have
+                  moved since. */}
+              {exchange.proposal !== null &&
+                (live !== null && live.at === i ? (
+                  <ProposalView
+                    proposal={live.proposal}
+                    onConfirm={confirm}
+                    committing={committing}
+                  />
+                ) : (
+                  <div className="chat-spent">
+                    <ul>
+                      {Object.entries(exchange.proposal.changes).map(([field, value]) => (
+                        <li key={field}>
+                          {field}: <strong>{String(value)}</strong>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="muted">
+                      Sous proposed this earlier. Ask again to act on it — the figures will be
+                      worked out fresh.
+                    </p>
+                    <button type="button" onClick={() => setQuestion(exchange.question)}>
+                      Ask this again
+                    </button>
+                  </div>
+                ))}
+            </div>
+          </section>
+        ))}
+      </div>
 
       {outcome !== null && <p className="muted">{outcome}</p>}
 
-      {/* The conversation. Oldest first, so it reads like a thread. */}
-      {exchanges.map((exchange, i) => (
-        <section key={`${i}-${exchange.question}`} className="sous-turn">
-          <p className="sous-asked">{exchange.question}</p>
-
-          {/* The model's own words — written BEFORE the engine ran, and rejected
-              by validation if they contained a digit. Conversational glue only:
-              every figure below comes from the engine. */}
-          {exchange.preamble !== null && <p className="muted">{exchange.preamble}</p>}
-
-          {/* A refusal is shown as itself, not as a failure. Rule 8 at the
-              conversational layer: asking again is cheap, acting on the wrong job
-              is not. */}
-          {exchange.refusal !== null && <p className="unresolved">{exchange.refusal}</p>}
-
-          {exchange.answer !== null && (
-            <>
-              <p className="sous-lead">{exchange.answer.lead}</p>
-
-              {exchange.answer.detail.length > 0 && (
-                <ul className="sous-detail num">
-                  {exchange.answer.detail.map((d) => (
-                    <li key={d}>{d}</li>
-                  ))}
-                </ul>
-              )}
-
-              {exchange.answer.flags.length > 0 && (
-                <ul className="unresolved-block">
-                  {exchange.answer.flags.map((flagText) => (
-                    <li key={flagText}>{flagText}</li>
-                  ))}
-                </ul>
-              )}
-            </>
-          )}
-
-          {/* Rule 7: a proposal is a suggestion until he taps confirm. */}
-          {exchange.result?.kind === 'proposal' && (
-            <ProposalView
-              proposal={exchange.result.value}
-              onConfirm={confirm}
-              committing={committing}
-            />
-          )}
-        </section>
-      ))}
-
+      <div className="chat-composer">
+        <Field
+          label="What do you want to know?"
+          value={question}
+          onChange={setQuestion}
+          multiline
+        />
+        <button
+          type="button"
+          className="primary"
+          disabled={asking || !ready || question.trim() === ''}
+          onClick={() => void ask()}
+        >
+          {asking ? 'Asking…' : 'Ask'}
+        </button>
+      </div>
     </div>
   );
 }

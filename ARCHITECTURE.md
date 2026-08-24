@@ -78,6 +78,7 @@ session reads to work out where things stand.
 | 13 Aug 2026 | **Invoice scan fixed.** Every number came back unreadable while names read fine: the narrowers demanded `typeof === 'number'` and models quote numbers. Underneath, the schema asked for CENTS inside a prompt saying "you do not calculate" — a Rule 2 violation in my own schema. Field renamed `lineTotalPrinted`, conversion moved to code. **984 unit** |
 | 23 Aug 2026 | **Design pass.** Ten ad-hoc font sizes became a six-step named ramp; ten near-identical per-component `h2` rules became three global ones; `h1` had NO rule at all and rendered at the browser default, which was most of why the app looked unfinished. Palette moved from warm stone + burnt orange to cool slate + deep teal, so **amber is now the only warm thing on any screen** and Rule 8's unresolved states are unmissable. Added a `.card` primitive, a button hierarchy with a pressed state, `color-scheme: light dark` so native controls follow the mode, and `accent-color` on checkboxes. All twelve token guards still pass |
 | 23 Aug 2026 | Phase 7 — **the dashboard**, the last §4 feature. Assembly only: it adds no arithmetic and no engine code. Fourth row on the derived guard and the strictest — it persists **nothing at all**, not even a tick. Dashboard takes `/` and the first tab ("Today"); Jobs moves to `/jobs`, one tap deeper, to hold the bar at eight. **1116 unit** |
+| 23 Aug 2026 | **Ask Sous keeps its conversation across tabs, and reads as a chat.** Transcript in a provider above the router; the live proposal stays in the component so it cannot outlive the snapshot it was computed from. Chat transcript styling in the new design system — and no new surface for model output: question is the owner's text, preamble is digit-free and pre-engine, everything else is `renderAnswer` over engine output. A streamed reply was declined for that reason. **1129 unit** |
 | | *Next: the four owner questions — two block golden tests* |
 
 ---
@@ -926,8 +927,22 @@ because of **when it speaks and what it remembers**:
   answerable from memory — is handed back as a question. There is no path by which the model is
   a source of facts here.
 
-Transcript is session-only. No schema for it, and inventing one to store chat history is not
-something to do quietly.
+**Transcript survives navigation, and the PROPOSAL deliberately does not.** The conversation
+lives in `SousProvider`, mounted above the router, so leaving the tab no longer loses it; a
+reload is a clean slate and there is no storage layer, no schema, no migration.
+
+The split is the safety property. A `Proposal` carries `impact` and `after`, both worked out
+from one snapshot of the data. Persisting that would let the owner take a proposal, change a
+guest count on the Jobs screen, come back, tap confirm — and write a job built from figures
+nobody re-checked, with a clean audit trail saying he approved it.
+
+So the transcript keeps a `ProposalRecord`: the job id and the changes he asked for, both of
+which read correctly however old they get. Nothing derived survives. The live `Proposal` stays
+in component state and dies on unmount. `commitProposal` demands `impact` and `after`, so the
+transcript has *nothing to hand it* — the refusal is structural, and `@ts-expect-error` in
+`tests/ui/transcript.test.ts` means widening `ProposalRecord` breaks the build before a test
+runs. An old proposal offers "Ask this again", which replays the question into the composer;
+re-asking re-routes through the model and recomputes through the engine.
 
 ## The routing collision (fixed 13 Aug)
 

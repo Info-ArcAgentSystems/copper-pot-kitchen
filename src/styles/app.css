@@ -887,3 +887,84 @@ section.danger-zone h2 {
 .sous-detail li {
   margin-bottom: var(--space-1);
 }
+
+/* ---------------------------------------------------------------------------
+   Ask Sous, as a conversation.
+
+   A transcript rather than a form with an answer under it: the owner asks
+   several things in a row, and the earlier ones stay legible while he does.
+
+   THE VISUAL CHANGE ADDS NO NEW PLACE FOR THE MODEL TO PUT A FACT. Everything
+   rendered here already existed — the question is his own text, the preamble is
+   model prose validated digit-free and written before the engine ran, and the
+   lead, detail and flags are all `renderAnswer` over engine output. Making it
+   look like a chat is not the same as letting it behave like one.
+   --------------------------------------------------------------------------- */
+
+.chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.chat-turn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* His own words, set apart from everything derived. The accent tint is the one
+   place it appears on a content surface, and it is his side of the exchange. */
+.chat-asked {
+  align-self: flex-end;
+  max-width: 85%;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  background: var(--accent-subtle);
+  color: var(--text);
+  font-weight: var(--weight-medium);
+}
+
+.chat-said {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  box-shadow: var(--shadow-card);
+}
+
+.chat-said > *:first-child {
+  margin-top: 0;
+}
+
+.chat-said > *:last-child {
+  margin-bottom: 0;
+}
+
+/* A proposal that can no longer be confirmed. Deliberately NOT styled as an
+   error: nothing went wrong, the figures are simply older than the data. */
+.chat-spent {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.chat-composer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  /* The tab bar already sits inside the safe area; this clears the composer of
+     the log scrolling under it. */
+  padding-bottom: var(--space-2);
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+
+.chat-composer .field {
+  margin-bottom: 0;
+}

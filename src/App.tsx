@@ -35,6 +35,7 @@ import { Prep } from './features/prep/Prep';
 import { Packing } from './features/packing/Packing';
 import { Money } from './features/money/Money';
 import { AskSous } from './features/sous/AskSous';
+import { SousProvider } from './features/sous/SousContext';
 
 /*
  * EIGHT, and eight is the ceiling: a ninth puts every tab under the 44px floor
@@ -96,36 +97,41 @@ function TabBar(): ReactNode {
 export default function App(): ReactNode {
   return (
     <KitchenProvider>
-      <RequireKitchen>
-        <Header />
-        <main className="app-main">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/jobs" element={<Jobs />} />
-            {/* Scan is NOT a tab. It produces jobs, so it is an action on the
-                Jobs screen — and a ninth tab would put every tab under the 44px
-                floor the rest of the app holds to. See ARCHITECTURE.md. */}
-            <Route path="/scan/job-sheet" element={<ScanJobSheet />} />
-            <Route path="/scan/recipe-card" element={<ScanRecipeCard />} />
-            <Route path="/scan/invoice" element={<ScanInvoice />} />
-            <Route path="/prep" element={<Prep />} />
-            <Route path="/shopping" element={<Shopping />} />
-            <Route path="/packing" element={<Packing />} />
-            <Route path="/money" element={<Money />} />
-            <Route path="/sous" element={<AskSous />} />
-            <Route path="/recipes" element={<Recipes />} />
-            <Route path="/ingredients" element={<Ingredients />} />
-            <Route path="/setup" element={<Setup />} />
-            <Route path="/setup/customers" element={<Customers />} />
-            <Route path="/setup/properties" element={<Properties />} />
-            <Route path="/setup/suppliers" element={<Suppliers />} />
-            <Route path="/setup/rates" element={<RateCard />} />
-            <Route path="/setup/templates" element={<ServiceTemplates />} />
-            <Route path="/setup/backup" element={<BackupScreen />} />
-          </Routes>
-        </main>
-        <TabBar />
-      </RequireKitchen>
+      {/* Above the router on purpose: the transcript has to outlive the Ask Sous
+          screen, or leaving the tab loses the conversation. In memory only — a
+          reload is a clean slate, and no storage layer exists for it. */}
+      <SousProvider>
+        <RequireKitchen>
+          <Header />
+          <main className="app-main">
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/jobs" element={<Jobs />} />
+              {/* Scan is NOT a tab. It produces jobs, so it is an action on the
+                  Jobs screen — and a ninth tab would put every tab under the 44px
+                  floor the rest of the app holds to. See ARCHITECTURE.md. */}
+              <Route path="/scan/job-sheet" element={<ScanJobSheet />} />
+              <Route path="/scan/recipe-card" element={<ScanRecipeCard />} />
+              <Route path="/scan/invoice" element={<ScanInvoice />} />
+              <Route path="/prep" element={<Prep />} />
+              <Route path="/shopping" element={<Shopping />} />
+              <Route path="/packing" element={<Packing />} />
+              <Route path="/money" element={<Money />} />
+              <Route path="/sous" element={<AskSous />} />
+              <Route path="/recipes" element={<Recipes />} />
+              <Route path="/ingredients" element={<Ingredients />} />
+              <Route path="/setup" element={<Setup />} />
+              <Route path="/setup/customers" element={<Customers />} />
+              <Route path="/setup/properties" element={<Properties />} />
+              <Route path="/setup/suppliers" element={<Suppliers />} />
+              <Route path="/setup/rates" element={<RateCard />} />
+              <Route path="/setup/templates" element={<ServiceTemplates />} />
+              <Route path="/setup/backup" element={<BackupScreen />} />
+            </Routes>
+          </main>
+          <TabBar />
+        </RequireKitchen>
+      </SousProvider>
     </KitchenProvider>
   );
 }

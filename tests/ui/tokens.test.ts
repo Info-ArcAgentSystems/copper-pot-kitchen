@@ -9,7 +9,7 @@
  * asserted here so a later screen cannot quietly undo them.
  */
 
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -87,10 +87,153 @@ describe('no hover-dependent interaction', () => {
   });
 });
 
+/**
+ * WEB FONTS, AND THE RULE THEY DO NOT GET TO BREAK.
+ *
+ * This used to be a flat ban: no `@font-face`, no `@import url`, ever. The ban
+ * came from CLAUDE.md section 5 — "used in a kitchen and in a supermarket" — and
+ * the thing it was really protecting was never the absence of fonts. It was that
+ * the owner must never wait on one, and must never see blank text on 4G.
+ *
+ * So the ban is replaced by the property it stood for, which is a stronger guard
+ * rather than a weaker one: fonts may be loaded, and every one of them must be
+ * self-hosted, swap-on-load, and backed by a system stack.
+ *
+ * WORTH RECORDING: the old guard only ever read `src/styles/*.css`, so a
+ * `<link>` to Google Fonts in `index.html` would have sailed straight past it.
+ * Routing around a guard that way is worse than changing it, because the next
+ * person reads the guard and believes it.
+ */
 describe('loads on a supermarket connection', () => {
-  it('uses a system font stack rather than fetching a webfont', () => {
+  it('keeps BODY text on the system stack, so it never waits', () => {
+    // The one family that must render instantly. Headings and labels can swap;
+    // the sentence the owner is reading cannot.
     expect(tokens).toMatch(/--font:\s*-apple-system/);
-    expect(allCss).not.toMatch(/@import\s+url|@font-face/);
+  });
+
+  it('EVERY family token ends in a system stack', () => {
+    // If both files fail to load, the app renders in New York and SF Mono and
+    // nothing about it breaks.
+    const families = [...tokens.matchAll(/--font[a-z-]*:\s*([^;]+);/g)].map((m) => m[1] ?? '');
+
+    expect(families.length).toBeGreaterThanOrEqual(3);
+    for (const stack of families) {
+      expect(stack, `"${stack}" has no generic fallback`).toMatch(
+        /(sans-serif|serif|monospace)\s*$/,
+      );
+    }
+  });
+
+  it('EVERY @font-face swaps rather than blocking', () => {
+    // `font-display: swap` is the difference between a slow font and invisible
+    // text. FOIT on a supermarket connection is a blank screen.
+    const faces = [...allCss.matchAll(/@font-face\s*\{([^}]+)\}/g)].map((m) => m[1] ?? '');
+
+    expect(faces.length).toBeGreaterThan(0);
+    for (const face of faces) {
+      expect(face, 'an @font-face does not declare font-display: swap').toMatch(
+        /font-display:\s*swap/,
+      );
+    }
+  });
+
+  it('fetches fonts from THIS origin, never a third party', () => {
+    // Self-hosted: no extra DNS lookup and TLS handshake to fonts.gstatic.com
+    // before the first word paints.
+    for (const face of allCss.matchAll(/@font-face\s*\{([^}]+)\}/g)) {
+      const src = face[1] ?? '';
+      expect(src, 'a font is fetched from another origin').not.toMatch(/url\(['"]?https?:/);
+    }
+
+    expect(allCss, 'a stylesheet is imported from a URL').not.toMatch(/@import\s+url/);
+  });
+
+  it('every font file it names actually exists', () => {
+    // A typo'd path is a silent fallback to the system stack — the app still
+    // works, looks wrong, and nothing says why.
+    const urls = [...allCss.matchAll(/url\(['"]?(\/fonts\/[^'")]+)['"]?\)/g)].map(
+      (m) => m[1] ?? '',
+    );
+
+    expect(urls.length).toBeGreaterThan(0);
+    for (const url of urls) {
+      const onDisk = fileURLToPath(new URL(`../../public${url}`, import.meta.url));
+      expect(existsSync(onDisk), `${url} is referenced but not in public/`).toBe(true);
+    }
+  });
+
+  it('THE FONT SWAP CANNOT MOVE AN INPUT BELOW 16px', () => {
+    // The no-zoom rule is set on the ELEMENT in absolute pixels, not inherited
+    // from a family or a ramp step, so a webfont landing mid-session cannot drag
+    // it under the threshold. Asserted as an absolute value on purpose: a
+    // `var(--size-body)` here would be one token edit away from zooming the page
+    // on every focus.
+    const inputRule = /button,[\s\S]*?textarea\s*\{([^}]+)\}/.exec(tokens)?.[1] ?? '';
+
+    expect(inputRule).toMatch(/font-size:\s*16px/);
+    expect(inputRule, 'the 16px rule was made relative to a token').not.toMatch(
+      /font-size:\s*var\(/,
+    );
+  });
+});
+
+/**
+ * COPPER CARRIES THE BRAND. AMBER CARRIES THE WARNING.
+ *
+ * `--accent` (#b87333) and `--unresolved` (#7f6115) contrast against each other
+ * at 1.33:1 — the eye cannot separate them by brightness at all. The separation
+ * is by TREATMENT, and this is the guard that keeps it:
+ *
+ *   copper  text, rules, borders, tick fills — never a filled background
+ *   amber   a filled block                   — never bare text on the page
+ *
+ * Without this, "a little amber here as an accent" is one plausible commit away,
+ * and the day it lands every warning in the app stops being the loudest thing on
+ * its screen. Rule 8 is what is actually being protected.
+ */
+describe('amber is reserved for the unresolved signal', () => {
+  /** Rules that mention amber at all. */
+  const amberRules = [...allCss.matchAll(/([^{}]+)\{([^}]*--unresolved[^}]*)\}/g)].map((m) => ({
+    selector: (m[1] ?? '').trim().split('\n').pop()?.trim() ?? '',
+    body: m[2] ?? '',
+  }));
+
+  it('is used somewhere, or this guard is guarding nothing', () => {
+    expect(amberRules.length).toBeGreaterThan(0);
+  });
+
+  it('NEVER appears without its own background', () => {
+    // Amber as bare text on parchment would sit at the same brightness as copper
+    // and read as ordinary chrome.
+    for (const rule of amberRules) {
+      const usesAmberInk = /color:\s*var\(--unresolved\)/.test(rule.body);
+      if (!usesAmberInk) continue;
+
+      const hasOwnGround =
+        /background:\s*var\(--unresolved-bg\)/.test(rule.body) ||
+        /border-left:[^;]*var\(--unresolved\)/.test(rule.body) ||
+        // A child of a block that already set the ground.
+        /unresolved-block/.test(rule.selector);
+
+      expect(hasOwnGround, `${rule.selector} uses amber with no amber ground`).toBe(true);
+    }
+  });
+
+  it('is NEVER used as an accent, a border colour or a tab indicator', () => {
+    // The specific misuses. Each of these would put amber somewhere the eye
+    // learns to ignore.
+    for (const forbidden of [
+      /--accent[a-z-]*:\s*var\(--unresolved/,
+      /\.tabs[^{]*\{[^}]*var\(--unresolved/,
+      /box-shadow:[^;]*var\(--unresolved\)/,
+    ]) {
+      expect(allCss, `amber is used decoratively: ${String(forbidden)}`).not.toMatch(forbidden);
+    }
+  });
+
+  it('and copper is never used as the unresolved signal', () => {
+    // The mirror image. A warning in copper is a warning nobody sees.
+    expect(allCss).not.toMatch(/--unresolved[a-z-]*:\s*var\(--accent/);
   });
 });
 

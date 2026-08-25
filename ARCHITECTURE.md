@@ -81,6 +81,7 @@ session reads to work out where things stand.
 | 23 Aug 2026 | **Ask Sous keeps its conversation across tabs, and reads as a chat.** Transcript in a provider above the router; the live proposal stays in the component so it cannot outlive the snapshot it was computed from. Chat transcript styling in the new design system — and no new surface for model output: question is the owner's text, preamble is digit-free and pre-engine, everything else is `renderAnswer` over engine output. A streamed reply was declined for that reason. **1129 unit** |
 | 23 Aug 2026 | Phase 6 closes — **recipe search from a menu**, the last AI feature. Fourth `parse-image` mode (`menu`, names only) plus a NEW `find-recipes` function on OpenAI hosted search. `webRecipe.ts` is the hardest flag-never-invent surface built: "1 onion" and "a splash of oil" go to unquantified by name, "2 cups" keeps its own unit for `units.ts` to refuse later, and **a candidate with no source URL never becomes a review at all**. Nothing is written — a draft opens in the recipe editor for Paul to save himself, because `confidence` cannot enforce "not until confirmed". Method prose is not imported; the link goes in `note`. **1164 unit** |
 | 23 Aug 2026 | **Recipe search fixed, and a diagnostics hole closed.** `find-recipes` returned 404 on every call: `gpt-4o-search-preview` was shut down 2026-07-23, and that family does not support function calling anyway. Moved to `/v1/responses` + `gpt-5.6-terra` + `tools: [{type:'web_search'}]`. `webRecipe.ts` and its 26 tests were untouched — the review layer never knew where the JSON came from. All three functions now surface the upstream error body; a status with no body had cost two diagnoses. **1170 unit** |
+| 23 Aug 2026 | **Copper re-skin.** Parchment and ink, Bitter 900 headings, uppercase JetBrains Mono section labels, small-radius cards. Presentation only — no engine, no data, no markup; the named ramp's SIZES are unchanged, only the families rendering at them. Restores the copper identity the slate/teal pass dropped, with amber kept strictly for the Rule 8 signal and a guard to hold the line. Nine new token guards, five verified by inversion. **1180 unit, golden pack unmoved** |
 | | *Next: the four owner questions — two block golden tests; and the `confidence` decision above* |
 
 ---
@@ -560,6 +561,32 @@ that would step around the repositories and the audit trail.
 Bottom tab bar, not a top nav: used one-handed, and the top of a phone is where a thumb cannot
 reach. `useAsync` is a ~40-line hook over the repositories — deliberately not a cache, since one
 user on one device does not need staleness bugs.
+
+**COPPER CARRIES THE BRAND, AMBER CARRIES THE WARNING, AND THEY NEVER SWAP.** `--accent`
+(#b87333) and `--unresolved` (#7f6115) contrast against each other at **1.33:1** — the eye
+cannot separate them by brightness at all. So the separation is by TREATMENT: copper is text,
+rules, borders and tick fills and is *never* a filled background; amber is *always* a filled
+block with a 4px left bar and never bare text. `tests/ui/tokens.test.ts` asserts it, so "a
+little amber as an accent" fails a test rather than relying on memory. Rule 8 is what is being
+protected — the day amber becomes decoration, every warning stops being the loudest thing on
+its screen.
+
+**Copper is three tokens, and the reason is measured rather than aesthetic.** Brand copper is
+3.37:1 on parchment: fine for a 1px rule, a FAIL for the 12px labels that are the signature
+treatment. So `--accent` keeps brand identity where contrast does not apply, `--accent-ink`
+(5.29) carries every small label and link, and `--accent-strong` (7.31 white-on) fills buttons.
+At 12px the three are indistinguishable; the contrast is not. Amber was likewise darkened one
+step from #8a6a18, which measured 4.11 on its own block — a fail.
+
+**Web fonts are self-hosted, and the old blanket ban is gone.** Two latin-subset woff2 files
+(Bitter, JetBrains Mono — both variable, 68KB together) in `public/fonts/`, same origin, every
+face `font-display: swap`. The guard that used to forbid `@font-face` outright now asserts the
+property it actually stood for: every family token ends in a system stack, every face swaps
+rather than blocks, no font is fetched from a third party, every referenced file exists, and
+**the 16px input rule stays an absolute pixel value so a font swap cannot drag it under the
+iOS zoom threshold**. Worth recording: the old guard only read `src/styles/*.css`, so a
+`<link>` in `index.html` would have sailed past it — routing around a guard that way is worse
+than changing it, because the next person reads the guard and believes it.
 
 `styles/tokens.css` holds the `CLAUDE.md` §5 kitchen constraints as definitions rather than
 conventions, and `tests/ui/tokens.test.ts` checks the checkable parts: a 44px touch floor with

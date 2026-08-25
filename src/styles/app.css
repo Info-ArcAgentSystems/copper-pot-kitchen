@@ -20,14 +20,16 @@
    --------------------------------------------------------------------------- */
 
 h1 {
+  font-family: var(--font-display);
   font-size: var(--size-h1);
-  font-weight: var(--weight-bold);
+  font-weight: var(--weight-display);
   line-height: var(--leading-tight);
   letter-spacing: -0.01em;
   margin: 0 0 var(--space-2);
 }
 
 h2 {
+  font-family: var(--font-display);
   font-size: var(--size-lead);
   font-weight: var(--weight-medium);
   line-height: var(--leading-tight);
@@ -43,20 +45,26 @@ h3:not(:first-child) {
 }
 
 h3 {
+  font-family: var(--font-display);
   font-size: var(--size-body);
   font-weight: var(--weight-medium);
   line-height: var(--leading-tight);
   margin: 0 0 var(--space-2);
 }
 
-/* The small uppercase label over a group — a supplier, a prep day, a section of
-   a packing list. Three screens had their own copy of this. */
+/* THE SIGNATURE TREATMENT. A small uppercase mono label in copper, over a group —
+   a supplier, a prep day, a section of a packing list.
+
+   `--accent-ink` rather than brand copper, and the reason is measured: brand
+   copper is 3.37:1 on parchment and this is 12px text, which needs 4.5. The two
+   are indistinguishable at this size; the contrast is not. */
 .eyebrow {
+  font-family: var(--font-mono);
   font-size: var(--size-micro);
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-bold);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
+  letter-spacing: var(--track-label);
+  color: var(--accent-ink);
 }
 
 /* ---------------------------------------------------------------------------
@@ -98,6 +106,8 @@ h3 {
    every one of them was wrapping mid-phrase. The name is the only part that can
    afford to be cut, so it is the only part allowed to. */
 .app-header > span:first-child {
+  font-family: var(--font-display);
+  font-weight: var(--weight-display);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -146,12 +156,18 @@ h3 {
   padding: var(--space-3) var(--space-2);
   color: var(--text-muted);
   text-decoration: none;
+  /* Uppercase mono, like every other label in the app. Navigation is a set of
+     section labels, and now reads as one. */
+  font-family: var(--font-mono);
   font-size: var(--size-small);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .tabs a[aria-current='page'] {
-  color: var(--accent);
-  font-weight: 600;
+  color: var(--accent-ink);
+  font-weight: var(--weight-bold);
   box-shadow: inset 0 2px 0 var(--accent);
 }
 
@@ -222,9 +238,11 @@ button:active {
 
 .signin button[type='submit'] {
   margin-top: var(--space-4);
-  background: var(--accent);
+  /* The fill step, for the same reason `button.primary` uses it: white on brand
+     copper is 3.79:1 and fails AA. */
+  background: var(--accent-strong);
   color: var(--accent-text);
-  border-color: var(--accent);
+  border-color: var(--accent-strong);
 }
 
 button:disabled {
@@ -332,15 +350,17 @@ button:disabled {
   flex: 1;
 }
 
+/* `--accent-strong`, not brand copper: white on #b87333 is 3.79:1 and fails AA
+   for button text. On #7d4a1f it is 7.31:1. */
 button.primary {
-  background: var(--accent);
+  background: var(--accent-strong);
   color: var(--accent-text);
-  border-color: var(--accent);
+  border-color: var(--accent-strong);
 }
 
 button.primary:active {
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
+  background: var(--accent-ink);
+  border-color: var(--accent-ink);
 }
 
 button.danger {
@@ -417,7 +437,7 @@ button.link {
   padding: 0;
   border: none;
   background: none;
-  color: var(--accent);
+  color: var(--accent-ink);
   text-decoration: underline;
   font-weight: 600;
 }
@@ -469,8 +489,8 @@ button.link {
 /* Direction is emphasis only — never a calculation, and never the sole carrier
    of meaning, since the before and after figures are both on the row. */
 .delta-up {
-  color: var(--accent);
-  font-weight: 700;
+  color: var(--accent-ink);
+  font-weight: var(--weight-bold);
 }
 
 .delta-down {
@@ -482,12 +502,27 @@ button.link {
   font-weight: 600;
 }
 
+/* THE WARNING, AND WHY IT LOOKS NOTHING LIKE THE ACCENT.
+
+   Copper and amber are luminance neighbours — 1.33:1 against each other — so
+   colour alone cannot separate them. The left bar does: amber is always a filled
+   block with a bar, copper is never a filled anything. */
 .unresolved-block {
   margin-top: var(--space-3);
   padding: var(--space-3);
   border: 1px solid var(--unresolved-border);
+  border-left: 4px solid var(--unresolved);
   border-radius: var(--radius);
   background: var(--unresolved-bg);
+  color: var(--unresolved);
+}
+
+.unresolved-block h2 {
+  font-family: var(--font-mono);
+  font-size: var(--size-micro);
+  font-weight: var(--weight-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
   color: var(--unresolved);
 }
 
@@ -510,14 +545,15 @@ button.link {
 }
 
 /* A supplier and a prep day are the same kind of heading, and now say so once.
-   `.eyebrow` carries the type; this adds only the rule beneath it. */
+   Same treatment as `.eyebrow`; this adds only the rule beneath it. */
 .supplier-group h2,
 .prep-day h2 {
+  font-family: var(--font-mono);
   font-size: var(--size-micro);
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-bold);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
+  letter-spacing: var(--track-label);
+  color: var(--accent-ink);
   border-bottom: 1px solid var(--border-strong);
   padding-bottom: var(--space-2);
   margin-bottom: var(--space-2);
@@ -540,8 +576,9 @@ button.link {
 }
 
 .shop-line .buy {
+  font-family: var(--font-display);
   font-size: var(--size-figure);
-  font-weight: 700;
+  font-weight: var(--weight-display);
   font-variant-numeric: var(--num);
   white-space: nowrap;
 }
@@ -597,8 +634,8 @@ button.link {
 }
 
 .prep-day .today {
-  color: var(--accent);
-  font-weight: 700;
+  color: var(--accent-ink);
+  font-weight: var(--weight-bold);
 }
 
 .prep-line {
@@ -616,8 +653,9 @@ button.link {
 }
 
 .prep-line .batch {
+  font-family: var(--font-display);
   font-size: var(--size-figure);
-  font-weight: 700;
+  font-weight: var(--weight-display);
   font-variant-numeric: var(--num);
   white-space: nowrap;
 }
@@ -689,10 +727,12 @@ button.link {
 }
 
 .pack-section {
-  font-size: var(--size-small);
+  font-family: var(--font-mono);
+  font-size: var(--size-micro);
+  font-weight: var(--weight-bold);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
+  letter-spacing: var(--track-label);
+  color: var(--accent-ink);
   margin: var(--space-3) 0 var(--space-1);
 }
 
@@ -778,16 +818,19 @@ button.link {
 }
 
 .money-figures dt {
+  font-family: var(--font-mono);
   font-size: var(--size-micro);
+  font-weight: var(--weight-bold);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
+  letter-spacing: var(--track-label);
+  color: var(--accent-ink);
 }
 
 .money-figures dd {
   margin: 0;
-  font-size: var(--size-lead);
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: var(--size-figure);
+  font-weight: var(--weight-display);
   font-variant-numeric: var(--num);
 }
 
@@ -849,7 +892,7 @@ section.danger-zone h2 {
 }
 
 .app-header a.tap {
-  color: var(--accent);
+  color: var(--accent-ink);
   text-decoration: none;
   font-weight: 600;
   display: inline-flex;
@@ -873,8 +916,9 @@ section.danger-zone h2 {
 }
 
 .sous-lead {
+  font-family: var(--font-display);
   font-size: var(--size-lead);
-  font-weight: 600;
+  font-weight: var(--weight-medium);
   margin: 0 0 var(--space-2);
 }
 

@@ -100,7 +100,7 @@ export function ScanInvoice(): ReactNode {
         nothing is saved until you have checked them.
       </p>
 
-      <label className="check">
+      <label className="scan-button">
         <input
           type="file"
           accept="image/*"

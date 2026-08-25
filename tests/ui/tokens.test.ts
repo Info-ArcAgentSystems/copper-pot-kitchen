@@ -32,12 +32,23 @@ describe('touch targets', () => {
   it('never sets an interactive height below the floor', () => {
     // A wet thumb in a supermarket is not a mouse pointer. Any rule that pins a
     // control shorter than 44px is a regression, whatever it looks like.
-    const heights = [...allCss.matchAll(/(?:min-)?height:\s*(\d+)px/g)]
-      .map((m) => Number(m[1]))
-      .filter((px) => px > 0);
+    //
+    // VISUALLY-HIDDEN CONTROLS ARE EXCLUDED, and precisely: only a rule that also
+    // carries `clip-path: inset(` — the screen-reader-only idiom. The scan
+    // button's file input is 1x1 and clipped because the LABEL is the 44px
+    // target; the input still exists for the accessibility tree and the keyboard.
+    // Skipping it is not a loophole in the floor, because a clipped element has
+    // no touch target to be too small.
+    const rules = [...allCss.matchAll(/\{([^}]*)\}/g)].map((m) => m[1] ?? '');
 
-    for (const px of heights) {
-      expect(px, `a rule sets ${px}px, below the 44px floor`).toBeGreaterThanOrEqual(44);
+    for (const rule of rules) {
+      if (/clip-path:\s*inset\(/.test(rule)) continue;
+
+      for (const found of rule.matchAll(/(?:min-)?height:\s*(\d+)px/g)) {
+        const px = Number(found[1]);
+        if (px === 0) continue;
+        expect(px, `a rule sets ${px}px, below the 44px floor`).toBeGreaterThanOrEqual(44);
+      }
     }
   });
 
@@ -116,7 +127,8 @@ describe('loads on a supermarket connection', () => {
     // nothing about it breaks.
     const families = [...tokens.matchAll(/--font[a-z-]*:\s*([^;]+);/g)].map((m) => m[1] ?? '');
 
-    expect(families.length).toBeGreaterThanOrEqual(3);
+    // Two now: the system sans everything is set in, and the mono for labels.
+    expect(families.length).toBeGreaterThanOrEqual(2);
     for (const stack of families) {
       expect(stack, `"${stack}" has no generic fallback`).toMatch(
         /(sans-serif|serif|monospace)\s*$/,
@@ -178,62 +190,75 @@ describe('loads on a supermarket connection', () => {
 });
 
 /**
- * COPPER CARRIES THE BRAND. AMBER CARRIES THE WARNING.
+ * AN ABSENCE WHISPERS. A WARNING SPEAKS ONCE.
  *
- * `--accent` (#b87333) and `--unresolved` (#7f6115) contrast against each other
- * at 1.33:1 — the eye cannot separate them by brightness at all. The separation
- * is by TREATMENT, and this is the guard that keeps it:
+ * These are two different things and the app used to render them identically —
+ * both as filled amber. That was wrong in both directions: "food cost not known
+ * yet" is an honest statement of fact and was alarming, while a genuine "check
+ * this yourself" had to shout over it to be noticed. A screen where everything
+ * is urgent has nothing urgent on it.
  *
- *   copper  text, rules, borders, tick fills — never a filled background
- *   amber   a filled block                   — never bare text on the page
+ * So the two are separated here, and the separation is what these guards hold:
  *
- * Without this, "a little amber here as an accent" is one plausible commit away,
- * and the day it lands every warning in the app stops being the loudest thing on
- * its screen. Rule 8 is what is actually being protected.
+ *   .unresolved        grey, normal weight, NO fill, NO warn colour
+ *   .unresolved-block  a left rule, a faint tint, one mono label in warn
+ *
+ * The accent is a third thing again — it means "you can act on this", not "look
+ * at this". Collapsing any pair of the three is how a signal stops signalling.
  */
-describe('amber is reserved for the unresolved signal', () => {
-  /** Rules that mention amber at all. */
-  const amberRules = [...allCss.matchAll(/([^{}]+)\{([^}]*--unresolved[^}]*)\}/g)].map((m) => ({
-    selector: (m[1] ?? '').trim().split('\n').pop()?.trim() ?? '',
-    body: m[2] ?? '',
-  }));
+describe('an absence is never dressed as a warning', () => {
+  /** The inline treatment for a value nobody has entered. */
+  const absence = /\.unresolved\s*\{([^}]*)\}/.exec(allCss)?.[1] ?? '';
 
-  it('is used somewhere, or this guard is guarding nothing', () => {
-    expect(amberRules.length).toBeGreaterThan(0);
+  it('has a rule to check', () => {
+    expect(absence.trim()).not.toBe('');
   });
 
-  it('NEVER appears without its own background', () => {
-    // Amber as bare text on parchment would sit at the same brightness as copper
-    // and read as ordinary chrome.
-    for (const rule of amberRules) {
-      const usesAmberInk = /color:\s*var\(--unresolved\)/.test(rule.body);
-      if (!usesAmberInk) continue;
-
-      const hasOwnGround =
-        /background:\s*var\(--unresolved-bg\)/.test(rule.body) ||
-        /border-left:[^;]*var\(--unresolved\)/.test(rule.body) ||
-        // A child of a block that already set the ground.
-        /unresolved-block/.test(rule.selector);
-
-      expect(hasOwnGround, `${rule.selector} uses amber with no amber ground`).toBe(true);
-    }
+  it('carries NO background fill', () => {
+    // The filled pill is what made every screen look like it had a problem.
+    expect(absence).not.toMatch(/background/);
   });
 
-  it('is NEVER used as an accent, a border colour or a tab indicator', () => {
-    // The specific misuses. Each of these would put amber somewhere the eye
-    // learns to ignore.
-    for (const forbidden of [
-      /--accent[a-z-]*:\s*var\(--unresolved/,
-      /\.tabs[^{]*\{[^}]*var\(--unresolved/,
-      /box-shadow:[^;]*var\(--unresolved\)/,
-    ]) {
-      expect(allCss, `amber is used decoratively: ${String(forbidden)}`).not.toMatch(forbidden);
-    }
+  it('is NEVER given the warning colour', () => {
+    expect(absence).not.toMatch(/var\(--warn/);
   });
 
-  it('and copper is never used as the unresolved signal', () => {
-    // The mirror image. A warning in copper is a warning nobody sees.
-    expect(allCss).not.toMatch(/--unresolved[a-z-]*:\s*var\(--accent/);
+  it('is never given the accent either — it is not actionable', () => {
+    expect(absence).not.toMatch(/var\(--accent/);
+  });
+
+  it('is grey secondary text at normal weight', () => {
+    expect(absence).toMatch(/color:\s*var\(--text-muted\)/);
+    expect(absence).not.toMatch(/font-weight:\s*(600|700|bold)/);
+  });
+});
+
+describe('the warning is its own signal, distinct from the accent', () => {
+  it('the warn colour is never the accent, and the accent is never the warn colour', () => {
+    // If these ever alias, "you can act on this" and "you must look at this"
+    // become the same colour, and the app has one fewer thing it can say.
+    expect(tokens).not.toMatch(/--warn[a-z-]*:\s*var\(--accent/);
+    expect(tokens).not.toMatch(/--accent[a-z-]*:\s*var\(--warn/);
+  });
+
+  it('the warning block sets a ground, so its colour is never bare on the page', () => {
+    const block = /\.unresolved-block,\s*\.warn\s*\{([^}]*)\}/.exec(allCss)?.[1] ?? '';
+
+    expect(block).toMatch(/background:\s*var\(--warn-bg\)/);
+    expect(block).toMatch(/border-left:[^;]*var\(--warn-border\)/);
+  });
+
+  it('KEEPS THE BODY TEXT IN NORMAL INK', () => {
+    // Amber on amber is what made the old treatment vibrate. Colour marks the
+    // edge and names the category; the content reads like content.
+    const block = /\.unresolved-block,\s*\.warn\s*\{([^}]*)\}/.exec(allCss)?.[1] ?? '';
+
+    expect(block).toMatch(/color:\s*var\(--text\)/);
+  });
+
+  it('defines a warn colour that is actually used', () => {
+    expect(tokens).toMatch(/--warn:/);
+    expect(allCss).toMatch(/color:\s*var\(--warn\)/);
   });
 });
 

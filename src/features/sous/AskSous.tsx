@@ -235,7 +235,7 @@ export function AskSous(): ReactNode {
 
               {/* A refusal is shown as itself, not as a failure. Asking again is
                   cheap; acting on the wrong job is not. */}
-              {exchange.refusal !== null && <p className="unresolved">{exchange.refusal}</p>}
+              {exchange.refusal !== null && <p className="warn">{exchange.refusal}</p>}
 
               {exchange.answer !== null && (
                 <>

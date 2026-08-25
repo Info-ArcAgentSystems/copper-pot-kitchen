@@ -20,16 +20,14 @@
    --------------------------------------------------------------------------- */
 
 h1 {
-  font-family: var(--font-display);
   font-size: var(--size-h1);
-  font-weight: var(--weight-display);
+  font-weight: var(--weight-semi);
   line-height: var(--leading-tight);
   letter-spacing: -0.01em;
   margin: 0 0 var(--space-2);
 }
 
 h2 {
-  font-family: var(--font-display);
   font-size: var(--size-lead);
   font-weight: var(--weight-medium);
   line-height: var(--leading-tight);
@@ -45,7 +43,6 @@ h3:not(:first-child) {
 }
 
 h3 {
-  font-family: var(--font-display);
   font-size: var(--size-body);
   font-weight: var(--weight-medium);
   line-height: var(--leading-tight);
@@ -64,7 +61,7 @@ h3 {
   font-weight: var(--weight-bold);
   text-transform: uppercase;
   letter-spacing: var(--track-label);
-  color: var(--accent-ink);
+  color: var(--text-muted);
 }
 
 /* ---------------------------------------------------------------------------
@@ -106,8 +103,7 @@ h3 {
    every one of them was wrapping mid-phrase. The name is the only part that can
    afford to be cut, so it is the only part allowed to. */
 .app-header > span:first-child {
-  font-family: var(--font-display);
-  font-weight: var(--weight-display);
+  font-weight: var(--weight-semi);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -166,7 +162,7 @@ h3 {
 }
 
 .tabs a[aria-current='page'] {
-  color: var(--accent-ink);
+  color: var(--accent);
   font-weight: var(--weight-bold);
   box-shadow: inset 0 2px 0 var(--accent);
 }
@@ -266,14 +262,22 @@ button:disabled {
   font-weight: 600;
 }
 
-/* Rule 8 made visible: an unresolved or unpriced value gets its own treatment so
-   it is never mistaken for a real figure. */
+/* ---------------------------------------------------------------------------
+   AN ABSENCE WHISPERS.
+
+   Rule 8 says an unknown value is surfaced rather than zeroed. It does NOT say
+   it is an emergency. "Food cost not known yet" is an honest statement of fact
+   sitting beside a real figure, and dressing it in a filled amber pill made
+   every screen look like it had a problem — which trains the eye to skip the
+   places that genuinely do.
+
+   Grey, normal weight, no fill, no border. It reads as what it is: a value
+   nobody has entered. The guard in `tests/ui/tokens.test.ts` stops it drifting
+   back toward a warning colour.
+   --------------------------------------------------------------------------- */
 .unresolved {
-  background: var(--unresolved-bg);
-  color: var(--unresolved);
-  padding: 2px var(--space-2);
-  border-radius: var(--radius);
-  font-weight: 600;
+  color: var(--text-muted);
+  font-weight: var(--weight-normal);
 }
 
 /* ---------------------------------------------------------------------------
@@ -359,8 +363,8 @@ button.primary {
 }
 
 button.primary:active {
-  background: var(--accent-ink);
-  border-color: var(--accent-ink);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 button.danger {
@@ -437,7 +441,7 @@ button.link {
   padding: 0;
   border: none;
   background: none;
-  color: var(--accent-ink);
+  color: var(--accent);
   text-decoration: underline;
   font-weight: 600;
 }
@@ -489,7 +493,7 @@ button.link {
 /* Direction is emphasis only — never a calculation, and never the sole carrier
    of meaning, since the before and after figures are both on the row. */
 .delta-up {
-  color: var(--accent-ink);
+  color: var(--accent);
   font-weight: var(--weight-bold);
 }
 
@@ -502,19 +506,39 @@ button.link {
   font-weight: 600;
 }
 
-/* THE WARNING, AND WHY IT LOOKS NOTHING LIKE THE ACCENT.
+/* ---------------------------------------------------------------------------
+   A WARNING SPEAKS ONCE, CALMLY.
 
-   Copper and amber are luminance neighbours — 1.33:1 against each other — so
-   colour alone cannot separate them. The left bar does: amber is always a filled
-   block with a bar, copper is never a filled anything. */
-.unresolved-block {
+   The single treatment for "you need to look at this", used by the check-these-
+   yourself blocks, an Ask Sous refusal, and an impact preview that would open a
+   gap. One treatment, so it is recognisable anywhere.
+
+   THE BODY TEXT IS NORMAL INK. The old version coloured every word amber on
+   amber, which is what made it vibrate. Colour now marks the EDGE and names the
+   CATEGORY; the content reads like content.
+   --------------------------------------------------------------------------- */
+.unresolved-block,
+.warn {
   margin-top: var(--space-3);
   padding: var(--space-3);
-  border: 1px solid var(--unresolved-border);
-  border-left: 4px solid var(--unresolved);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--warn-border);
   border-radius: var(--radius);
-  background: var(--unresolved-bg);
-  color: var(--unresolved);
+  background: var(--warn-bg);
+  color: var(--text);
+}
+
+/* The category label, and the only coloured text in the block. */
+.unresolved-block > h2,
+.warn > h2,
+.warn-label {
+  font-family: var(--font-mono);
+  font-size: var(--size-micro);
+  font-weight: var(--weight-semi);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--warn);
+  margin: 0 0 var(--space-2);
 }
 
 .unresolved-block h2 {
@@ -523,7 +547,7 @@ button.link {
   font-weight: var(--weight-bold);
   text-transform: uppercase;
   letter-spacing: var(--track-label);
-  color: var(--unresolved);
+  color: var(--warn);
 }
 
 .unresolved-block ul {
@@ -550,10 +574,10 @@ button.link {
 .prep-day h2 {
   font-family: var(--font-mono);
   font-size: var(--size-micro);
-  font-weight: var(--weight-bold);
+  font-weight: var(--weight-medium);
   text-transform: uppercase;
   letter-spacing: var(--track-label);
-  color: var(--accent-ink);
+  color: var(--text-muted);
   border-bottom: 1px solid var(--border-strong);
   padding-bottom: var(--space-2);
   margin-bottom: var(--space-2);
@@ -576,9 +600,8 @@ button.link {
 }
 
 .shop-line .buy {
-  font-family: var(--font-display);
   font-size: var(--size-figure);
-  font-weight: var(--weight-display);
+  font-weight: var(--weight-semi);
   font-variant-numeric: var(--num);
   white-space: nowrap;
 }
@@ -634,7 +657,7 @@ button.link {
 }
 
 .prep-day .today {
-  color: var(--accent-ink);
+  color: var(--accent);
   font-weight: var(--weight-bold);
 }
 
@@ -653,9 +676,8 @@ button.link {
 }
 
 .prep-line .batch {
-  font-family: var(--font-display);
   font-size: var(--size-figure);
-  font-weight: var(--weight-display);
+  font-weight: var(--weight-semi);
   font-variant-numeric: var(--num);
   white-space: nowrap;
 }
@@ -674,7 +696,7 @@ button.link {
    rounding up to whole trays, and colouring it red would make every other line
    look like a problem. */
 .surplus {
-  color: var(--warning);
+  color: var(--warn);
 }
 
 .allocations {
@@ -729,10 +751,10 @@ button.link {
 .pack-section {
   font-family: var(--font-mono);
   font-size: var(--size-micro);
-  font-weight: var(--weight-bold);
+  font-weight: var(--weight-medium);
   text-transform: uppercase;
   letter-spacing: var(--track-label);
-  color: var(--accent-ink);
+  color: var(--text-muted);
   margin: var(--space-3) 0 var(--space-1);
 }
 
@@ -803,7 +825,7 @@ button.link {
 /* A loss is marked, but not alarmed. Selling one job at a loss is a decision he
    may have made deliberately; the screen reports it rather than scolding. */
 .money-row.loss {
-  border-left: 4px solid var(--warning);
+  border-left: 4px solid var(--warn);
 }
 
 .money-figures {
@@ -820,17 +842,16 @@ button.link {
 .money-figures dt {
   font-family: var(--font-mono);
   font-size: var(--size-micro);
-  font-weight: var(--weight-bold);
+  font-weight: var(--weight-medium);
   text-transform: uppercase;
   letter-spacing: var(--track-label);
-  color: var(--accent-ink);
+  color: var(--text-muted);
 }
 
 .money-figures dd {
   margin: 0;
-  font-family: var(--font-display);
   font-size: var(--size-figure);
-  font-weight: var(--weight-display);
+  font-weight: var(--weight-semi);
   font-variant-numeric: var(--num);
 }
 
@@ -892,7 +913,7 @@ section.danger-zone h2 {
 }
 
 .app-header a.tap {
-  color: var(--accent-ink);
+  color: var(--accent);
   text-decoration: none;
   font-weight: 600;
   display: inline-flex;
@@ -916,7 +937,6 @@ section.danger-zone h2 {
 }
 
 .sous-lead {
-  font-family: var(--font-display);
   font-size: var(--size-lead);
   font-weight: var(--weight-medium);
   margin: 0 0 var(--space-2);
@@ -1011,4 +1031,57 @@ section.danger-zone h2 {
 
 .chat-composer .field {
   margin-bottom: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   THE SCAN BUTTON.
+
+   A file input is the only control here that must stay a real `<input
+   type="file">` — nothing else opens a camera. So the LABEL is styled as the
+   button and the input is taken out of the visual flow, which is the accessible
+   pattern: the label is still the input's label, so tapping it opens the camera
+   and a screen reader still announces a file control.
+
+   It was previously `.check`, the checkbox row style — a bare 44px tick-target
+   with text beside it, which read as a list item rather than the primary action
+   on the screen.
+
+   `clip-path` rather than `display: none`: a hidden input cannot be focused, and
+   the keyboard path has to keep working.
+   --------------------------------------------------------------------------- */
+
+.scan-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--touch-min);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+
+.scan-button:active {
+  background: var(--surface);
+}
+
+.scan-button input[type='file'] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The label carries the ring, since the input it belongs to is not visible. */
+.scan-button:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }

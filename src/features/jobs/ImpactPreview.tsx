@@ -118,7 +118,7 @@ export function ImpactPreview({
           before saving, not discovering on the shopping list afterwards. */}
       {impact.gapsIntroduced.length > 0 && (
         <div className="unresolved-block">
-          <p className="unresolved">This change leaves something unresolved</p>
+          <p className="warn-label">This change leaves something unresolved</p>
           <ul>
             {impact.gapsIntroduced.map((gap) => (
               <li key={gap}>{gap}</li>

@@ -10,51 +10,42 @@
  * be checked.
  *
  * ---------------------------------------------------------------------------
- * COPPER CARRIES THE BRAND. AMBER CARRIES THE WARNING. THEY NEVER SWAP.
+ * AN ABSENCE WHISPERS. A WARNING SPEAKS ONCE, CALMLY.
  *
- * The most important signal in this app is an unresolved value — a price nobody
- * entered, a quantity that could not be worked out, a dietary requirement in the
- * owner's own words. Rule 8 says those are surfaced rather than zeroed, and the
- * amber treatment is how the eye finds them.
+ * These are two different things and the app used to render them identically —
+ * both as filled amber. That was wrong in both directions: "food cost not known
+ * yet" is an honest statement of fact and was alarming, while a genuine
+ * "check this yourself" had to shout over it to be noticed.
  *
- * Copper (#b87333) and amber (#7f6115) are luminance neighbours: their contrast
- * against each other is 1.33, which is to say the eye cannot separate them by
- * brightness at all. So the separation is by TREATMENT, and it is absolute:
+ *   ABSENCE    grey secondary text, normal weight, no fill whatsoever
+ *   WARNING    a 3px left rule, a faint tint, and a mono label in the warn colour
+ *              — with the BODY TEXT IN NORMAL INK
  *
- *   copper  text, rules, borders, tick fills — never a filled background
- *   amber   a filled block with a left bar   — never bare text on the page
+ * The old treatment coloured every word amber on amber, which is what made it
+ * vibrate. Colour now marks the edge and names the category; the content reads
+ * normally. `tests/ui/tokens.test.ts` asserts an absence is never given a warning
+ * colour or a fill, so the two cannot collapse back into one.
  *
- * `tests/ui/tokens.test.ts` asserts amber is only ever used alongside its own
- * background, so "amber as a decorative accent" fails a test rather than relying
- * on anyone remembering. That guard is the whole reason the split holds.
+ * WHY BLUE AND AMBER SIT TOGETHER SAFELY. They contrast 1.03:1 against each
+ * other — luminance-identical, exactly as copper and amber were. The difference
+ * is hue: copper and amber were the same family and genuinely confusable, where
+ * blue and amber are ~180 degrees apart. Blue/amber is also the safest pair for
+ * red-green colour blindness, which is around 8% of men — deuteranopia and
+ * protanopia both preserve blue-yellow discrimination. The copper scheme was the
+ * worst case for those readers; this is close to the best.
  * ---------------------------------------------------------------------------
  *
- * WEB FONTS, AND THE RULE THEY DO NOT GET TO BREAK. Two self-hosted woff2 files,
- * 68KB together, same origin — no third-party DNS and TLS before the first word
- * paints. Every face declares `font-display: swap`, so the system fallback shows
- * immediately and is replaced when the file lands. A kitchen on 4G never waits on
- * a font, and never sees blank text.
- *
- * Every family token ENDS IN A SYSTEM STACK. If both files fail, the app renders
- * in New York and SF Mono and nothing about it breaks.
+ * ONE WEB FONT, FOR LABELS ONLY. Body text is the system stack: on the iPhone
+ * this is actually used on, `-apple-system` IS SF Pro — the neutral sans every
+ * modern app falls back to anyway — so a webfont for body would buy nothing and
+ * cost a swap on the one thing that must never wait. Only the small uppercase
+ * data labels use a face that has to load, and they degrade to SF Mono.
  */
 
 /*
- * Self-hosted, latin subset, variable weight axis.
- *
- * `font-display: swap` is not a preference — see above. `font-weight` declares
- * the axis RANGE rather than a single value, which is what makes one file serve
- * every weight the app uses; verified in-browser, where Bitter measures 125.39 /
- * 126.99 / 130.03 px at 400 / 600 / 900.
+ * Self-hosted, latin subset, variable weight axis. `font-display: swap` is not a
+ * preference: FOIT on a supermarket connection is a blank screen.
  */
-@font-face {
-  font-family: 'Bitter';
-  src: url('/fonts/bitter-latin.woff2') format('woff2');
-  font-weight: 100 900;
-  font-style: normal;
-  font-display: swap;
-}
-
 @font-face {
   font-family: 'JetBrains Mono';
   src: url('/fonts/jetbrains-mono-latin.woff2') format('woff2');
@@ -78,19 +69,13 @@
   --num: tabular-nums;
 
   /* -------------------------------------------------------------------------
-     TYPE — three families, each ending in a system stack.
-
-     `--font` stays system and stays first: body text is the one thing that must
-     never wait, and it does not.
+     TYPE — the system stack for everything, mono for data labels.
+     Both end in a generic family, so nothing breaks if a file never arrives.
      ------------------------------------------------------------------------- */
   --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-display: 'Bitter', ui-serif, Georgia, 'Times New Roman', serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* -------------------------------------------------------------------------
-     One ramp, named. SIZES ARE UNCHANGED by the re-skin — only the families and
-     weights that render at them.
-     ------------------------------------------------------------------------- */
+  /* One ramp, named. Sizes are unchanged by the re-skin. */
   --size-micro: 0.75rem; /* 12px — eyebrows, captions */
   --size-small: 0.875rem; /* 14px — workings, hints */
   --size-body: 1rem; /* 16px — everything else */
@@ -99,16 +84,15 @@
   --size-h1: 1.3125rem; /* 21px — the screen's name */
 
   --weight-normal: 400;
-  --weight-medium: 600;
+  --weight-medium: 500;
+  --weight-semi: 600;
   --weight-bold: 700;
-  /* The slab weight. Screen names and every figure. */
-  --weight-display: 900;
 
-  --leading-tight: 1.25;
-  --leading-body: 1.45;
+  --leading-tight: 1.3;
+  --leading-body: 1.5;
 
-  /* The letter-spacing that makes a 12px mono label read as a label. */
-  --track-label: 0.12em;
+  /* Enough to read a 12px uppercase label as a label, and no more. */
+  --track-label: 0.06em;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -117,88 +101,65 @@
   --space-5: 24px;
   --space-6: 32px;
 
-  --radius: 6px;
+  --radius: 8px;
   --radius-pill: 999px;
 
   /* -------------------------------------------------------------------------
-     COLOUR — light. A kitchen ledger: parchment, ink, and a copper rule.
-     Read in daylight through a kitchen window, so contrast is measured rather
-     than judged. Every value below clears WCAG AA for the size it is used at.
+     COLOUR — light. Neutral greys, one accent, used sparingly.
+     Every value below clears WCAG AA for the size it is used at.
      ------------------------------------------------------------------------- */
-  --bg: #f7f1e3; /* the page — parchment */
-  --surface: #efe6d3; /* chrome — header, tabs. The sunk paper */
-  --card: #fffdf8; /* anything that reads as one object */
-  --border: #e0d5bd;
-  --border-strong: #cfc0a2;
-  --text: #0e0e0c;
-  --text-muted: #5c554a;
+  --bg: #fafafa; /* the page */
+  --surface: #f4f4f5; /* a sunk panel */
+  --card: #ffffff; /* anything that reads as one object */
+  --border: #e5e7eb; /* hairline */
+  --border-strong: #d4d4d8;
+  --text: #1a1a1a; /* 16.67 on the page */
+  --text-muted: #6b7280; /* 4.63 — passes body text, which is why an absence can use it */
 
-  /*
-   * COPPER IN THREE STEPS, and the reason is measured rather than aesthetic.
-   *
-   * Brand copper is 3.37:1 on parchment — fine for a rule or a 1px border, and
-   * a FAIL for the 12px labels that are the signature treatment. So the brand
-   * value keeps its identity where contrast does not apply, and text and fills
-   * get darker steps that clear AA.
-   *
-   *   --accent          3.37 on paper   rules, borders, tab indicator, ticks
-   *   --accent-ink      5.29 on paper   every small copper label and link
-   *   --accent-strong   7.31 white-on   button fills
-   *
-   * At 12px the three are indistinguishable to the eye. The contrast is not.
-   */
-  --accent: #b87333;
-  --accent-ink: #8f5626;
-  --accent-strong: #7d4a1f;
-  --accent-subtle: #f3e3d2;
+  /* The ONE accent. Active tab, primary button, links. Not a fill for anything
+     else, and never a decoration. */
+  --accent: #2563eb; /* 4.95 on the page, 5.17 white-on */
+  --accent-strong: #1d4ed8; /* pressed — 6.42 */
+  --accent-subtle: #eff6ff; /* a tinted surface: the owner's own words in a chat */
   --accent-text: #ffffff;
 
-  --danger: #b4381f; /* 5.29 on paper */
-  --danger-subtle: #fbeeea;
-  --ok: #436b45; /* 5.44 on paper */
-  --warning: #7f6115;
+  --ok: #15803d; /* 4.81 */
+  --danger: #dc2626; /* 4.63 */
+  --danger-subtle: #fef2f2;
 
   /*
-   * RESERVED FOR THE UNRESOLVED SIGNAL. Never an accent, never decoration.
-   *
-   * #8a6a18 was the brand value and measures 4.11 on its own block — a fail. One
-   * step darker clears it at 4.71 and is the same colour to the eye.
+   * THE WARNING. Reserved for "you need to look at this" — never an absence,
+   * never a decoration, never the accent.
    */
-  --unresolved: #7f6115;
-  --unresolved-bg: #f5e7c0;
-  --unresolved-border: #e3d09a;
+  --warn: #b45309; /* 4.81 on the page, 4.84 on its own tint */
+  --warn-bg: #fffbeb;
+  --warn-border: #f59e0b;
 
-  --shadow-card: 0 1px 2px rgb(14 14 12 / 5%);
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 5%);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    /* Warm near-black, not the cool slate this replaced. The paper darkens; it
-       does not become a different material. */
-    --bg: #17150f;
-    --surface: #211e15;
-    --card: #232016;
-    --border: #3a3527;
-    --border-strong: #4d4634;
-    --text: #f4efe2;
-    --text-muted: #a9a08c;
+    --bg: #0f0f0f;
+    --surface: #18181b;
+    --card: #18181b;
+    --border: #27272a;
+    --border-strong: #3f3f46;
+    --text: #fafafa;
+    --text-muted: #a1a1aa;
 
-    /* Copper lightens to stay readable on a dark ground. The three-step
-       structure holds: brand, text, fill. */
-    --accent: #d08b4c;
-    --accent-ink: #e0a468;
-    --accent-strong: #e0a468;
-    --accent-subtle: #2e2418;
-    --accent-text: #17150f;
+    --accent: #60a5fa;
+    --accent-strong: #93c5fd;
+    --accent-subtle: #132033;
+    --accent-text: #0f0f0f;
 
-    --danger: #e8785c;
-    --danger-subtle: #2a1611;
-    --ok: #7fae7f;
-    --warning: #e8c56a;
+    --ok: #4ade80;
+    --danger: #f87171;
+    --danger-subtle: #2a1414;
 
-    --unresolved: #e8c56a;
-    --unresolved-bg: #3a2f0e;
-    --unresolved-border: #5c4a15;
+    --warn: #fbbf24;
+    --warn-bg: #2a2010;
+    --warn-border: #a16207;
 
     --shadow-card: none;
   }
@@ -228,9 +189,9 @@ body {
 /*
  * Every interactive element clears the floor.
  *
- * THE 16px IS NOT A TYPE CHOICE AND THE FONT SWAP CANNOT TOUCH IT. It is set on
- * the element in absolute pixels, not inherited from a family or a ramp step, so
- * a webfont landing mid-session cannot move it under the threshold where iOS
+ * THE 16px IS NOT A TYPE CHOICE AND NO FONT SWAP CAN TOUCH IT. It is set on the
+ * element in absolute pixels, not inherited from a family or a ramp step, so a
+ * webfont landing mid-session cannot drag it under the threshold where iOS
  * Safari zooms the whole page on focus. `tests/ui/tokens.test.ts` pins it.
  */
 button,
@@ -257,7 +218,7 @@ input[type='date'] {
 }
 
 /* A ticked box is the owner's own mark on a derived list — the one thing on these
-   screens he puts there himself, so it carries the brand copper. */
+   screens he puts there himself, so it carries the accent. */
 input[type='checkbox'],
 input[type='radio'] {
   accent-color: var(--accent);
@@ -269,6 +230,11 @@ input[type='radio'] {
   font-feature-settings: 'tnum';
 }
 
+/* No browser-default blue. Links are the accent, like every other affordance. */
+a {
+  color: var(--accent);
+}
+
 /* Nothing is revealed by hover alone — a touch screen has no hover. Every hover
    rule in this codebase pairs with :focus-visible. */
 button:focus-visible,
@@ -276,7 +242,7 @@ a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 3px solid var(--accent-ink);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 

@@ -131,7 +131,7 @@ export function ScanJobSheet(): ReactNode {
         Photograph the sheet. Nothing is saved until you have checked it and tapped confirm.
       </p>
 
-      <label className="check">
+      <label className="scan-button">
         <input
           type="file"
           accept="image/*"

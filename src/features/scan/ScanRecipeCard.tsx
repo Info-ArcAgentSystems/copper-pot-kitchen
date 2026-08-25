@@ -107,7 +107,7 @@ export function ScanRecipeCard(): ReactNode {
         Photograph the card. Nothing is saved until you have read it back and confirmed it.
       </p>
 
-      <label className="check">
+      <label className="scan-button">
         <input
           type="file"
           accept="image/*"

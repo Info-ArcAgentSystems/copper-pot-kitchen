@@ -141,7 +141,7 @@ export function ScanMenu(): ReactNode {
         one opens in the recipe editor for you to check and adjust to your own portions first.
       </p>
 
-      <label className="check">
+      <label className="scan-button">
         <input
           type="file"
           accept="image/*"

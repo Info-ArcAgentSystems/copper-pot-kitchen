@@ -519,3 +519,65 @@ describe('every function surfaces what the upstream actually said', () => {
     expect(source, `${fn} does not return it`).toContain('It said:');
   });
 });
+
+/**
+ * THE SCANNERS TAKE A PHOTO **OR** A FILE HE ALREADY HAS.
+ *
+ * Reported live: the button said "Take or choose a photo" and only ever offered
+ * "take". The cause was `capture="environment"` on the file input — an attribute
+ * that does not mean "prefer the camera", it means "this control IS a camera
+ * capture". Android Chrome and iOS Safari both honour that by skipping the
+ * picker entirely, so the gallery, Files, iCloud and Drive all disappear.
+ *
+ * That is wrong for every one of these four. A supplier emails an invoice photo,
+ * a client sends a menu as a screenshot, a recipe card was photographed last week
+ * — none of those are things to re-photograph off a screen, and two of them
+ * cannot be.
+ *
+ * Without `capture` the picker offers BOTH: iOS shows Photo Library / Take Photo
+ * / Choose File, Android shows the camera alongside the file sources. One
+ * control, both routes, and the label is finally true.
+ *
+ * A guard rather than a comment because the attribute reads as a helpful hint —
+ * it is exactly the sort of thing a future session adds back to "default to the
+ * camera", not realising it removes every other option.
+ */
+describe('a scanner accepts a photo from anywhere', () => {
+  const SCANNERS = ['ScanJobSheet', 'ScanRecipeCard', 'ScanInvoice', 'ScanMenu'] as const;
+
+  const sourceOf = (name: string): string =>
+    readFileSync(
+      fileURLToPath(new URL(`../../src/features/scan/${name}.tsx`, import.meta.url)),
+      'utf8',
+    );
+
+  it('covers every scanner that renders a file input', () => {
+    // If a fifth scanner appears and is not listed here, this guard would pass
+    // while leaving it camera-only. So the list is checked against the source
+    // tree rather than trusted.
+    const dir = fileURLToPath(new URL('../../src/features/scan', import.meta.url));
+    const withFileInput = readdirSync(dir)
+      .filter((f) => f.endsWith('.tsx'))
+      .filter((f) => readFileSync(join(dir, f), 'utf8').includes('type="file"'))
+      .map((f) => f.replace('.tsx', ''))
+      .sort();
+
+    expect(withFileInput).toEqual([...SCANNERS].sort());
+  });
+
+  it.each(SCANNERS)('%s does not force the camera', (name) => {
+    // `capture` in ANY form — bare, ="environment", ="user". All three remove the
+    // gallery; only the wording differs.
+    expect(sourceOf(name)).not.toMatch(/\scapture(\s|=|\/|>)/);
+  });
+
+  it.each(SCANNERS)('%s still restricts the picker to images', (name) => {
+    // Dropping `capture` must not take `accept` with it, or the picker starts
+    // offering PDFs and zip files for a function that reads a photograph.
+    expect(sourceOf(name)).toContain('accept="image/*"');
+  });
+
+  it.each(SCANNERS)('%s still says it takes either', (name) => {
+    expect(sourceOf(name)).toContain('Take or choose a photo');
+  });
+});

@@ -18,6 +18,7 @@ import { commitScannedPrices } from '../../scan/commit';
 import { reviewInvoice, type InvoiceReview } from '../../scan/invoice';
 import { parseInvoice } from '../../scan/parseImage';
 import { toScaledDataUrl } from './scaleImage';
+import { PhotoSource } from './PhotoSource';
 import { formatMoney } from '../../ui/form';
 import { lineNote } from '../../ui/invoiceView';
 import { useAsync } from '../../ui/useAsync';
@@ -100,27 +101,7 @@ export function ScanInvoice(): ReactNode {
         nothing is saved until you have checked them.
       </p>
 
-      <label className="scan-button">
-        <input
-          type="file"
-          accept="image/*"
-          /* NO `capture` HERE, DELIBERATELY.
-
-             It does not mean "prefer the camera" — it means "this control IS a
-             camera capture", so Android Chrome and iOS Safari both skip the
-             picker and the gallery, Files, iCloud and Drive all disappear.
-
-             A supplier emails an invoice photo; a client sends a menu as a
-             screenshot. Those cannot be re-photographed off a screen, and should
-             not have to be. `tests/scan/guards.test.ts` keeps it out. */
-          disabled={busy || !ready}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file !== undefined) void scan(file);
-          }}
-        />
-        Take or choose a photo
-      </label>
+      <PhotoSource onFile={(file) => void scan(file)} disabled={busy || !ready} />
 
       {busy && <p className="muted">Reading it…</p>}
 

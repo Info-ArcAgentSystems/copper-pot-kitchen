@@ -24,6 +24,7 @@ import { parseMenu } from '../../scan/parseImage';
 import { findRecipes } from '../../scan/findRecipes';
 import { draftFromWebReview, reviewWebRecipe, type WebRecipeReview } from '../../scan/webRecipe';
 import { toScaledDataUrl } from './scaleImage';
+import { PhotoSource } from './PhotoSource';
 import { useAsync } from '../../ui/useAsync';
 import type { Ingredient } from '../../engine/types';
 
@@ -141,27 +142,7 @@ export function ScanMenu(): ReactNode {
         one opens in the recipe editor for you to check and adjust to your own portions first.
       </p>
 
-      <label className="scan-button">
-        <input
-          type="file"
-          accept="image/*"
-          /* NO `capture` HERE, DELIBERATELY.
-
-             It does not mean "prefer the camera" — it means "this control IS a
-             camera capture", so Android Chrome and iOS Safari both skip the
-             picker and the gallery, Files, iCloud and Drive all disappear.
-
-             A supplier emails an invoice photo; a client sends a menu as a
-             screenshot. Those cannot be re-photographed off a screen, and should
-             not have to be. `tests/scan/guards.test.ts` keeps it out. */
-          disabled={busy || !ready}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file !== undefined) void scan(file);
-          }}
-        />
-        Take or choose a photo
-      </label>
+      <PhotoSource onFile={(file) => void scan(file)} disabled={busy || !ready} />
 
       {busy && <p className="muted">Reading it…</p>}
 

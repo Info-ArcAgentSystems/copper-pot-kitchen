@@ -521,63 +521,99 @@ describe('every function surfaces what the upstream actually said', () => {
 });
 
 /**
- * THE SCANNERS TAKE A PHOTO **OR** A FILE HE ALREADY HAS.
+ * THE SCANNERS REACH THE CAMERA **AND** THE GALLERY.
  *
- * Reported live: the button said "Take or choose a photo" and only ever offered
- * "take". The cause was `capture="environment"` on the file input — an attribute
- * that does not mean "prefer the camera", it means "this control IS a camera
- * capture". Android Chrome and iOS Safari both honour that by skipping the
- * picker entirely, so the gallery, Files, iCloud and Drive all disappear.
+ * Two live failures got here, and they are opposites — which is why this guard
+ * asserts a pair rather than an absence.
  *
- * That is wrong for every one of these four. A supplier emails an invoice photo,
- * a client sends a menu as a screenshot, a recipe card was photographed last week
- * — none of those are things to re-photograph off a screen, and two of them
- * cannot be.
+ * FIRST: `capture="environment"` was on the input. It does not mean "prefer the
+ * camera", it means "this control IS a camera capture", so both mobile browsers
+ * skipped the picker. Gallery, Files, iCloud and Drive all disappeared, and the
+ * button saying "Take or choose a photo" could only take.
  *
- * Without `capture` the picker offers BOTH: iOS shows Photo Library / Take Photo
- * / Choose File, Android shows the camera alongside the file sources. One
- * control, both routes, and the label is finally true.
+ * SECOND: removing it fixed the gallery and broke the camera. Chrome on Android
+ * 13+ routes a bare `accept="image/*"` to the SYSTEM PHOTO PICKER — Photos and
+ * Albums, no camera button anywhere. Camera-only became gallery-only, which was
+ * no better and arguably worse: the job sheet scanner exists to be used standing
+ * over a sheet of paper.
  *
- * A guard rather than a comment because the attribute reads as a helpful hint —
- * it is exactly the sort of thing a future session adds back to "default to the
- * camera", not realising it removes every other option.
+ * There is no attribute combination that reliably offers both on Android, so the
+ * app makes the choice explicit with two controls. What has to hold:
+ *
+ *   exactly one input carries `capture`      — the camera route
+ *   exactly one input carries no `capture`   — the gallery route
+ *   both filter to images
+ *
+ * Losing either is a regression, and they fail in opposite directions, so a
+ * guard that only forbade `capture` would have passed the second outage
+ * cheerfully.
  */
-describe('a scanner accepts a photo from anywhere', () => {
+describe('a scanner can reach the camera and the gallery', () => {
   const SCANNERS = ['ScanJobSheet', 'ScanRecipeCard', 'ScanInvoice', 'ScanMenu'] as const;
 
-  const sourceOf = (name: string): string =>
-    readFileSync(
-      fileURLToPath(new URL(`../../src/features/scan/${name}.tsx`, import.meta.url)),
-      'utf8',
-    );
+  const scanDir = fileURLToPath(new URL('../../src/features/scan', import.meta.url));
+  const sourceOf = (name: string): string => readFileSync(join(scanDir, `${name}.tsx`), 'utf8');
+  const shared = readFileSync(join(scanDir, 'PhotoSource.tsx'), 'utf8');
 
-  it('covers every scanner that renders a file input', () => {
-    // If a fifth scanner appears and is not listed here, this guard would pass
-    // while leaving it camera-only. So the list is checked against the source
-    // tree rather than trusted.
-    const dir = fileURLToPath(new URL('../../src/features/scan', import.meta.url));
-    const withFileInput = readdirSync(dir)
-      .filter((f) => f.endsWith('.tsx'))
-      .filter((f) => readFileSync(join(dir, f), 'utf8').includes('type="file"'))
+  /** Every `<input type="file" ... />` in a file, as its own text. */
+  const fileInputs = (source: string): string[] =>
+    [...source.matchAll(/<input\b[^>]*type="file"[^>]*\/>/gs)].map((m) => m[0]);
+
+  it('covers every scanner, checked against the source tree', () => {
+    // A fifth scanner that never appears in this list would be left broken while
+    // the suite stayed green, so the list is derived rather than trusted.
+    const rendering = readdirSync(scanDir)
+      .filter((f) => f.endsWith('.tsx') && f !== 'PhotoSource.tsx')
+      .filter((f) => readFileSync(join(scanDir, f), 'utf8').includes('<PhotoSource'))
       .map((f) => f.replace('.tsx', ''))
       .sort();
 
-    expect(withFileInput).toEqual([...SCANNERS].sort());
+    expect(rendering).toEqual([...SCANNERS].sort());
   });
 
-  it.each(SCANNERS)('%s does not force the camera', (name) => {
-    // `capture` in ANY form — bare, ="environment", ="user". All three remove the
-    // gallery; only the wording differs.
-    expect(sourceOf(name)).not.toMatch(/\scapture(\s|=|\/|>)/);
+  it.each(SCANNERS)('%s goes through the shared control', (name) => {
+    // One definition, so the next browser change is fixed once rather than in
+    // four places with one forgotten.
+    expect(sourceOf(name)).toContain('<PhotoSource');
+    expect(fileInputs(sourceOf(name)), 'a scanner rolls its own file input').toHaveLength(0);
   });
 
-  it.each(SCANNERS)('%s still restricts the picker to images', (name) => {
-    // Dropping `capture` must not take `accept` with it, or the picker starts
-    // offering PDFs and zip files for a function that reads a photograph.
-    expect(sourceOf(name)).toContain('accept="image/*"');
+  it('offers exactly two routes', () => {
+    expect(fileInputs(shared)).toHaveLength(2);
   });
 
-  it.each(SCANNERS)('%s still says it takes either', (name) => {
-    expect(sourceOf(name)).toContain('Take or choose a photo');
+  it('ONE route goes to the camera', () => {
+    const withCapture = fileInputs(shared).filter((i) => /\scapture=/.test(i));
+
+    expect(withCapture, 'no input opens the camera — Android will show only the gallery').toHaveLength(1);
+    expect(withCapture[0]).toContain('capture="environment"');
+  });
+
+  it('ONE route reaches the gallery', () => {
+    const withoutCapture = fileInputs(shared).filter((i) => !/\scapture=/.test(i));
+
+    expect(
+      withoutCapture,
+      'every input forces the camera — the gallery is unreachable',
+    ).toHaveLength(1);
+  });
+
+  it('both routes filter to images', () => {
+    for (const input of fileInputs(shared)) {
+      expect(input).toContain('accept="image/*"');
+    }
+  });
+
+  it('names both routes plainly', () => {
+    // "Take or choose a photo" described one control that did both. Two controls
+    // have to say which is which.
+    expect(shared).toContain('Take a photo');
+    expect(shared).toContain('Choose a photo');
+  });
+
+  it('clears the input so the same photo can be picked twice', () => {
+    // After a failed scan, re-choosing the identical file is the obvious next
+    // move — and without this it fires no change event at all.
+    expect(shared).toMatch(/\.value = ''/);
   });
 });

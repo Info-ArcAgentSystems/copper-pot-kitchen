@@ -31,6 +31,7 @@ import { commitScannedJob } from '../../scan/commit';
 import { reviewJobSheet, type JobSheetReview } from '../../scan/jobSheet';
 import { parseJobSheet } from '../../scan/parseImage';
 import { toScaledDataUrl } from './scaleImage';
+import { PhotoSource } from './PhotoSource';
 import { EmptyState } from '../../ui/EmptyState';
 import { useAsync } from '../../ui/useAsync';
 
@@ -131,27 +132,7 @@ export function ScanJobSheet(): ReactNode {
         Photograph the sheet. Nothing is saved until you have checked it and tapped confirm.
       </p>
 
-      <label className="scan-button">
-        <input
-          type="file"
-          accept="image/*"
-          /* NO `capture` HERE, DELIBERATELY.
-
-             It does not mean "prefer the camera" — it means "this control IS a
-             camera capture", so Android Chrome and iOS Safari both skip the
-             picker and the gallery, Files, iCloud and Drive all disappear.
-
-             A supplier emails an invoice photo; a client sends a menu as a
-             screenshot. Those cannot be re-photographed off a screen, and should
-             not have to be. `tests/scan/guards.test.ts` keeps it out. */
-          disabled={busy || !ready}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file !== undefined) void scan(file);
-          }}
-        />
-        <span>Take or choose a photo</span>
-      </label>
+      <PhotoSource onFile={(file) => void scan(file)} disabled={busy || !ready} />
 
       {busy && <p className="muted">Reading it…</p>}
 

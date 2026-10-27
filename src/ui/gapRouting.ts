@@ -32,7 +32,14 @@ export interface Flag {
    * Setup rather than on the job, and sending him to the wrong screen is worse
    * than sending him nowhere.
    */
-  readonly where: 'Recipes' | 'Ingredients' | 'Jobs' | 'Rate card';
+  /*
+   * WHERE TO GO, IN THE WORDS THE NAV NOW USES.
+   *
+   * Recipes and Ingredients moved under the Library tab, so "fix in Ingredients"
+   * named a destination the owner could no longer see. A fix-it instruction that
+   * does not match the tab bar is a dead end dressed as help.
+   */
+  readonly where: 'Library → Recipes' | 'Library → Ingredients' | 'Jobs' | 'Setup → Rate card';
 }
 
 export interface RoutedGaps {
@@ -52,14 +59,14 @@ const GAP_ROUTING: Record<RequirementGap['reason'], Flag['where'] | 'check'> = {
   unquantified: 'check',
   named_unquantified: 'check',
 
-  missing_recipe: 'Recipes',
-  missing_sub_recipe: 'Recipes',
-  no_components: 'Recipes',
-  no_portions_per_batch: 'Recipes',
-  cycle: 'Recipes',
-  missing_ingredient: 'Ingredients',
-  no_pack_size: 'Ingredients',
-  unresolved_conversion: 'Ingredients',
+  missing_recipe: 'Library → Recipes',
+  missing_sub_recipe: 'Library → Recipes',
+  no_components: 'Library → Recipes',
+  no_portions_per_batch: 'Library → Recipes',
+  cycle: 'Library → Recipes',
+  missing_ingredient: 'Library → Ingredients',
+  no_pack_size: 'Library → Ingredients',
+  unresolved_conversion: 'Library → Ingredients',
   no_service_date: 'Jobs',
   no_portions: 'Jobs',
 };
@@ -110,17 +117,17 @@ const MISSING_ROUTING: Record<MissingReason, Flag['where'] | 'check'> = {
   named_unquantified: 'check',
 
   // A price or a conversion is absent.
-  unpriced_ingredient: 'Ingredients',
-  no_pack_size: 'Ingredients',
-  missing_ingredient: 'Ingredients',
-  unresolved_conversion: 'Ingredients',
+  unpriced_ingredient: 'Library → Ingredients',
+  no_pack_size: 'Library → Ingredients',
+  missing_ingredient: 'Library → Ingredients',
+  unresolved_conversion: 'Library → Ingredients',
 
   // The recipe itself is incomplete.
-  missing_recipe: 'Recipes',
-  missing_sub_recipe: 'Recipes',
-  no_components: 'Recipes',
-  no_portions_per_batch: 'Recipes',
-  cycle: 'Recipes',
+  missing_recipe: 'Library → Recipes',
+  missing_sub_recipe: 'Library → Recipes',
+  no_components: 'Library → Recipes',
+  no_portions_per_batch: 'Library → Recipes',
+  cycle: 'Library → Recipes',
 
   // Something about this job.
   no_portions: 'Jobs',
@@ -129,7 +136,7 @@ const MISSING_ROUTING: Record<MissingReason, Flag['where'] | 'check'> = {
 
   // Rule 11: no rate for (client group, service type). Fixed in Setup, not on the
   // job — unless he means to override the price, which is a job-level decision.
-  no_rate: 'Rate card',
+  no_rate: 'Setup → Rate card',
 };
 
 /** Why a money figure could not be produced, and where to go about it. */

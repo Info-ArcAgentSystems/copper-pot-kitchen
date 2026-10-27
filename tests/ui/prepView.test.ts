@@ -242,7 +242,7 @@ describe('gap flags — the same vocabulary as Shopping', () => {
       gap('missing_recipe', 'no recipe found for dish "x"'),
     ]);
 
-    expect(needsFixing[0]?.where).toBe('Recipes');
+    expect(needsFixing[0]?.where).toBe('Library → Recipes');
   });
 
   it('routes a missing portions-per-batch to Recipes', () => {
@@ -250,7 +250,7 @@ describe('gap flags — the same vocabulary as Shopping', () => {
       gap('no_portions_per_batch', 'Lasagne: batch recipe with no portions per batch'),
     ]);
 
-    expect(needsFixing[0]?.where).toBe('Recipes');
+    expect(needsFixing[0]?.where).toBe('Library → Recipes');
   });
 
   it('EVERY reason lands somewhere', () => {

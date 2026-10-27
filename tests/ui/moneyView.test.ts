@@ -190,7 +190,7 @@ describe('what is blocking the number', () => {
       },
     ]).rows;
 
-    expect(row?.blockers[0]?.where).toBe('Ingredients');
+    expect(row?.blockers[0]?.where).toBe('Library → Ingredients');
     expect(row?.blockers[0]?.label).toContain('mince');
   });
 
@@ -208,7 +208,7 @@ describe('what is blocking the number', () => {
       },
     ]).rows;
 
-    expect(row?.blockers[0]?.where).toBe('Rate card');
+    expect(row?.blockers[0]?.where).toBe('Setup → Rate card');
   });
 
   it('de-duplicates a blocker the same job reports twice', () => {

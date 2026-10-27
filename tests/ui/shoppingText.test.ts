@@ -104,7 +104,7 @@ describe('the caveats survive the export', () => {
 
   it('carries the needs-fixing section', () => {
     const text = shoppingText(
-      view({ needsFixing: [{ label: 'mince: no pack size set', where: 'Ingredients' }] }),
+      view({ needsFixing: [{ label: 'mince: no pack size set', where: 'Library → Ingredients' }] }),
       '2026-08-10',
       '2026-08-17',
     );

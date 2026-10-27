@@ -608,7 +608,44 @@ describe('a scanner can reach the camera and the gallery', () => {
     // "Take or choose a photo" described one control that did both. Two controls
     // have to say which is which.
     expect(shared).toContain('Take a photo');
-    expect(shared).toContain('Choose a photo');
+    expect(shared).toContain('Choose a file');
+  });
+
+  it('THE CAMERA BUTTON IS GATED ON A DEVICE THAT HAS ONE', () => {
+    /*
+     * `capture` is not implemented on desktop — `'capture' in
+     * HTMLInputElement.prototype` is false there — so both buttons would open
+     * the identical file dialog and "Take a photo" would be a label describing
+     * something that cannot happen. A file input reaches no webcam on any
+     * platform; that needs getUserMedia, which is not wired here.
+     *
+     * So the camera input renders only behind the pointer check. Without this
+     * the honest-on-mobile control becomes a lie on a laptop.
+     */
+    expect(shared).toContain("matchMedia('(pointer: coarse)')");
+    expect(shared, 'the camera input is not gated').toMatch(/hasCamera && \(/);
+  });
+
+  it('the file route is NEVER gated — it works everywhere', () => {
+    /*
+     * Whatever the device, one route must always be present, or a desktop with
+     * no touch input has no way to pick a photo at all.
+     *
+     * COUNTED, not matched. The first version of this test located "the gated
+     * block" with a non-greedy regex and asserted it did not contain the file
+     * button — which passed happily when the file button was wrapped in a
+     * SECOND gate, because the regex kept matching the first one. Gating
+     * everything is exactly the failure that most needs catching, and the guard
+     * waved it through. Counting the gates cannot be fooled that way.
+     */
+    const gates = [...shared.matchAll(/hasCamera && \(/g)];
+
+    expect(gates, 'more than one pointer gate — something else was hidden too').toHaveLength(1);
+
+    const camera = /hasCamera && \(([\s\S]*?)\n      \)\}/.exec(shared)?.[1] ?? '';
+    expect(camera, 'the one gate does not wrap the camera input').toContain(
+      'capture="environment"',
+    );
   });
 
   it('clears the input so the same photo can be picked twice', () => {

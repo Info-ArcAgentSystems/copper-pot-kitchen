@@ -1063,11 +1063,14 @@ section.danger-zone h2 {
 }
 
 .scan-button {
-  flex: 1 1 auto;
+  flex: 1 1 180px;
   justify-content: center;
   display: inline-flex;
+  /* Stacked, so the sub-line sits under the label rather than beside it. */
+  flex-direction: column;
   align-items: center;
-  gap: var(--space-2);
+  text-align: center;
+  gap: var(--space-1);
   min-height: var(--touch-min);
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--border-strong);
@@ -1080,6 +1083,24 @@ section.danger-zone h2 {
 
 .scan-button:active {
   background: var(--surface);
+}
+
+.scan-button-icon {
+  width: 1.6em;
+  height: 1.6em;
+  color: var(--accent);
+}
+
+.scan-button-label {
+  font-weight: var(--weight-semi);
+}
+
+/* What the OS will actually do. Quiet, because it is a clarification rather
+   than part of the label. */
+.scan-button-sub {
+  font-size: var(--size-small);
+  font-weight: var(--weight-normal);
+  color: var(--text-muted);
 }
 
 .scan-button input[type='file'] {

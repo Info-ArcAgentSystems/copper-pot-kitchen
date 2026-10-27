@@ -275,14 +275,14 @@ describe('check these yourself — the engine cannot give a number', () => {
 
 describe('needs fixing — something is absent from the records', () => {
   const cases: [RequirementGap['reason'], string][] = [
-    ['missing_recipe', 'Recipes'],
-    ['missing_sub_recipe', 'Recipes'],
-    ['no_components', 'Recipes'],
-    ['no_portions_per_batch', 'Recipes'],
-    ['cycle', 'Recipes'],
-    ['missing_ingredient', 'Ingredients'],
-    ['no_pack_size', 'Ingredients'],
-    ['unresolved_conversion', 'Ingredients'],
+    ['missing_recipe', 'Library → Recipes'],
+    ['missing_sub_recipe', 'Library → Recipes'],
+    ['no_components', 'Library → Recipes'],
+    ['no_portions_per_batch', 'Library → Recipes'],
+    ['cycle', 'Library → Recipes'],
+    ['missing_ingredient', 'Library → Ingredients'],
+    ['no_pack_size', 'Library → Ingredients'],
+    ['unresolved_conversion', 'Library → Ingredients'],
     ['no_service_date', 'Jobs'],
     ['no_portions', 'Jobs'],
   ];

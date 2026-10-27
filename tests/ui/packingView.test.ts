@@ -340,7 +340,7 @@ describe('gap flags — the shared vocabulary', () => {
       gap('missing_recipe', 'no recipe found'),
     ]);
 
-    expect(needsFixing[0]?.where).toBe('Recipes');
+    expect(needsFixing[0]?.where).toBe('Library → Recipes');
   });
 
   it('routes an unquantified component to check-yourself', () => {

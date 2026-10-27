@@ -132,7 +132,7 @@ export function Prep({ range }: { range?: DateRange }): ReactNode {
     // rather than two that can drift.
     const gaps = requirementsForRange(preppable, recipeList, ingredientList).gaps;
 
-    return buildPrepView(days, gaps, jobList, customerList, tickList);
+    return buildPrepView(days, gaps, jobList, customerList, tickList, recipeList);
   }, [ready, jobList, recipes.state, ingredients.state, customers.state, ticks.state, from, to]);
 
   const setDone = async (recipeId: RecipeId, prepDate: IsoDate, done: boolean): Promise<void> => {
@@ -215,6 +215,12 @@ export function Prep({ range }: { range?: DateRange }): ReactNode {
                     </>
                   )}
                 </span>
+
+                {/* MARK, DON'T FILTER. The portions above are real work — people
+                    are eating it — but there is nothing to buy and no cost, and
+                    that has to be said beside the tray count rather than only in
+                    the flags at the foot of the screen. */}
+                {line.stub !== null && <p className="unresolved">{line.stub}</p>}
 
                 {/* The per-job split. This is the reason a consolidated tray is
                     still usable: he has to know which portions go where. */}

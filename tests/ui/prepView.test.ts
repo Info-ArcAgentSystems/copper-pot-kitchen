@@ -25,6 +25,7 @@ import type {
   Job,
   JobId,
   KitchenId,
+  Recipe,
   RecipeId,
 } from '../../src/engine/types';
 
@@ -88,7 +89,26 @@ const view = (
   jobs: Job[] = [job('j1', 'c1'), job('j2', 'c2'), job('j3', 'c3')],
   customers: Customer[] = [customer('c1', 'Nolan'), customer('c2', 'Byrne'), customer('c3', 'Carr')],
   ticks: { recipeId: string; prepDate: string; done: boolean }[] = [],
-) => buildPrepView(days, gaps, jobs, customers, ticks as never);
+  recipes: Recipe[] = [],
+) => buildPrepView(days, gaps, jobs, customers, ticks as never, recipes);
+
+/** A recipe with ingredients in it — the ordinary case. */
+const written = (id: string, name: string): Recipe => ({
+  id: id as RecipeId, kitchenId: KITCHEN, name,
+  course: 'main', yieldType: 'per_person', portionsPerBatch: null, batchUnit: null,
+  confidence: 'locked', makeAheadDays: 0, sameDayOnly: true, freezable: false,
+  onsiteFinish: false, method: null, note: null,
+  components: [{ id: 'l1', recipeId: id, position: 0, kind: 'ingredient',
+    ingredientId: 'i1', subRecipeId: null, quantity: 150, unit: 'g' } as never],
+  unquantified: [],
+});
+
+/** A name and nothing else — what a scanned menu line becomes. */
+const nameOnly = (id: string, name: string, confidence: Recipe['confidence']): Recipe => ({
+  ...written(id, name),
+  confidence,
+  components: [],
+});
 
 describe('days', () => {
   it('keeps the engine’s day order rather than re-sorting', () => {
@@ -305,5 +325,85 @@ describe('ticks', () => {
 
   it('is not done when there is no tick at all', () => {
     expect(view().days[0]?.lines[0]?.done).toBe(false);
+  });
+});
+
+describe('a recipe with nothing in it is MARKED, not dropped', () => {
+  /*
+   * THE HOLE THIS CLOSES. A scanned menu line becomes a recipe that is a name
+   * and nothing else, and a recipe with no components produces:
+   *
+   *   a cost of null          — correct, `recipeFoodCost` refuses to guess
+   *   no shopping line        — correct, there is nothing to buy
+   *   a PREP BUCKET with a real tray count — and nothing saying why the other
+   *                             two are empty
+   *
+   * So the prep sheet said "5 trays of Pavlova" on the strength of a recipe
+   * with no ingredients in it. The engine does raise `no_components`, and
+   * `routeGaps` puts it in `needsFixing` — at the BOTTOM of the screen, under a
+   * heading, while the tray count sits at the top. A flag down there and a tray
+   * count up here is how he makes five trays of nothing.
+   *
+   * Marked rather than filtered, deliberately: 17 people are still eating it.
+   * The portions are real work. What is absent is the shopping and the cost,
+   * and that is what the line now says.
+   *
+   * THE MARKER IS A VIEW CONCERN. It reads `components.length`, it does no
+   * arithmetic, and it adds nothing to the engine — so the golden pack cannot
+   * move for it.
+   */
+  it('marks a line whose recipe has no ingredients', () => {
+    const lines = view(undefined, [], undefined, undefined, [], [nameOnly('lasagne', 'Lasagne', 'locked')]).days[0]?.lines;
+
+    expect(lines?.[0]?.stub).toBe('No ingredients yet — nothing to buy and no cost for this.');
+  });
+
+  it('says where a scanned one came from, because that is how he recognises it', () => {
+    // `missing` is what `stubRecipe` sets: nothing is known about it at all.
+    const lines = view(undefined, [], undefined, undefined, [], [nameOnly('lasagne', 'Lasagne', 'missing')]).days[0]?.lines;
+
+    expect(lines?.[0]?.stub).toBe(
+      'Scanned as a name only — add ingredients before it can be bought or costed.',
+    );
+  });
+
+  it('keeps the portions and the tray count on a marked line', () => {
+    // MARK, DON'T FILTER. He still has to make it.
+    const lines = view(undefined, [], undefined, undefined, [], [nameOnly('lasagne', 'Lasagne', 'missing')]).days[0]?.lines;
+
+    expect(lines?.[0]?.portions).toBe(39);
+    expect(lines?.[0]?.recipeName).toBe('Lasagne');
+  });
+
+  it('leaves an ordinary recipe unmarked', () => {
+    const lines = view(undefined, [], undefined, undefined, [], [written('lasagne', 'Lasagne')]).days[0]?.lines;
+
+    expect(lines?.[0]?.stub).toBeNull();
+  });
+
+  it('does not mark a scanned recipe he has since filled in', () => {
+    /*
+     * The operational fact is `components.length`, not the confidence flag. He
+     * scans a recipe card, the recipe lands as `confirm` or `missing`, and he
+     * then types the ingredients in. It is shoppable and costable from that
+     * moment, and marking it on the flag alone would nag him about a recipe
+     * that works.
+     */
+    const filledIn = { ...written('lasagne', 'Lasagne'), confidence: 'missing' as const };
+    const lines = view(undefined, [], undefined, undefined, [], [filledIn]).days[0]?.lines;
+
+    expect(lines?.[0]?.stub).toBeNull();
+  });
+
+  it('does not claim a recipe is empty when it simply was not passed in', () => {
+    /*
+     * The failure mode of adding a parameter. `sousAnswer` builds this view for
+     * one answer and has no reason to hand over the whole recipe book; if an
+     * absent recipe read as an empty one, every line there would be marked as
+     * having no ingredients.
+     */
+    const lines = view().days[0]?.lines;
+
+    expect(lines?.[0]?.stub).toBeNull();
   });
 });

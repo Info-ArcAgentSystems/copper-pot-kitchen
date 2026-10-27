@@ -554,7 +554,22 @@ describe('a scanner can reach the camera and the gallery', () => {
   const scanDir = fileURLToPath(new URL('../../src/features/scan', import.meta.url));
   const sourceOf = (name: string): string => readFileSync(join(scanDir, `${name}.tsx`), 'utf8');
   const shared = readFileSync(join(scanDir, 'PhotoSource.tsx'), 'utf8');
+  const gate = readFileSync(join(scanDir, 'PhotoGate.tsx'), 'utf8');
 
+  /*
+   * A SCANNER NOW REACHES THE CONTROL THROUGH `PhotoGate`, not directly.
+   *
+   * The scanners used to render `<PhotoSource disabled={busy || !ready} />`
+   * themselves, where `ready` was a boolean over two or three repository reads —
+   * false while loading and false FOREVER after a failed one. A failure left the
+   * buttons greyed with no message and the reason discarded. `PhotoGate` owns
+   * the control and the words for every non-ready state, and
+   * `tests/scan/photoGate.test.ts` is the guard for that.
+   *
+   * This guard is unchanged in what it protects: ONE definition of the two photo
+   * routes, with no scanner rolling its own file input. It follows the extra hop,
+   * and asserts the hop actually arrives.
+   */
   /** Every `<input type="file" ... />` in a file, as its own text. */
   const fileInputs = (source: string): string[] =>
     [...source.matchAll(/<input\b[^>]*type="file"[^>]*\/>/gs)].map((m) => m[0]);
@@ -563,18 +578,23 @@ describe('a scanner can reach the camera and the gallery', () => {
     // A fifth scanner that never appears in this list would be left broken while
     // the suite stayed green, so the list is derived rather than trusted.
     const rendering = readdirSync(scanDir)
-      .filter((f) => f.endsWith('.tsx') && f !== 'PhotoSource.tsx')
-      .filter((f) => readFileSync(join(scanDir, f), 'utf8').includes('<PhotoSource'))
+      .filter((f) => f.endsWith('.tsx') && f !== 'PhotoSource.tsx' && f !== 'PhotoGate.tsx')
+      .filter((f) => readFileSync(join(scanDir, f), 'utf8').includes('<PhotoGate'))
       .map((f) => f.replace('.tsx', ''))
       .sort();
 
     expect(rendering).toEqual([...SCANNERS].sort());
   });
 
+  it('the gate reaches the shared control, so the hop is not a dead end', () => {
+    expect(gate).toContain('<PhotoSource');
+    expect(fileInputs(gate), 'the gate rolls its own file input').toHaveLength(0);
+  });
+
   it.each(SCANNERS)('%s goes through the shared control', (name) => {
     // One definition, so the next browser change is fixed once rather than in
     // four places with one forgotten.
-    expect(sourceOf(name)).toContain('<PhotoSource');
+    expect(sourceOf(name)).toContain('<PhotoGate');
     expect(fileInputs(sourceOf(name)), 'a scanner rolls its own file input').toHaveLength(0);
   });
 

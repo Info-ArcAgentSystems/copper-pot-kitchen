@@ -18,10 +18,11 @@ import { commitScannedPrices } from '../../scan/commit';
 import { reviewInvoice, type InvoiceReview } from '../../scan/invoice';
 import { parseInvoice } from '../../scan/parseImage';
 import { toScaledDataUrl } from './scaleImage';
-import { PhotoSource } from './PhotoSource';
+import { PhotoGate } from './PhotoGate';
 import { formatMoney } from '../../ui/form';
 import { lineNote } from '../../ui/invoiceView';
 import { useAsync } from '../../ui/useAsync';
+import type { DataSource } from '../../ui/sourceState';
 import type { Cents } from '../../engine/types';
 
 const today = (): string => new Date().toISOString().slice(0, 10);
@@ -36,11 +37,22 @@ export function ScanInvoice(): ReactNode {
   const [review, setReview] = useState<InvoiceReview | null>(null);
   const [saved, setSaved] = useState<number | null>(null);
 
-  const ready = ingredients.state.status === 'ready' && suppliers.state.status === 'ready';
+  const sources: readonly DataSource[] = [
+    {
+      what: 'your ingredients',
+      why: 'the scanner matches each invoice line against them',
+      state: ingredients.state,
+      reload: ingredients.reload,
+    },
+    {
+      what: 'your suppliers',
+      why: 'a price belongs to a supplier, so the scanner matches the one on the invoice',
+      state: suppliers.state,
+      reload: suppliers.reload,
+    },
+  ];
 
   const scan = async (file: File): Promise<void> => {
-    if (!ready) return;
-
     setBusy(true);
     setRefusal(null);
     setReview(null);
@@ -101,7 +113,7 @@ export function ScanInvoice(): ReactNode {
         nothing is saved until you have checked them.
       </p>
 
-      <PhotoSource onFile={(file) => void scan(file)} disabled={busy || !ready} />
+      <PhotoGate sources={sources} busy={busy} onFile={(file) => void scan(file)} />
 
       {busy && <p className="muted">Reading it…</p>}
 

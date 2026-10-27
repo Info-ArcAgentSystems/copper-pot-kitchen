@@ -19,8 +19,9 @@ import { commitScannedRecipe } from '../../scan/commit';
 import { parseRecipeCard } from '../../scan/parseImage';
 import { reviewRecipeCard, type RecipeCardReview } from '../../scan/recipeCard';
 import { toScaledDataUrl } from './scaleImage';
-import { PhotoSource } from './PhotoSource';
+import { PhotoGate } from './PhotoGate';
 import { useAsync } from '../../ui/useAsync';
+import type { DataSource } from '../../ui/sourceState';
 
 /** How a resolved name reads, in his terms rather than the type's. */
 function resolutionOf(resolved: { kind: string; matches?: readonly string[] }): string {
@@ -45,11 +46,16 @@ export function ScanRecipeCard(): ReactNode {
   const [review, setReview] = useState<RecipeCardReview | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
 
-  const ready = ingredients.state.status === 'ready';
+  const sources: readonly DataSource[] = [
+    {
+      what: 'your ingredients',
+      why: 'the scanner needs them to match what it reads',
+      state: ingredients.state,
+      reload: ingredients.reload,
+    },
+  ];
 
   const scan = async (file: File): Promise<void> => {
-    if (!ready) return;
-
     setBusy(true);
     setRefusal(null);
     setReview(null);
@@ -108,7 +114,7 @@ export function ScanRecipeCard(): ReactNode {
         Photograph the card. Nothing is saved until you have read it back and confirmed it.
       </p>
 
-      <PhotoSource onFile={(file) => void scan(file)} disabled={busy || !ready} />
+      <PhotoGate sources={sources} busy={busy} onFile={(file) => void scan(file)} />
 
       {busy && <p className="muted">Reading it…</p>}
 

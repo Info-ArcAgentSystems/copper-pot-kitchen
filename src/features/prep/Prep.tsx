@@ -22,8 +22,8 @@ import { prepPlanByDay, productionBuckets } from '../../engine/production';
 import { requirementsForRange } from '../../engine/shopping';
 import { buildPrepView } from '../../ui/prepView';
 import { EmptyState } from '../../ui/EmptyState';
-import { Field } from '../../ui/Field';
 import { useAsync } from '../../ui/useAsync';
+import { useDateRange, type DateRange } from '../../ui/dateRange';
 import { useKitchen } from '../../auth/kitchenState';
 import type { IsoDate, KitchenId, RecipeId } from '../../engine/types';
 
@@ -36,19 +36,16 @@ import type { IsoDate, KitchenId, RecipeId } from '../../engine/types';
  */
 const PREPPABLE = new Set(['confirmed', 'in_prep']);
 
-const addDays = (date: string, days: number): string => {
-  const [y, m, d] = date.split('-').map(Number) as [number, number, number];
-  return new Date(Date.UTC(y, m - 1, d) + days * 86_400_000).toISOString().slice(0, 10);
-};
 
-const today = (): string => new Date().toISOString().slice(0, 10);
 
-export function Prep(): ReactNode {
+export function Prep({ range }: { range?: DateRange }): ReactNode {
   const db = supabaseDb();
   const { state: kitchenState } = useKitchen();
 
-  const [from, setFrom] = useState(today);
-  const [to, setTo] = useState(() => addDays(today(), 7));
+  // The hook is called unconditionally (rules of hooks); when Service passes a
+  // range down, its value wins and the local one simply goes unused.
+  const local = useDateRange();
+  const { from, to } = range ?? local;
 
   const jobs = useAsync(() => jobRepository(db).list(), []);
   const recipes = useAsync(() => recipeRepository(db).list(), []);
@@ -153,15 +150,6 @@ export function Prep(): ReactNode {
     <div>
       <h1>Prep</h1>
 
-      <fieldset className="units">
-        <legend>Which days</legend>
-        <Field label="From" value={from} onChange={setFrom} type="date" />
-        <Field label="To" value={to} onChange={setTo} type="date" />
-        <p className="hint muted">
-          These are prep days, not service days. Something served just after this range can
-          still be made inside it.
-        </p>
-      </fieldset>
 
       {error !== null && (
         <p className="error" role="alert">

@@ -26,8 +26,8 @@ import {
 import { requirementsForRange, outstandingShopping } from '../../engine/shopping';
 import { buildShoppingView, shoppingText } from '../../ui/shoppingView';
 import { EmptyState } from '../../ui/EmptyState';
-import { Field } from '../../ui/Field';
 import { useAsync } from '../../ui/useAsync';
+import { useDateRange, type DateRange } from '../../ui/dateRange';
 import { useKitchen } from '../../auth/kitchenState';
 import type { IngredientId, IsoDate, KitchenId, StockUnit } from '../../engine/types';
 
@@ -41,23 +41,19 @@ import type { IngredientId, IsoDate, KitchenId, StockUnit } from '../../engine/t
  */
 const SHOPPABLE = new Set(['confirmed', 'in_prep']);
 
-const addDays = (date: string, days: number): string => {
-  const [y, m, d] = date.split('-').map(Number) as [number, number, number];
-  const shifted = new Date(Date.UTC(y, m - 1, d) + days * 86_400_000);
-  return shifted.toISOString().slice(0, 10);
-};
 
-const today = (): string => new Date().toISOString().slice(0, 10);
 
-export function Shopping(): ReactNode {
+export function Shopping({ range }: { range?: DateRange }): ReactNode {
   const db = supabaseDb();
   const { state: kitchenState } = useKitchen();
 
   // A view default, not business data: it encodes no price, quantity or recipe,
   // and he can move it. Rule 1 is about what the app SHIPS knowing, and it ships
   // knowing nothing about his food.
-  const [from, setFrom] = useState(today);
-  const [to, setTo] = useState(() => addDays(today(), 7));
+  // The hook is called unconditionally (rules of hooks); when Service passes a
+  // range down, its value wins and the local one simply goes unused.
+  const local = useDateRange();
+  const { from, to } = range ?? local;
 
   const jobs = useAsync(() => jobRepository(db).list(), []);
   const recipes = useAsync(() => recipeRepository(db).list(), []);
@@ -199,15 +195,6 @@ export function Shopping(): ReactNode {
     <div>
       <h1>Shopping</h1>
 
-      <fieldset className="units">
-        <legend>Which dates</legend>
-        <Field label="From" value={from} onChange={setFrom} type="date" />
-        <Field label="To" value={to} onChange={setTo} type="date" />
-        <p className="hint muted">
-          Ticks belong to these dates. Change the window and you are looking at a different
-          shop, not losing the one you ticked.
-        </p>
-      </fieldset>
 
       {/* The filter, stated. Rule 15 keeps cancelled and completed jobs; it does
           not mean buying for them. */}

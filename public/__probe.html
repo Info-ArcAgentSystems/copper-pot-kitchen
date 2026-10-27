@@ -1,0 +1,1370 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>/*
+ * Design tokens.
+ *
+ * CLAUDE.md section 5: "Every screen works on an iPhone in Safari. Used
+ * one-handed, in a kitchen and in a supermarket. Large touch targets, readable
+ * numerals, no hover-dependent interaction."
+ *
+ * Those are requirements, not preferences, so they are defined once here rather
+ * than remembered per screen. `tests/ui/tokens.test.ts` checks the ones that can
+ * be checked.
+ *
+ * ---------------------------------------------------------------------------
+ * AN ABSENCE WHISPERS. A WARNING SPEAKS ONCE, CALMLY.
+ *
+ * These are two different things and the app used to render them identically —
+ * both as filled amber. That was wrong in both directions: "food cost not known
+ * yet" is an honest statement of fact and was alarming, while a genuine
+ * "check this yourself" had to shout over it to be noticed.
+ *
+ *   ABSENCE    grey secondary text, normal weight, no fill whatsoever
+ *   WARNING    a 3px left rule, a faint tint, and a mono label in the warn colour
+ *              — with the BODY TEXT IN NORMAL INK
+ *
+ * The old treatment coloured every word amber on amber, which is what made it
+ * vibrate. Colour now marks the edge and names the category; the content reads
+ * normally. `tests/ui/tokens.test.ts` asserts an absence is never given a warning
+ * colour or a fill, so the two cannot collapse back into one.
+ *
+ * WHY BLUE AND AMBER SIT TOGETHER SAFELY. They contrast 1.03:1 against each
+ * other — luminance-identical, exactly as copper and amber were. The difference
+ * is hue: copper and amber were the same family and genuinely confusable, where
+ * blue and amber are ~180 degrees apart. Blue/amber is also the safest pair for
+ * red-green colour blindness, which is around 8% of men — deuteranopia and
+ * protanopia both preserve blue-yellow discrimination. The copper scheme was the
+ * worst case for those readers; this is close to the best.
+ * ---------------------------------------------------------------------------
+ *
+ * ONE WEB FONT, FOR LABELS ONLY. Body text is the system stack: on the iPhone
+ * this is actually used on, `-apple-system` IS SF Pro — the neutral sans every
+ * modern app falls back to anyway — so a webfont for body would buy nothing and
+ * cost a swap on the one thing that must never wait. Only the small uppercase
+ * data labels use a face that has to load, and they degrade to SF Mono.
+ */
+
+/*
+ * Self-hosted, latin subset, variable weight axis. `font-display: swap` is not a
+ * preference: FOIT on a supermarket connection is a blank screen.
+ */
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/jetbrains-mono-latin.woff2') format('woff2');
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* Native controls follow the mode too. Without this a checkbox, a date picker
+     and the scrollbar all render in the light palette on a dark screen — an
+     unticked box was a solid white square, the loudest thing on the page. */
+  color-scheme: light dark;
+
+  /* The floor for anything tappable, not a target to aim at. A wet thumb in a
+     supermarket is not a mouse pointer. */
+  --touch-min: 44px;
+
+  /* Quantities and money align down a column. 1111 must be the same width as
+     8888, or a shopping list cannot be scanned. */
+  --num: tabular-nums;
+
+  /* -------------------------------------------------------------------------
+     TYPE — the system stack for everything, mono for data labels.
+     Both end in a generic family, so nothing breaks if a file never arrives.
+     ------------------------------------------------------------------------- */
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* One ramp, named. Sizes are unchanged by the re-skin. */
+  --size-micro: 0.75rem; /* 12px — eyebrows, captions */
+  --size-small: 0.875rem; /* 14px — workings, hints */
+  --size-body: 1rem; /* 16px — everything else */
+  --size-lead: 1.0625rem; /* 17px — h2, h3, an answer's first line */
+  --size-figure: 1.125rem; /* 18px — the quantity on a row */
+  --size-h1: 1.3125rem; /* 21px — the screen's name */
+
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semi: 600;
+  --weight-bold: 700;
+
+  --leading-tight: 1.3;
+  --leading-body: 1.5;
+
+  /* Enough to read a 12px uppercase label as a label, and no more. */
+  --track-label: 0.06em;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --radius: 8px;
+  --radius-pill: 999px;
+
+  /* -------------------------------------------------------------------------
+     COLOUR — light. Neutral greys, one accent, used sparingly.
+     Every value below clears WCAG AA for the size it is used at.
+     ------------------------------------------------------------------------- */
+  --bg: #fafafa; /* the page */
+  --surface: #f4f4f5; /* a sunk panel */
+  --card: #ffffff; /* anything that reads as one object */
+  --border: #e5e7eb; /* hairline */
+  --border-strong: #d4d4d8;
+  --text: #1a1a1a; /* 16.67 on the page */
+  --text-muted: #6b7280; /* 4.63 — passes body text, which is why an absence can use it */
+
+  /* The ONE accent. Active tab, primary button, links. Not a fill for anything
+     else, and never a decoration. */
+  --accent: #2563eb; /* 4.95 on the page, 5.17 white-on */
+  --accent-strong: #1d4ed8; /* pressed — 6.42 */
+  --accent-subtle: #eff6ff; /* a tinted surface: the owner's own words in a chat */
+  --accent-text: #ffffff;
+
+  --ok: #15803d; /* 4.81 */
+  --danger: #dc2626; /* 4.63 */
+  --danger-subtle: #fef2f2;
+
+  /*
+   * THE WARNING. Reserved for "you need to look at this" — never an absence,
+   * never a decoration, never the accent.
+   */
+  --warn: #b45309; /* 4.81 on the page, 4.84 on its own tint */
+  --warn-bg: #fffbeb;
+  --warn-border: #f59e0b;
+
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 5%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f0f0f;
+    --surface: #18181b;
+    --card: #18181b;
+    --border: #27272a;
+    --border-strong: #3f3f46;
+    --text: #fafafa;
+    --text-muted: #a1a1aa;
+
+    --accent: #60a5fa;
+    --accent-strong: #93c5fd;
+    --accent-subtle: #132033;
+    --accent-text: #0f0f0f;
+
+    --ok: #4ade80;
+    --danger: #f87171;
+    --danger-subtle: #2a1414;
+
+    --warn: #fbbf24;
+    --warn-bg: #2a2010;
+    --warn-border: #a16207;
+
+    --shadow-card: none;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--font);
+  font-size: var(--size-body);
+  line-height: var(--leading-body);
+  background: var(--bg);
+  color: var(--text);
+  /* Stops iOS Safari inflating text in landscape. */
+  -webkit-text-size-adjust: 100%;
+}
+
+/*
+ * Every interactive element clears the floor.
+ *
+ * THE 16px IS NOT A TYPE CHOICE AND NO FONT SWAP CAN TOUCH IT. It is set on the
+ * element in absolute pixels, not inherited from a family or a ramp step, so a
+ * webfont landing mid-session cannot drag it under the threshold where iOS
+ * Safari zooms the whole page on focus. `tests/ui/tokens.test.ts` pins it.
+ */
+button,
+[role='button'],
+a.tap,
+input,
+select,
+textarea {
+  min-height: var(--touch-min);
+  font-family: inherit;
+  font-size: 16px; /* below 16px iOS Safari zooms the whole page on focus */
+}
+
+/* Native date inputs.
+   iOS Safari applies its own appearance to these, which can centre the value
+   oddly inside the 44px box and right-align it. Neither height nor font-size is
+   touched here — those stay inherited from the rule above, so the 44px floor and
+   the 16px no-zoom rule continue to apply exactly as they do to every other
+   input. */
+input[type='date'] {
+  -webkit-appearance: none;
+  appearance: none;
+  text-align: left;
+}
+
+/* A ticked box is the owner's own mark on a derived list — the one thing on these
+   screens he puts there himself, so it carries the accent. */
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--accent);
+}
+
+/* Quantities, money, counts. */
+.num {
+  font-variant-numeric: var(--num);
+  font-feature-settings: 'tnum';
+}
+
+/* No browser-default blue. Links are the accent, like every other affordance. */
+a {
+  color: var(--accent);
+}
+
+/* Nothing is revealed by hover alone — a touch screen has no hover. Every hover
+   rule in this codebase pairs with :focus-visible. */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/*
+ * Shell layout and the shared primitives. Everything here obeys the tokens;
+ * nothing redefines them.
+ *
+ * Layout is a fixed header, a scrolling main, and a bottom tab bar inside the
+ * safe area — the thumb-reachable third of a phone.
+ */
+
+/* ---------------------------------------------------------------------------
+   TYPE — three global rules, replacing ten near-identical component ones.
+
+   `.impact h2`, `.supplier-group h2`, `.prep-day h2`, `.money-summary h2`,
+   `.pack-job h2`, `.needs-fixing h2`, `.sous-answer h2` and the rest each said
+   roughly the same thing in slightly different words. Stating it once is the
+   difference between a design system and a pile of local decisions.
+
+   h1 had NO rule at all, so every screen title rendered at the browser default
+   of 2em with browser margins. That single omission is most of why the app
+   looked unfinished.
+   --------------------------------------------------------------------------- */
+
+h1 {
+  font-size: var(--size-h1);
+  font-weight: var(--weight-semi);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.01em;
+  margin: 0 0 var(--space-2);
+}
+
+h2 {
+  font-size: var(--size-lead);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-tight);
+  margin: 0 0 var(--space-2);
+}
+
+/* A heading that OPENS a card gets no top margin; one that starts a new section
+   further down the page needs air above it, or the sections run together. Being
+   the first child is exactly the difference between the two. */
+h2:not(:first-child),
+h3:not(:first-child) {
+  margin-top: var(--space-5);
+}
+
+h3 {
+  font-size: var(--size-body);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-tight);
+  margin: 0 0 var(--space-2);
+}
+
+/* THE SIGNATURE TREATMENT. A small uppercase mono label in copper, over a group —
+   a supplier, a prep day, a section of a packing list.
+
+   `--accent-ink` rather than brand copper, and the reason is measured: brand
+   copper is 3.37:1 on parchment and this is 12px text, which needs 4.5. The two
+   are indistinguishable at this size; the contrast is not. */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--size-micro);
+  font-weight: var(--weight-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--text-muted);
+}
+
+/* ---------------------------------------------------------------------------
+   CARD — one primitive, composed by the section classes below.
+
+   Every grouped thing on every screen was previously a bare border, so the whole
+   app sat on one flat plane and nothing read as an object. The page is now
+   faintly tinted and cards are the only white, which is what makes a list of
+   them scannable at arm's length.
+   --------------------------------------------------------------------------- */
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  box-shadow: var(--shadow-card);
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh; /* dvh, not vh: iOS Safari's toolbar changes the viewport */
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  padding-top: max(var(--space-3), env(safe-area-inset-top));
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  font-weight: var(--weight-medium);
+}
+
+/* At 375px the kitchen name, the Ask Sous link and Sign out do not all fit, and
+   every one of them was wrapping mid-phrase. The name is the only part that can
+   afford to be cut, so it is the only part allowed to. */
+.app-header > span:first-child {
+  font-weight: var(--weight-semi);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-header a.tap,
+.app-header button {
+  white-space: nowrap;
+  flex: none;
+}
+
+.app-main {
+  flex: 1;
+  padding: var(--space-4);
+  padding-bottom: var(--space-6);
+  overflow-y: auto;
+}
+
+/* Bottom tabs: within thumb reach, clear of the home indicator. */
+.tabs {
+  display: flex;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  padding-bottom: env(safe-area-inset-bottom);
+  /* Eight tabs at flex:1 gives ~47px each on a 375px screen, which clips the
+     longer labels. Scrolling keeps every label readable instead. Eight is already
+     too many for a bottom bar and wants a proper information-architecture
+     decision — noted in ARCHITECTURE.md rather than solved as a side effect of
+     adding Money. */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tabs a {
+  flex: 1 0 auto;
+  min-width: 4.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch-min);
+  padding: var(--space-3) var(--space-2);
+  color: var(--text-muted);
+  text-decoration: none;
+  /* Uppercase mono, like every other label in the app. Navigation is a set of
+     section labels, and now reads as one. */
+  font-family: var(--font-mono);
+  font-size: var(--size-small);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.tabs a[aria-current='page'] {
+  color: var(--accent);
+  font-weight: var(--weight-bold);
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+/* Selection is shown by colour and weight, never by hover alone. */
+.tabs a:focus-visible {
+  outline-offset: -3px;
+}
+
+.centred,
+.signin {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  max-width: 480px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.signin form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.signin label {
+  font-weight: 600;
+  margin-top: var(--space-3);
+}
+
+input,
+select,
+textarea {
+  padding: var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  /* `--card`, not `--bg`: a field is a thing you type into, so it sits above the
+     page rather than merging with it. */
+  background: var(--card);
+  color: var(--text);
+  width: 100%;
+}
+
+/* ---------------------------------------------------------------------------
+   BUTTONS — four levels, one set of rules.
+
+   The base is the SECONDARY button: bordered, on the card surface. `.primary`
+   and `.danger` fill; `.link` strips to text. A pressed state exists now, which
+   matters more on touch than on a mouse — there is no hover to tell you the
+   press registered.
+   --------------------------------------------------------------------------- */
+
+button {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+
+button:active {
+  background: var(--surface);
+}
+
+.signin button[type='submit'] {
+  margin-top: var(--space-4);
+  /* The fill step, for the same reason `button.primary` uses it: white on brand
+     copper is 3.79:1 and fails AA. */
+  background: var(--accent-strong);
+  color: var(--accent-text);
+  border-color: var(--accent-strong);
+}
+
+button:disabled {
+  opacity: 0.6;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-5) 0;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.error {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------------------
+   AN ABSENCE WHISPERS.
+
+   Rule 8 says an unknown value is surfaced rather than zeroed. It does NOT say
+   it is an emergency. "Food cost not known yet" is an honest statement of fact
+   sitting beside a real figure, and dressing it in a filled amber pill made
+   every screen look like it had a problem — which trains the eye to skip the
+   places that genuinely do.
+
+   Grey, normal weight, no fill, no border. It reads as what it is: a value
+   nobody has entered. The guard in `tests/ui/tokens.test.ts` stops it drifting
+   back toward a warning colour.
+   --------------------------------------------------------------------------- */
+.unresolved {
+  color: var(--text-muted);
+  font-weight: var(--weight-normal);
+}
+
+/* ---------------------------------------------------------------------------
+   Records: the list-and-form pattern every setup screen uses.
+   --------------------------------------------------------------------------- */
+
+.records {
+  list-style: none;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* A whole row is the tap target, not a link inside it. Easier to hit one-handed
+   and it clears the 44px floor by a distance. */
+.record {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: var(--space-3);
+  text-align: left;
+  text-decoration: none;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+}
+
+.record:active {
+  background: var(--surface);
+}
+
+.record .muted {
+  font-size: var(--size-small);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+}
+
+.field label {
+  font-weight: 600;
+}
+
+.hint {
+  font-size: var(--size-small);
+  margin: 0;
+}
+
+.field .error {
+  font-size: var(--size-small);
+  margin: 0;
+}
+
+.record-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.actions button {
+  flex: 1;
+}
+
+/* `--accent-strong`, not brand copper: white on #b87333 is 3.79:1 and fails AA
+   for button text. On #7d4a1f it is 7.31:1. */
+button.primary {
+  background: var(--accent-strong);
+  color: var(--accent-text);
+  border-color: var(--accent-strong);
+}
+
+button.primary:active {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+button.danger {
+  background: var(--danger);
+  color: #ffffff;
+  border-color: var(--danger);
+}
+
+/* Set apart, below the save actions, so it is never the button reached for by
+   accident. */
+.danger-zone {
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.danger-zone p {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------------------
+   Grouped fields. Used by Ingredients to keep the three unit systems visibly
+   apart (Rule 4) and by Recipes for its two line editors.
+   --------------------------------------------------------------------------- */
+
+fieldset.units {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  margin: 0 0 var(--space-4);
+  background: var(--card);
+}
+
+fieldset.units legend {
+  font-weight: 700;
+  padding: 0 var(--space-2);
+}
+
+/* A component or unquantified row inside a recipe. Boxed so it reads as one
+   thing on a narrow screen rather than a run of loose fields. */
+.line {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+  background: var(--card);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  font-weight: 600;
+}
+
+.check input {
+  width: auto;
+  min-width: var(--touch-min);
+}
+
+/* The assumed-pack state: visible until the owner confirms it, because an
+   assumed pack size trusted silently is a wrong shopping quantity. */
+.unresolved-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+button.link {
+  min-height: auto;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  text-decoration: underline;
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------------------
+   The impact preview.
+
+   It sits inline in the job form, above the menu, because it answers a question
+   the owner is asking WHILE typing — "if I change 17 to 23, what moves?" — and
+   an answer he has to scroll to find is one he will not read.
+
+   Deliberately unstyled as an alert: this is information, not a warning. The
+   only coloured thing is a gap the change would OPEN, which is the one part that
+   needs a decision (Rule 8).
+   --------------------------------------------------------------------------- */
+
+.impact {
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  margin: 0 0 var(--space-4);
+  background: var(--accent-subtle);
+}
+
+.impact-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.impact-table th,
+.impact-table td {
+  padding: var(--space-2);
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.impact-table thead th {
+  font-size: var(--size-small);
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+/* Quantities line up under each other so 2 -> 3 trays is read, not decoded. */
+.impact-table td.num {
+  text-align: right;
+  font-variant-numeric: var(--num);
+}
+
+/* Direction is emphasis only — never a calculation, and never the sole carrier
+   of meaning, since the before and after figures are both on the row. */
+.delta-up {
+  color: var(--accent);
+  font-weight: var(--weight-bold);
+}
+
+.delta-down {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.delta-same {
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------------------
+   A WARNING SPEAKS ONCE, CALMLY.
+
+   The single treatment for "you need to look at this", used by the check-these-
+   yourself blocks, an Ask Sous refusal, and an impact preview that would open a
+   gap. One treatment, so it is recognisable anywhere.
+
+   THE BODY TEXT IS NORMAL INK. The old version coloured every word amber on
+   amber, which is what made it vibrate. Colour now marks the EDGE and names the
+   CATEGORY; the content reads like content.
+   --------------------------------------------------------------------------- */
+.unresolved-block,
+.warn {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--warn-border);
+  border-radius: var(--radius);
+  background: var(--warn-bg);
+  color: var(--text);
+}
+
+/* The category label, and the only coloured text in the block. */
+.unresolved-block > h2,
+.warn > h2,
+.warn-label {
+  font-family: var(--font-mono);
+  font-size: var(--size-micro);
+  font-weight: var(--weight-semi);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--warn);
+  margin: 0 0 var(--space-2);
+}
+
+.unresolved-block h2 {
+  font-family: var(--font-mono);
+  font-size: var(--size-micro);
+  font-weight: var(--weight-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--warn);
+}
+
+.unresolved-block ul {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+}
+
+/* ---------------------------------------------------------------------------
+   Shopping.
+
+   Read one-handed, in a supermarket, while holding a trolley. So the line leads
+   with the thing that goes IN the trolley — "2 × 1 kg" — at the largest size on
+   the row, and the workings sit underneath in a size you only read if you doubt
+   the number.
+   --------------------------------------------------------------------------- */
+
+.supplier-group {
+  margin-bottom: var(--space-5);
+}
+
+/* A supplier and a prep day are the same kind of heading, and now say so once.
+   Same treatment as `.eyebrow`; this adds only the rule beneath it. */
+.supplier-group h2,
+.prep-day h2 {
+  font-family: var(--font-mono);
+  font-size: var(--size-micro);
+  font-weight: var(--weight-medium);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-strong);
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.shop-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+/* The whole row is the target, not just the box. A 44px checkbox is still a
+   small thing to hit with a thumb while carrying something. */
+.shop-line .check {
+  margin: 0;
+  min-height: var(--touch-min);
+  gap: var(--space-3);
+}
+
+.shop-line .buy {
+  font-size: var(--size-figure);
+  font-weight: var(--weight-semi);
+  font-variant-numeric: var(--num);
+  white-space: nowrap;
+}
+
+.shop-name {
+  font-weight: 600;
+}
+
+.shop-line .workings {
+  font-size: var(--size-small);
+  font-variant-numeric: var(--num);
+  padding-left: calc(var(--touch-min) + var(--space-3));
+}
+
+/* Ticked off. Faded rather than removed — he can see what he has already got, and
+   untick it if he was wrong. */
+.shop-line.done .buy,
+.shop-line.done .shop-name {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+
+.needs-fixing {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  margin-bottom: var(--space-4);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+}
+
+.needs-fixing ul,
+.unresolved-block ul {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+}
+
+.needs-fixing li,
+.unresolved-block li {
+  margin-bottom: var(--space-2);
+}
+
+/* ---------------------------------------------------------------------------
+   Prep.
+
+   Read in a kitchen, at a bench, while doing something else with the other hand.
+   So the line leads with the thing being made — "5 trays" — and the per-job split
+   sits underneath, indented, because that is the second question not the first.
+   --------------------------------------------------------------------------- */
+
+.prep-day {
+  margin-bottom: var(--space-5);
+}
+
+.prep-day .today {
+  color: var(--accent);
+  font-weight: var(--weight-bold);
+}
+
+.prep-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.prep-line .check {
+  margin: 0;
+  min-height: var(--touch-min);
+  gap: var(--space-3);
+}
+
+.prep-line .batch {
+  font-size: var(--size-figure);
+  font-weight: var(--weight-semi);
+  font-variant-numeric: var(--num);
+  white-space: nowrap;
+}
+
+.prep-name {
+  font-weight: 600;
+}
+
+.prep-total {
+  font-size: var(--size-small);
+  font-variant-numeric: var(--num);
+  padding-left: calc(var(--touch-min) + var(--space-3));
+}
+
+/* Surplus is information, not a warning — 6 spare portions is a normal outcome of
+   rounding up to whole trays, and colouring it red would make every other line
+   look like a problem. */
+.surplus {
+  color: var(--warn);
+}
+
+.allocations {
+  list-style: none;
+  margin: var(--space-1) 0 0;
+  padding-left: calc(var(--touch-min) + var(--space-3));
+  font-size: var(--size-small);
+  color: var(--text-muted);
+}
+
+.allocations li {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+}
+
+.allocations .num {
+  font-variant-numeric: var(--num);
+  font-weight: 600;
+  min-width: 2.5em;
+  text-align: right;
+}
+
+.prep-line.done .batch,
+.prep-line.done .prep-name {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+
+/* ---------------------------------------------------------------------------
+   Packing.
+
+   One block per job, because each is packed into its own boxes and driven to its
+   own address. Nothing here is added up across jobs, and the layout says so: the
+   job heading is the loudest thing on the screen, not the item names.
+   --------------------------------------------------------------------------- */
+
+.pack-job {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  margin-bottom: var(--space-4);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+}
+
+.pack-job h2 {
+  font-size: var(--size-lead);
+  margin: 0 0 var(--space-2);
+}
+
+.pack-section {
+  font-family: var(--font-mono);
+  font-size: var(--size-micro);
+  font-weight: var(--weight-medium);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--text-muted);
+  margin: var(--space-3) 0 var(--space-1);
+}
+
+.pack-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.pack-line .check {
+  margin: 0;
+  min-height: var(--touch-min);
+  gap: var(--space-3);
+}
+
+/* Fixed width so the names line up whether or not a line has a portions figure —
+   equipment has none, and a ragged left edge makes the list harder to scan. */
+.pack-qty {
+  font-variant-numeric: var(--num);
+  font-weight: 700;
+  min-width: 2.5em;
+  text-align: right;
+}
+
+.pack-name {
+  font-weight: 600;
+}
+
+.pack-line.done .pack-qty,
+.pack-line.done .pack-name {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+
+/* ---------------------------------------------------------------------------
+   Money.
+
+   The only screen where the absence of a number is the important part. So a
+   stated absence is set in the same size and weight as a figure — shrinking it
+   to a caption would make "not known yet" read as a footnote rather than as the
+   answer.
+   --------------------------------------------------------------------------- */
+
+.money-summary {
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  margin-bottom: var(--space-4);
+  background: var(--accent-subtle);
+}
+
+.money-row {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+}
+
+.money-row h3 {
+  font-size: var(--size-lead);
+  margin: 0 0 var(--space-2);
+}
+
+/* A loss is marked, but not alarmed. Selling one job at a loss is a decision he
+   may have made deliberately; the screen reports it rather than scolding. */
+.money-row.loss {
+  border-left: 4px solid var(--warn);
+}
+
+.money-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin: 0;
+}
+
+.money-figures > div {
+  min-width: 7rem;
+}
+
+.money-figures dt {
+  font-family: var(--font-mono);
+  font-size: var(--size-micro);
+  font-weight: var(--weight-medium);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--text-muted);
+}
+
+.money-figures dd {
+  margin: 0;
+  font-size: var(--size-figure);
+  font-weight: var(--weight-semi);
+  font-variant-numeric: var(--num);
+}
+
+.money-figures dd.note {
+  font-size: var(--size-micro);
+  font-weight: 400;
+  max-width: 22rem;
+}
+
+.blockers {
+  margin: var(--space-3) 0 0;
+  padding-left: var(--space-5);
+  font-size: var(--size-small);
+}
+
+.blockers li {
+  margin-bottom: var(--space-1);
+}
+
+/* ---------------------------------------------------------------------------
+   Backup.
+
+   The text area is the guarantee, not a detail: when the download is blocked and
+   the clipboard refused, this is the only copy of his kitchen he can reach. So it
+   is monospaced, tall enough to look substantial, and selectable rather than
+   tucked behind a disclosure.
+   --------------------------------------------------------------------------- */
+
+.backup-text {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: var(--size-body);
+  line-height: 1.4;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+}
+
+/* The destructive block reads as one, rather than as another section with a
+   red button in it. */
+section.danger-zone {
+  border-color: var(--danger);
+}
+
+section.danger-zone h2 {
+  color: var(--danger);
+}
+
+/* Ask Sous. The answer reads like the screen it came from, deliberately — it IS
+   the same formatter output, and dressing it differently would suggest it might
+   be a different figure. */
+.sous-answer {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  margin-top: var(--space-4);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+}
+
+.app-header a.tap {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-2);
+}
+
+/* Ask Sous, as a conversation.
+   The answer leads; the workings sit under it. A kitchen reader wants the
+   sentence first and the arithmetic only if they doubt it. */
+.sous-turn {
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.sous-asked {
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 0 0 var(--space-2);
+}
+
+.sous-lead {
+  font-size: var(--size-lead);
+  font-weight: var(--weight-medium);
+  margin: 0 0 var(--space-2);
+}
+
+.sous-detail {
+  margin: 0 0 var(--space-2);
+  padding-left: var(--space-5);
+  font-variant-numeric: var(--num);
+}
+
+.sous-detail li {
+  margin-bottom: var(--space-1);
+}
+
+/* ---------------------------------------------------------------------------
+   Ask Sous, as a conversation.
+
+   A transcript rather than a form with an answer under it: the owner asks
+   several things in a row, and the earlier ones stay legible while he does.
+
+   THE VISUAL CHANGE ADDS NO NEW PLACE FOR THE MODEL TO PUT A FACT. Everything
+   rendered here already existed — the question is his own text, the preamble is
+   model prose validated digit-free and written before the engine ran, and the
+   lead, detail and flags are all `renderAnswer` over engine output. Making it
+   look like a chat is not the same as letting it behave like one.
+   --------------------------------------------------------------------------- */
+
+.chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.chat-turn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* His own words, set apart from everything derived. The accent tint is the one
+   place it appears on a content surface, and it is his side of the exchange. */
+.chat-asked {
+  align-self: flex-end;
+  max-width: 85%;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  background: var(--accent-subtle);
+  color: var(--text);
+  font-weight: var(--weight-medium);
+}
+
+.chat-said {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  box-shadow: var(--shadow-card);
+}
+
+.chat-said > *:first-child {
+  margin-top: 0;
+}
+
+.chat-said > *:last-child {
+  margin-bottom: 0;
+}
+
+/* A proposal that can no longer be confirmed. Deliberately NOT styled as an
+   error: nothing went wrong, the figures are simply older than the data. */
+.chat-spent {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.chat-composer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  /* The tab bar already sits inside the safe area; this clears the composer of
+     the log scrolling under it. */
+  padding-bottom: var(--space-2);
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+
+.chat-composer .field {
+  margin-bottom: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   THE SCAN BUTTON.
+
+   A file input is the only control here that must stay a real `<input
+   type="file">` — nothing else opens a camera. So the LABEL is styled as the
+   button and the input is taken out of the visual flow, which is the accessible
+   pattern: the label is still the input's label, so tapping it opens the camera
+   and a screen reader still announces a file control.
+
+   It was previously `.check`, the checkbox row style — a bare 44px tick-target
+   with text beside it, which read as a list item rather than the primary action
+   on the screen.
+
+   `clip-path` rather than `display: none`: a hidden input cannot be focused, and
+   the keyboard path has to keep working.
+   --------------------------------------------------------------------------- */
+
+/* The two photo routes sit side by side, and wrap on a narrow phone rather than
+   squeezing either below the 44px floor. */
+.photo-source {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.scan-button {
+  flex: 1 1 auto;
+  justify-content: center;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--touch-min);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+
+.scan-button:active {
+  background: var(--surface);
+}
+
+.scan-button input[type='file'] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The label carries the ring, since the input it belongs to is not visible. */
+.scan-button:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+</style></head><body><div id="root"><header class="app-header"><span>Copper Pot Kitchen</span><a class="tap" href="#">Ask Sous</a><button>Sign out</button></header>
+<main class="app-main"><section id="probe">
+<h1>Shopping</h1>
+<fieldset class="units"><legend>Which dates</legend>
+<div class="field"><label for="f">From</label><input id="f" type="date" value="2026-10-27"></div>
+<div class="field"><label for="t">To</label><input id="t" type="date" value="2026-11-03"></div>
+<p class="hint muted">Ticks belong to these dates.</p></fieldset>
+<section class="supplier-group"><h2>Musgrave</h2>
+<ul class="records"><li class="shop-line"><label class="check"><input type="checkbox">
+<span class="num buy">4 × 1 kg</span><span class="shop-name">Beef mince</span></label>
+<span class="muted num workings">4 kg needed · nothing on the shelf</span></li></ul></section>
+<section class="unresolved-block"><h2>Check these yourself</h2><ul><li>Salt &amp; pepper — no quantity</li></ul></section>
+<div class="money-row"><dl class="money-figures"><div><dt>Revenue</dt><dd class="num">€600.00</dd></div>
+<div><dt>Food cost</dt><dd class="unresolved">not known yet</dd></div></dl></div>
+<button type="button">Copy for WhatsApp</button>
+</section></main>
+<nav class="tabs"><a href="#" aria-current="page">Today</a><a href="#">Shopping</a><a href="#">Prep</a><a href="#">Packing</a><a href="#">Money</a></nav>
+</div></body></html>

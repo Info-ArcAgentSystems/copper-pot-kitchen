@@ -19,7 +19,6 @@
  */
 
 import { useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
 import { supabaseDb } from '../../data/client';
 import {
   clientRateRepository,
@@ -37,6 +36,7 @@ import { jobRevenue } from '../../engine/costing';
 import { portionsDerivable } from '../../engine/rules';
 import type { JobChanges } from '../../engine/impact';
 import { ImpactPreview } from './ImpactPreview';
+import { Dashboard } from '../dashboard/Dashboard';
 import { useKitchen } from '../../auth/kitchenState';
 import type {
   AllocatedDietary,
@@ -80,11 +80,13 @@ export function Jobs(): ReactNode {
 
   return (
     <>
-      {/* Scan lives here rather than in the tab bar: it produces jobs, and the
-          bar is already at its width limit. */}
-      <p className="muted">
-        <Link to="/scan/job-sheet">Scan a job sheet from a photo</Link>
-      </p>
+      {/* The former "Today" screen. Folded in rather than kept as its own tab:
+          what is coming up and the jobs it comes from are one question, and the
+          dashboard was the only tab that answered half of it.
+
+          Still its own component in `features/dashboard/` — `derived.test.ts`
+          guards that directory by name, and it writes nothing. */}
+      <Dashboard />
       <RecordScreen<Job>
         title="Jobs"
         addLabel="Add a job"

@@ -10,7 +10,7 @@
  * things, and Rule 1 makes the distinction matter.
  */
 
-import { NavLink, Route, Routes } from 'react-router-dom';
+import { Navigate, NavLink, Route, Routes } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { KitchenProvider } from './auth/KitchenContext';
 import { useKitchen } from './auth/kitchenState';
@@ -23,40 +23,37 @@ import { Suppliers } from './features/setup/Suppliers';
 import { RateCard } from './features/setup/RateCard';
 import { ServiceTemplates } from './features/setup/ServiceTemplates';
 import { BackupScreen } from './features/setup/Backup';
-import { Ingredients } from './features/setup/Ingredients';
-import { Recipes } from './features/setup/Recipes';
 import { Jobs } from './features/jobs/Jobs';
-import { Dashboard } from './features/dashboard/Dashboard';
+import { Service } from './features/service/Service';
+import { Library } from './features/library/Library';
+import { ScanHub } from './features/scan/ScanHub';
 import { ScanJobSheet } from './features/scan/ScanJobSheet';
 import { ScanRecipeCard } from './features/scan/ScanRecipeCard';
 import { ScanInvoice } from './features/scan/ScanInvoice';
 import { ScanMenu } from './features/scan/ScanMenu';
-import { Shopping } from './features/shopping/Shopping';
-import { Prep } from './features/prep/Prep';
-import { Packing } from './features/packing/Packing';
 import { Money } from './features/money/Money';
 import { AskSous } from './features/sous/AskSous';
 import { SousProvider } from './features/sous/SousContext';
 
 /*
- * EIGHT, and eight is the ceiling: a ninth puts every tab under the 44px floor
- * the rest of the app holds to (see `.tabs` in app.css).
+ * FIVE, and each one is a job rather than a screen.
  *
- * So the dashboard takes the home slot rather than being added, and Jobs moves to
- * `/jobs` — reached by tapping any job on the dashboard, or by the "All jobs"
- * link beside them. That ordering matches what actually happens: he opens the
- * app to find out what is next, not to browse a list. The cost is honest and
- * worth stating — Jobs is now one tap deeper than it was.
+ * Eight tabs did not fit: they scrolled sideways on a phone, which hid Recipes,
+ * Ingredients and Setup behind a gesture nobody discovers, and left no room for
+ * Scan at all. The owner reported being unable to find the camera — correctly,
+ * because every scanner was a text link on somebody else's screen.
+ *
+ * Service and Library are shells over the existing screens, chosen so that no
+ * feature directory moves and `tests/ui/derived.test.ts` keeps guarding Rule 6
+ * unchanged. Setup leaves the bar for the header: it is configured once and then
+ * rarely opened, which is exactly what a header link is for.
  */
 const TABS = [
-  { to: '/', label: 'Today' },
-  { to: '/shopping', label: 'Shopping' },
-  { to: '/prep', label: 'Prep' },
-  { to: '/packing', label: 'Packing' },
+  { to: '/', label: 'Jobs' },
+  { to: '/service', label: 'Service' },
   { to: '/money', label: 'Money' },
-  { to: '/recipes', label: 'Recipes' },
-  { to: '/ingredients', label: 'Ingredients' },
-  { to: '/setup', label: 'Setup' },
+  { to: '/library', label: 'Library' },
+  { to: '/scan', label: 'Scan' },
 ] as const;
 
 function Header(): ReactNode {
@@ -70,6 +67,9 @@ function Header(): ReactNode {
           and the bar is already past the point where another tab fits. */}
       <NavLink to="/sous" className="tap">
         Ask Sous
+      </NavLink>
+      <NavLink to="/setup" className="tap">
+        Setup
       </NavLink>
       <button
         type="button"
@@ -106,8 +106,16 @@ export default function App(): ReactNode {
           <Header />
           <main className="app-main">
             <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/jobs" element={<Jobs />} />
+              <Route path="/" element={<Jobs />} />
+              {/* Bookmarks from the eight-tab era. Each resolves rather than
+                  404s — see tests/ui/routes.test.ts. */}
+              <Route path="/jobs" element={<Navigate to="/" replace />} />
+              <Route path="/today" element={<Navigate to="/" replace />} />
+              <Route path="/service" element={<Navigate to="/service/shopping" replace />} />
+              <Route path="/service/:view" element={<Service />} />
+              <Route path="/library" element={<Navigate to="/library/recipes" replace />} />
+              <Route path="/library/:view" element={<Library />} />
+              <Route path="/scan" element={<ScanHub />} />
               {/* Scan is NOT a tab. It produces jobs, so it is an action on the
                   Jobs screen — and a ninth tab would put every tab under the 44px
                   floor the rest of the app holds to. See ARCHITECTURE.md. */}
@@ -115,13 +123,13 @@ export default function App(): ReactNode {
               <Route path="/scan/recipe-card" element={<ScanRecipeCard />} />
               <Route path="/scan/invoice" element={<ScanInvoice />} />
               <Route path="/scan/menu" element={<ScanMenu />} />
-              <Route path="/prep" element={<Prep />} />
-              <Route path="/shopping" element={<Shopping />} />
-              <Route path="/packing" element={<Packing />} />
+              <Route path="/prep" element={<Navigate to="/service/prep" replace />} />
+              <Route path="/shopping" element={<Navigate to="/service/shopping" replace />} />
+              <Route path="/packing" element={<Navigate to="/service/packing" replace />} />
               <Route path="/money" element={<Money />} />
               <Route path="/sous" element={<AskSous />} />
-              <Route path="/recipes" element={<Recipes />} />
-              <Route path="/ingredients" element={<Ingredients />} />
+              <Route path="/recipes" element={<Navigate to="/library/recipes" replace />} />
+              <Route path="/ingredients" element={<Navigate to="/library/ingredients" replace />} />
               <Route path="/setup" element={<Setup />} />
               <Route path="/setup/customers" element={<Customers />} />
               <Route path="/setup/properties" element={<Properties />} />

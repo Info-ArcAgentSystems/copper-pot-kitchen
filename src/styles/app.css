@@ -417,6 +417,21 @@ fieldset.units legend {
   background: var(--card);
 }
 
+/*
+ * A scanned field: the box, with the sheet's own words under it.
+ *
+ * Only spacing. The sentence beneath carries `.muted`, so it reads as evidence
+ * rather than as a warning — an absence is never dressed as one, and neither is
+ * a correction he has already made.
+ */
+.scan-field {
+  margin-bottom: var(--space-3);
+}
+
+.scan-field > .muted {
+  margin-top: calc(var(--space-1) * -1);
+}
+
 .check {
   display: flex;
   align-items: center;

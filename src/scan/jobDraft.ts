@@ -30,7 +30,20 @@
  * PURE. No React, no repositories, no network. Values in, values out.
  */
 
-import type { DietarySeverity } from '../engine/types';
+import type {
+  CustomerId,
+  DietarySeverity,
+  IsoDate,
+  IsoTime,
+  Job,
+  JobDietaryId,
+  JobDish,
+  JobId,
+  KitchenId,
+  PropertyId,
+  Recipe,
+  RecipeId,
+} from '../engine/types';
 import type { Gap, JobSheetReview, Resolved } from './jobSheet';
 
 /**
@@ -285,5 +298,172 @@ export function creationsFromDraft(draft: JobSheetDraft): Creations {
     customers: creations(toCreate(draft.customer)),
     properties: creations(toCreate(draft.property)),
     recipes: creations(draft.dishes.flatMap(toCreate)),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// From draft to the rows he is confirming
+// ---------------------------------------------------------------------------
+
+/** The ids minted for the records this save created, by the name created. */
+export interface CreatedRecords {
+  readonly customerId: CustomerId | null;
+  readonly propertyId: PropertyId | null;
+  readonly recipeIds: ReadonlyMap<string, RecipeId>;
+}
+
+/**
+ * There is deliberately NO path from an incomplete draft to a `Job`.
+ *
+ * Returning a job with a null guest count and letting the commit catch it later
+ * is exactly how an unconfirmed value gets written and then forgotten. The
+ * gaps come back instead, which is also what the screen needs to show him.
+ */
+export type DraftToJob =
+  | { readonly ok: true; readonly job: Job }
+  | { readonly ok: false; readonly gaps: readonly Gap[] };
+
+/** The id a choice resolves to, once the creations have been made. */
+const idOf = (choice: NameChoice, created: string | null): string | null => {
+  if (choice.kind === 'existing') return choice.id;
+  if (choice.kind === 'create') return created;
+  return null;
+};
+
+export function draftToJob(draft: JobSheetDraft, created: CreatedRecords): DraftToJob {
+  const gaps = draftGaps(draft);
+  if (gaps.length > 0) return { ok: false, gaps };
+
+  /*
+   * Every dish must resolve to a recipe id. A dish that does not is a GAP, not
+   * a line to drop — which is the silent failure this replaces: `jobFromReview`
+   * dropped any dish without a recipe, so a sheet of four unknown dishes saved
+   * a job with an empty menu and no complaint.
+   */
+  const dishes: JobDish[] = [];
+  const unresolvedDishes: Gap[] = [];
+
+  draft.dishes.forEach((dish, position) => {
+    const recipeId = idOf(
+      dish.choice,
+      dish.choice.kind === 'create' ? (created.recipeIds.get(dish.choice.name) ?? null) : null,
+    );
+
+    if (recipeId === null) {
+      unresolvedDishes.push({
+        field: `dish:${position}`,
+        label: 'A dish has no recipe to point at',
+        saw: dish.read,
+      });
+      return;
+    }
+
+    dishes.push({
+      id: '' as JobDish['id'],
+      jobId: '' as JobId,
+      recipeId: recipeId as RecipeId,
+      /*
+       * Null ASKS `applyBuffetSplit` to derive portions from the guest count.
+       * Unchanged from the old path, and still right: the scanner read a menu,
+       * not a portion count. Zero would be worse again — it means "make none".
+       */
+      portions: null,
+      note: null,
+      position,
+    });
+  });
+
+  if (unresolvedDishes.length > 0) return { ok: false, gaps: unresolvedDishes };
+
+  return {
+    ok: true,
+    job: {
+      // Empty means "new" to `save_job`, which mints the id. Kitchen comes from
+      // `my_kitchen_id()` inside the RPC, never from here.
+      id: '' as JobId,
+      kitchenId: '' as KitchenId,
+      customerId: idOf(draft.customer.choice, created.customerId) as CustomerId | null,
+      propertyId: idOf(draft.property.choice, created.propertyId) as PropertyId | null,
+      jobGroup: null,
+      serviceDate: draft.serviceDate.trim() as IsoDate,
+      serviceTime: draft.serviceTime.trim() as IsoTime,
+      serviceType: draft.serviceType.trim(),
+      guests: guestCount(draft.guests),
+      /*
+       * FALSE, always, and unchanged by this feature. He confirmed the scan is
+       * a fair reading of the sheet; that is not the same as confirming the
+       * sheet was right, and conflating them ticks a box nobody ticked.
+       */
+      guestsConfirmed: false,
+      meatEatingGuests: null,
+      pricing: { kind: 'rate_card' },
+      status: 'enquiry',
+      notes: draft.notes.trim() === '' ? null : draft.notes.trim(),
+      dishes,
+      /*
+       * RULE 12. The wording the sheet carried, kept as an `unresolved`
+       * requirement — the one shape that is honest about it. Its presence
+       * blocks exact purchase quantities until he allocates it to named guests,
+       * which is precisely what it should do.
+       *
+       * The old path dropped these entirely. `severity` is non-null here only
+       * because `draftGaps` refuses the draft until he has set it (Rule 9).
+       */
+      dietaries: draft.dietaries.flatMap((d) =>
+        d.severity === null
+          ? []
+          : [
+              {
+                kind: 'unresolved' as const,
+                id: '' as JobDietaryId,
+                jobId: '' as JobId,
+                dietType: d.dietType.trim(),
+                severity: d.severity,
+                excludesMeat: d.excludesMeat,
+                details: null,
+                // Rule 9: surfaced for review, never assigned by the system. He
+                // picks a dish on the job screen, where he can see the menu.
+                assignedRecipeId: null,
+                originalWording: d.wording,
+              },
+            ],
+      ),
+      extras: [],
+    },
+  };
+}
+
+/**
+ * A scanned dish name as a recipe — a NAME and nothing else.
+ *
+ * `confidence: 'missing'` rather than `'confirm'`. "Confirm" means it was read
+ * from a card and should be checked; "missing" means nothing is known, which is
+ * the truth about a name lifted off a menu line. Prep and Money read that to
+ * MARK the line rather than drop it (decision: mark, don't filter).
+ *
+ * `course: null` because the sheet named a dish, not a course. Inferring "main"
+ * from a dish name would be business data in `src/` (Rule 1) and would enter it
+ * into a buffet split it was never part of.
+ */
+export function stubRecipe(name: string, kitchenId: KitchenId): Recipe {
+  return {
+    id: '' as RecipeId,
+    kitchenId,
+    name,
+    course: null,
+    yieldType: 'per_person',
+    portionsPerBatch: null,
+    batchUnit: null,
+    confidence: 'missing',
+    makeAheadDays: 0,
+    sameDayOnly: true,
+    freezable: false,
+    onsiteFinish: false,
+    method: null,
+    note: null,
+    // Decision: stays `[]`, not nullable. An empty component list is already
+    // what makes the cost null and leaves the shopping line absent.
+    components: [],
+    unquantified: [],
   };
 }

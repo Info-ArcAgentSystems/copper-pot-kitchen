@@ -223,6 +223,128 @@ describe.each(GATED)('$file', ({ file, reads, title, gate }) => {
   });
 });
 
+describe('the shared record screen — eight screens, one gate', () => {
+  /*
+   * `RecordScreen` is the LIST half of Jobs, Recipes and Ingredients, and the
+   * whole of Customers, Properties, Suppliers, Rate card and Service
+   * templates. It carried the original defect verbatim long after the ten
+   * screens above were fixed: a bare "Loading…", and "Could not load: Failed
+   * to fetch" with a Try again button, naming neither which list failed nor
+   * what the owner lost by it.
+   *
+   * It is also the reason those three screens were only half converted. Their
+   * forms spoke; their lists did not.
+   */
+  const RECORD = 'ui/RecordScreen.tsx';
+
+  const CALLERS = [
+    'features/jobs/Jobs.tsx',
+    'features/setup/Customers.tsx',
+    'features/setup/Properties.tsx',
+    'features/setup/Suppliers.tsx',
+    'features/setup/RateCard.tsx',
+    'features/setup/ServiceTemplates.tsx',
+    'features/setup/Recipes.tsx',
+    'features/setup/Ingredients.tsx',
+  ] as const;
+
+  it('demands the one thing it cannot work out for itself', () => {
+    const source = code(RECORD);
+
+    /*
+     * `what` comes from the title. `why` cannot: only the caller knows what the
+     * owner loses. Required, not optional — a screen that cannot name its own
+     * consequence should not compile, and optional would mean eight screens
+     * quietly falling back to half a sentence.
+     */
+    expect(source).toContain('readonly why: string;');
+    expect(source, 'the why has been made optional').not.toMatch(/readonly why\?:/);
+  });
+
+  it('builds its source from the title and that why', () => {
+    const source = code(RECORD);
+
+    expect(source).toContain('const sources: readonly DataSource[] = [');
+    expect(source).toContain('what: `your ${title.toLowerCase()}`');
+    expect(source).toContain('reload');
+  });
+
+  it('decides through sourceState and renders the notice, with nothing in front', () => {
+    const source = code(RECORD);
+
+    expect(source).toContain('sourceState(sources)');
+    // The whole-screen shape, pinned as one line: gating the RETURN instead of
+    // the element is the same defect moved left by one operator.
+    expect(source).toMatch(
+      /if \(state\.status !== 'ready'\) return <SourceNotice state=\{loaded\} title=\{title\} \/>;/,
+    );
+    expect(before(source, '<SourceNotice'), 'the notice is rendered behind a condition').not.toMatch(
+      /(&&|\|\||\?)\s*$/,
+    );
+  });
+
+  it('holds no copy of its own any more', () => {
+    const source = code(RECORD);
+
+    for (const copy of ['Could not load', 'Loading…', 'Working it out']) {
+      expect(source, `RecordScreen still carries its own "${copy}"`).not.toContain(copy);
+    }
+  });
+
+  it('gives a second read somewhere to speak, under the heading', () => {
+    /*
+     * Ingredients is why. Its on-hand column comes from a separate stock read,
+     * and before this slot existed its notice could only go ABOVE the heading
+     * `RecordScreen` renders — so the owner met the explanation before the
+     * screen it belonged to.
+     */
+    const source = code(RECORD);
+
+    expect(source).toContain('readonly notice?: ReactNode;');
+
+    // Position, not presence: a slot rendered BELOW the list would be a notice
+    // he reaches after the column it is about. (Compared by index because
+    // `strip` leaves the braces of the JSX comment between the two.)
+    const heading = source.indexOf('<h1>{title}</h1>');
+    const slot = source.indexOf('{notice}');
+    const list = source.indexOf('state.data.length === 0');
+
+    expect(heading).toBeGreaterThan(-1);
+    expect(slot, 'the notice slot is not under the heading').toBeGreaterThan(heading);
+    expect(slot, 'the notice slot is below the list it explains').toBeLessThan(list);
+  });
+
+  it.each(CALLERS)('%s names its own consequence', (file) => {
+    const source = code(file);
+
+    // Both props, on the one screen. The compiler enforces `why` exists; this
+    // enforces it was written rather than defaulted somewhere central.
+    expect(source).toMatch(/title="[^"]+"/);
+    expect(source).toMatch(/why="[^"]+"/);
+  });
+
+  it('is the end of the sweep, not a pattern to keep applying', () => {
+    /*
+     * `features/setup/Backup.tsx` is the eleventh screen that handles its own
+     * read, and it is deliberately NOT converted: it is off the catering path,
+     * and the sweep stops here. Logged rather than fixed.
+     *
+     * It is also the least bad of the eleven, which is worth recording
+     * accurately rather than lumping in. Its message DOES name the consequence
+     * — "Could not read your data, so a backup would be incomplete" — which is
+     * the clause the other ten were missing. What it lacks is a retry, and it
+     * composes those words itself instead of through the one renderer.
+     *
+     * This assertion is the note. If someone converts it, it fails, and
+     * deleting it is how the note goes with the hand-written branch.
+     */
+    const source = code('features/setup/Backup.tsx');
+
+    expect(source).toContain('so a backup would be incomplete');
+    expect(source, 'Backup was converted — delete this note').not.toContain('<SourceNotice');
+  });
+});
+
 describe('the scanners’ gate goes through the same renderer', () => {
   it('PhotoGate renders SourceNotice rather than its own words', () => {
     // Otherwise there are two sets of words for the same four states, which is

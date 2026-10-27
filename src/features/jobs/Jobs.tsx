@@ -91,6 +91,7 @@ export function Jobs(): ReactNode {
       <Dashboard />
       <RecordScreen<Job>
         title="Jobs"
+        why="everything the kitchen does is one of them, and shopping, prep and packing are all derived from this list"
         addLabel="Add a job"
         emptyDescription="A job is one service: who, where, when, how many, and what you are cooking."
         load={async () =>

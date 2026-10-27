@@ -26,6 +26,7 @@ export function RateCard(): ReactNode {
   return (
     <RecordScreen<ClientRate>
       title="Rate card"
+      why="nothing else gives a job a price, and a job with no matching rate has no revenue rather than a revenue of zero"
       addLabel="Add a rate"
       emptyDescription="A rate is a client group and a service type, with a per-head rate, a flat fee, or both. Without a matching rate a job has no price."
       load={async () =>

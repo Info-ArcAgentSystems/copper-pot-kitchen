@@ -20,6 +20,7 @@ export function Suppliers(): ReactNode {
   return (
     <RecordScreen<Supplier>
       title="Suppliers"
+      why="the shopping list is grouped by them, so without them it arrives as one long list"
       addLabel="Add a supplier"
       emptyDescription="The shopping list groups by supplier, so each shop gets its own section."
       load={async () => (await repo.list()).sort(byName((s) => s.name))}

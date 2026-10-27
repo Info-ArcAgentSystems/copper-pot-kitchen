@@ -22,6 +22,7 @@ export function Properties(): ReactNode {
   return (
     <RecordScreen<Property>
       title="Properties"
+      why="they carry the eircode and the access notes a delivery is made against"
       addLabel="Add a property"
       emptyDescription="The houses and venues you deliver to, with access notes and facilities."
       load={async () => (await repo.list()).sort(byName((p) => p.name))}

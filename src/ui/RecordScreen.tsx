@@ -12,11 +12,25 @@
 
 import { useState, type ReactNode } from 'react';
 import { EmptyState } from './EmptyState';
+import { SourceNotice } from './SourceNotice';
+import { sourceState, type DataSource } from './sourceState';
 import { useAsync } from './useAsync';
 import type { ReferenceCount } from './form';
 
 export interface RecordScreenProps<T> {
   readonly title: string;
+  /**
+   * The clause after the dash when this read fails: "could not load your
+   * suppliers — THE SHOPPING LIST IS GROUPED BY THEM, so without them it
+   * arrives as one long list."
+   *
+   * Required, and required on purpose. It is the one thing this component
+   * cannot work out for itself — `what` comes from the title, but only the
+   * caller knows what the owner loses — and the whole defect being fixed here
+   * was a message that said something had failed without saying what it cost.
+   * A screen that cannot name its own consequence does not compile.
+   */
+  readonly why: string;
   /** What the owner is invited to add when there is nothing yet. */
   readonly emptyDescription: string;
   readonly addLabel: string;
@@ -25,16 +39,28 @@ export interface RecordScreenProps<T> {
   readonly renderRow: (item: T) => ReactNode;
   /** The form for a new or existing record. `null` means "new". */
   readonly renderForm: (item: T | null, done: () => void) => ReactNode;
+  /**
+   * Anything the screen needs to say about a SECOND read of its own, placed
+   * under the heading and above the list.
+   *
+   * Ingredients is why this exists: its on-hand column comes from a separate
+   * stock read, and its notice had nowhere to go but above the heading this
+   * component renders — so the owner met the explanation before the screen it
+   * belonged to.
+   */
+  readonly notice?: ReactNode;
 }
 
 export function RecordScreen<T>({
   title,
+  why,
   emptyDescription,
   addLabel,
   load,
   keyOf,
   renderRow,
   renderForm,
+  notice,
 }: RecordScreenProps<T>): ReactNode {
   const { state, reload } = useAsync(load, []);
   // `undefined` = not editing. `null` = adding. A value = editing that record.
@@ -45,23 +71,28 @@ export function RecordScreen<T>({
     reload();
   };
 
-  if (state.status === 'loading') return <p className="muted">Loading…</p>;
+  /*
+   * EIGHT SCREENS went through the two branches this replaces: a bare
+   * "Loading…", and "Could not load: Failed to fetch" with a Try again button —
+   * naming neither which list failed nor what the owner loses by it, on a
+   * screen that otherwise looked like an empty kitchen. That is one defect in
+   * one shared place, so it is fixed once.
+   *
+   * `what` is the title in his words; `why` can only come from the caller.
+   */
+  const sources: readonly DataSource[] = [
+    { what: `your ${title.toLowerCase()}`, why, state, reload },
+  ];
+  const loaded = sourceState(sources);
 
-  if (state.status === 'error') {
-    // Say what failed. A blank screen would look like an empty kitchen, which is
-    // a different thing entirely.
-    return (
-      <div>
-        <h1>{title}</h1>
-        <p className="error" role="alert">
-          Could not load: {state.error.message}
-        </p>
-        <button type="button" onClick={reload}>
-          Try again
-        </button>
-      </div>
-    );
-  }
+  /*
+   * One read, so narrowing `state` and asking `loaded` are the same question —
+   * `loaded.kind` is ready exactly when `state.status` is. The narrowing is
+   * what gives us `state.data` below; `loaded` is what supplies the words.
+   * The multi-read screens keep a `ready` boolean beside `loaded` because they
+   * have several states to narrow; here there is nothing to fold together.
+   */
+  if (state.status !== 'ready') return <SourceNotice state={loaded} title={title} />;
 
   if (editing !== undefined) {
     return (
@@ -75,6 +106,10 @@ export function RecordScreen<T>({
   return (
     <div>
       <h1>{title}</h1>
+
+      {/* Under the heading, above the list: a second read of the screen's own
+          has somewhere to speak without arriving before its own screen. */}
+      {notice}
 
       {state.data.length === 0 ? (
         <EmptyState

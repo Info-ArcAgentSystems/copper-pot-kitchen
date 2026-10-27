@@ -39,3 +39,42 @@ export function onHandNote(state: SourceState, held: OnHand | undefined): string
   // Rule 4: the stored unit is carried, never rewritten. 2 kg is not 2 g.
   return held === undefined ? 'not counted' : `${held.value} ${held.unit} on hand`;
 }
+
+/**
+ * What the save should do to the stock row — decided from the read's STATE.
+ *
+ * The clear was previously guarded by `existingStock !== undefined`, which is
+ * false after a failed read for the same wrong reason that leaves the On hand
+ * field blank. So a broken read plus an unrelated edit to the same ingredient —
+ * a price, a pack size — did not delete his stock-take, but only because two
+ * bugs cancelled. Restore `existingStock` from a stale read, or rewrite that
+ * condition for any other purpose, and the stock-take goes.
+ *
+ * Taking the `SourceState` makes the protection deliberate: a blank field over
+ * a read that never landed is the form not knowing, which is not the same thing
+ * as him clearing a count, and there is no way to ask this question without
+ * having said which of the two it is.
+ *
+ * A figure he TYPED is still written. He is standing in front of the shelf; a
+ * broken read is no reason to throw away what he can see.
+ */
+export type StockWrite =
+  | { readonly kind: 'none' }
+  | { readonly kind: 'clear' }
+  | { readonly kind: 'set'; readonly value: number };
+
+export function stockWrite(
+  state: SourceState,
+  held: OnHand | undefined,
+  typed: number | null,
+): StockWrite {
+  if (typed !== null) return { kind: 'set', value: typed };
+
+  // Blank, and the read never landed: the form does not know what is on the
+  // shelf, so it changes nothing.
+  if (state.kind !== 'ready') return { kind: 'none' };
+
+  // Blank over a read that DID land: Rule 8, he has removed the count, so the
+  // row goes rather than becoming a zero he never said.
+  return held === undefined ? { kind: 'none' } : { kind: 'clear' };
+}

@@ -31,6 +31,7 @@ export function ServiceTemplates(): ReactNode {
   return (
     <RecordScreen<ServiceTemplate>
       title="Service templates"
+      why="the packing list is the menu plus these, so without them it packs food and no equipment"
       addLabel="Add an item"
       emptyDescription="What to pack for each service type. The packing list is the menu plus these."
       load={async () =>

@@ -85,3 +85,81 @@ describe('onHandNote', () => {
     expect(new Set(notes).size, 'two states render the same text').toBe(notes.length);
   });
 });
+
+/**
+ * A FAILED STOCK READ MUST NEVER CLEAR A STOCK-TAKE.
+ *
+ * The hazard, in order:
+ *
+ *   1. the stock read fails
+ *   2. `existingStock` is therefore undefined — the same value it holds when he
+ *      has genuinely never counted the ingredient
+ *   3. the On hand field falls back to '', so the form says "not counted"
+ *   4. he saves something unrelated on the same record — a price, a pack size
+ *   5. blank on-hand means "clear the row" under Rule 8
+ *
+ * Which would delete a real stock-take he never touched, because a read broke.
+ *
+ * Today it does not happen, and the reason is an accident: the clear is wrapped
+ * in `if (existingStock !== undefined)`, which is false for the failed read for
+ * the SAME wrong reason that made the field blank. Two bugs cancelling is not a
+ * guarantee — restore `existingStock` from a stale read, or rewrite that
+ * condition for any other purpose, and the stock-take goes.
+ *
+ * So the decision is a function of the read's STATE, not of a value that cannot
+ * tell the two absences apart, and these tests are what hold it there.
+ */
+
+import { stockWrite } from '../../src/ui/stockView';
+
+const counted = { value: 2, unit: 'kg' };
+
+describe('stockWrite', () => {
+  it('writes what he typed', () => {
+    expect(stockWrite(ready, undefined, 5)).toEqual({ kind: 'set', value: 5 });
+    // A counted zero is a real figure meaning "I looked and there is none".
+    expect(stockWrite(ready, counted, 0)).toEqual({ kind: 'set', value: 0 });
+  });
+
+  it('clears a real row when he deliberately empties the field', () => {
+    // Rule 8 in the other direction: he had a count, he blanked it, so the row
+    // goes rather than becoming a zero he never said.
+    expect(stockWrite(ready, counted, null)).toEqual({ kind: 'clear' });
+  });
+
+  it('writes nothing when there was nothing and he typed nothing', () => {
+    expect(stockWrite(ready, undefined, null)).toEqual({ kind: 'none' });
+  });
+
+  it('NEVER clears when the read failed — the data-loss path', () => {
+    // THE PIN. A blank field over a broken read is not him clearing anything;
+    // it is the form not knowing. Both of these were one incidental if-guard
+    // away from deleting a stock-take.
+    expect(stockWrite(failed, undefined, null)).toEqual({ kind: 'none' });
+    expect(stockWrite(failed, counted, null)).toEqual({ kind: 'none' });
+    expect(stockWrite(loading, undefined, null)).toEqual({ kind: 'none' });
+    expect(stockWrite(loading, counted, null)).toEqual({ kind: 'none' });
+  });
+
+  it('never clears on a failed read whatever the row says', () => {
+    /*
+     * Stated over every shape rather than the two above, because the defect was
+     * precisely that one absence was standing in for another. If any
+     * combination of a non-ready state produces a clear, this fails.
+     */
+    for (const state of [failed, loading]) {
+      for (const held of [undefined, counted, { value: 0, unit: 'kg' }]) {
+        expect(stockWrite(state, held, null).kind, 'cleared a stock row on a read that never landed').not.toBe('clear');
+      }
+    }
+  });
+
+  it('still saves a figure he typed while the read is broken', () => {
+    /*
+     * Not the same thing as clearing. A number in the field is him telling the
+     * system what is on the shelf, and a broken read is no reason to discard
+     * it — he is standing in front of the shelf.
+     */
+    expect(stockWrite(failed, undefined, 3)).toEqual({ kind: 'set', value: 3 });
+  });
+});

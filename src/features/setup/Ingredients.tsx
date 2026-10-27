@@ -25,7 +25,7 @@ import {
 import { ChoiceField, Field } from '../../ui/Field';
 import { RecordForm, RecordScreen } from '../../ui/RecordScreen';
 import { SourceNotice } from '../../ui/SourceNotice';
-import { onHandNote } from '../../ui/stockView';
+import { onHandNote, stockWrite } from '../../ui/stockView';
 import { sourceState, type DataSource } from '../../ui/sourceState';
 import { useAsync } from '../../ui/useAsync';
 import {
@@ -83,14 +83,14 @@ export function Ingredients(): ReactNode {
       : undefined;
 
   return (
-    <>
-    {/* Above the heading `RecordScreen` renders, which is not where it belongs
-        — the column it is about is further down. `RecordScreen` has no slot for
-        it yet; that is the next change. */}
-    <SourceNotice state={stockState} />
-
     <RecordScreen<Ingredient>
       title="Ingredients"
+      why="everything bought, priced and consumed is one of them"
+      /* The SECOND read. It is its own notice because its failure costs
+         something different: the on-hand column, which used to render a broken
+         read as "not counted". Under the heading, above the list — beside the
+         column it is about rather than ahead of the screen it belongs to. */
+      notice={<SourceNotice state={stockState} />}
       addLabel="Add an ingredient"
       emptyDescription="Each ingredient carries three units: how a recipe measures it, how you count it on hand, and how you buy it."
       load={async () => (await repo.list()).sort(byName((i) => i.name))}
@@ -123,7 +123,6 @@ export function Ingredients(): ReactNode {
         <IngredientForm ingredient={ingredient} done={done} />
       )}
     />
-    </>
   );
 }
 
@@ -269,16 +268,25 @@ function IngredientForm({
       if (id !== undefined && id !== '') {
         const stockRepo = stockRepository(db);
 
-        if (onHandParse.value === null) {
-          // RULE 8: blank means "not counted", which is the ABSENCE of a row —
-          // not a zero. Writing 0 here would make the shopping list behave
-          // identically while recording something he never said.
-          if (existingStock !== undefined) await stockRepo.clearOnHand(id);
-        } else {
+        /*
+         * RULE 8 in both directions, and the read's state as the third operand.
+         *
+         * Blank means "not counted" — the ABSENCE of a row, not a zero; writing
+         * 0 would make the shopping list behave identically while recording
+         * something he never said. But blank ALSO means "the stock read failed
+         * and this field never knew", and that must not clear a stock-take he
+         * never touched. `stockWrite` is what tells the two apart; it used to
+         * be `existingStock !== undefined`, which could not.
+         */
+        const write = stockWrite(sourceState(sources), existingStock?.onHand, onHandParse.value);
+
+        if (write.kind === 'clear') {
+          await stockRepo.clearOnHand(id);
+        } else if (write.kind === 'set') {
           await stockRepo.setOnHand(
             kitchenId,
             id,
-            onHandParse.value,
+            write.value,
             (parseText(stockUnit) ?? '') as StockUnit,
           );
         }

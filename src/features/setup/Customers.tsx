@@ -23,6 +23,7 @@ export function Customers(): ReactNode {
   return (
     <RecordScreen<Customer>
       title="Customers"
+      why="a rate is looked up by their client group, so this is where a job with no price is traced to"
       addLabel="Add a customer"
       emptyDescription="Customers drive the rate card: a rate is looked up by client group and service type."
       load={async () => (await repo.list()).sort(byName((c) => c.name))}

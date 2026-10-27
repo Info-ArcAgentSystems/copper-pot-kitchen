@@ -30,6 +30,8 @@ import {
 } from '../../data/repositories';
 import { ChoiceField, Field } from '../../ui/Field';
 import { RecordForm, RecordScreen } from '../../ui/RecordScreen';
+import { SourceNotice } from '../../ui/SourceNotice';
+import { sourceState, type DataSource } from '../../ui/sourceState';
 import { useAsync, type AsyncState } from '../../ui/useAsync';
 import { formatMoney, moneyValue, parseCount, parseMoney, parseText, textValue } from '../../ui/form';
 import { jobRevenue } from '../../engine/costing';
@@ -190,6 +192,62 @@ function JobForm({ job, done }: { job: Job | null; done: () => void }): ReactNod
   const customers = useAsync(() => customerRepository(db).list(), []);
   const properties = useAsync(() => propertyRepository(db).list(), []);
   const rates = useAsync(() => clientRateRepository(db).list(), []);
+
+  /*
+   * What the preview is made of. Gated separately because these three are the
+   * ones whose absence removes a feature rather than a dropdown — and the `why`
+   * clause on each has to say so, since the preview's absence is otherwise the
+   * silence this whole change was about.
+   */
+  const previewSources: readonly DataSource[] = [
+    {
+      what: 'your other jobs',
+      why: 'the preview needs them to show what this change does to a shared prep day',
+      state: jobs.state,
+      reload: jobs.reload,
+    },
+    {
+      what: 'your recipes',
+      why: 'the menu is chosen from them, and the preview scales them to the guest count',
+      state: recipes.state,
+      reload: recipes.reload,
+    },
+    {
+      what: 'your ingredients',
+      why: 'the preview works out what this change adds to the shopping list',
+      state: ingredients.state,
+      reload: ingredients.reload,
+    },
+  ];
+
+  /*
+   * And what the form itself is made of. These three failed WORSE than
+   * silently: `nameOptions` falls back to the blank option, so a broken read
+   * renders as "No customer" and nothing else — indistinguishable from a
+   * kitchen with no customers in it.
+   */
+  const formSources: readonly DataSource[] = [
+    {
+      what: 'your customers',
+      why: 'the customer is what decides which rate from the card applies',
+      state: customers.state,
+      reload: customers.reload,
+    },
+    {
+      what: 'your properties',
+      why: 'the property is where the service happens, and it carries the address',
+      state: properties.state,
+      reload: properties.reload,
+    },
+    {
+      what: 'your rate card',
+      why: 'without it no rate can apply, and the price stays blank',
+      state: rates.state,
+      reload: rates.reload,
+    },
+  ];
+
+  const sources: readonly DataSource[] = [...previewSources, ...formSources];
 
   const [customerId, setCustomerId] = useState(job?.customerId ?? '');
   const [propertyId, setPropertyId] = useState(job?.propertyId ?? '');
@@ -376,10 +434,9 @@ function JobForm({ job, done }: { job: Job | null; done: () => void }): ReactNod
   };
   const guestsChanged = job !== null && guestsParse.value !== job.guests;
 
-  const ready =
-    jobs.state.status === 'ready' &&
-    recipes.state.status === 'ready' &&
-    ingredients.state.status === 'ready';
+  // Not a boolean of its own: the same decision the notice above is rendering,
+  // asked of the three reads the preview actually needs.
+  const previewReady = sourceState(previewSources).kind === 'ready';
 
   const patchDish = (key: string, patch: Partial<DishDraft>): void =>
     setDishes((all) => all.map((d) => (d.key === key ? { ...d, ...patch } : d)));
@@ -397,6 +454,11 @@ function JobForm({ job, done }: { job: Job | null; done: () => void }): ReactNod
       onDelete={job === null ? undefined : () => void remove()}
       deleteWarningText="Delete this job? Completed and cancelled jobs are normally kept, because historical figures depend on them."
     >
+      {/* Above the two dropdowns it explains, and above the preview it
+          explains. Inline, with no title: `RecordScreen` has already put the
+          heading on. */}
+      <SourceNotice state={sourceState(sources)} />
+
       <ChoiceField
         label="Customer"
         value={customerId}
@@ -446,7 +508,7 @@ function JobForm({ job, done }: { job: Job | null; done: () => void }): ReactNod
       />
 
       {/* THE PREVIEW — the §4 feature. Purely computed, no network. */}
-      {ready && job !== null && (
+      {previewReady && job !== null && (
         <ImpactPreview
           jobs={jobs.state.status === 'ready' ? jobs.state.data : []}
           recipes={recipes.state.status === 'ready' ? recipes.state.data : []}

@@ -65,6 +65,23 @@ const GATED = [
   { file: 'features/money/Money.tsx', reads: 5, title: 'Money', gate: 'self' },
   { file: 'features/sous/AskSous.tsx', reads: 7, title: null, gate: 'self' },
   /*
+   * The job form is the eleventh, and the one with the most to lose. Its six
+   * reads fed a three-read `ready` boolean, so a failed read took the §4 impact
+   * preview off the screen with NO words at all — the form still looked whole
+   * and saveable, and the one thing that told him what a guest-count change
+   * costs was simply absent.
+   *
+   * The other three reads were worse than silent. `nameOptions` falls back to
+   * the blank option, so a failed customers read renders as "No customer" and
+   * nothing else: a read that broke, presented as a kitchen with no customers
+   * in it. He picks the only option there is, saves, and revenue goes null
+   * because no rate could match.
+   *
+   * `title` is null: this notice sits INSIDE the form, under the heading
+   * `RecordScreen` has already rendered.
+   */
+  { file: 'features/jobs/Jobs.tsx', reads: 6, title: null, gate: 'self' },
+  /*
    * The scanners hand their reads to `PhotoGate`, which owns the photo control
    * and renders the notice for them — so THEY must not decide anything, and the
    * assertions below check the handover instead of the decision.
@@ -80,6 +97,17 @@ const NOTICE = 'ui/SourceNotice.tsx';
 const PHOTO_GATE = 'features/scan/PhotoGate.tsx';
 
 const count = (source: string, pattern: RegExp): number => (source.match(pattern) ?? []).length;
+
+/**
+ * The 40 characters in front of `needle`, for asking what it is rendered behind.
+ *
+ * Newlines included, deliberately: an operator put on the line above is the
+ * same operator.
+ */
+const before = (source: string, needle: string): string => {
+  const at = source.indexOf(needle);
+  return at === -1 ? '' : source.slice(Math.max(0, at - 40), at);
+};
 
 describe.each(GATED)('$file', ({ file, reads, title, gate }) => {
   it('declares every read it waits on, in the owner’s words', () => {
@@ -128,10 +156,32 @@ describe.each(GATED)('$file', ({ file, reads, title, gate }) => {
 
     expect(source).toContain(gate === 'self' ? '<SourceNotice' : '<PhotoGate');
 
+    if (gate === 'self') {
+      // ANCHORED, for the THIRD time. `toContain('<SourceNotice')` passes
+      // against
+      //
+      //     {false && <SourceNotice state={sourceState(sources)} />}
+      //
+      // which is the silence restored with the fix still visible above it, and
+      // inverting this assertion is how that was found — in the job form, after
+      // the same trick had already beaten the scanner guard and the renderer
+      // guard. The lesson did not transfer twice because each anchor was
+      // written for one file's syntax. This one is written for the operator.
+      expect(before(source, '<SourceNotice'), 'the notice is rendered behind a condition').not.toMatch(
+        /(&&|\|\||\?)\s*$/,
+      );
+    }
+
     if (title !== null) {
-      // Whole-screen: the heading goes on, so a bare error is never orphaned
-      // from the screen it belongs to.
-      expect(source).toContain(`title="${title}"`);
+      /*
+       * The whole-screen shape, pinned as one line. A looser check lets the
+       * RETURN be gated instead of the element — `if (false && !ready) return
+       * <SourceNotice …>` — which is the same defect moved left by one
+       * operator.
+       */
+      expect(source, 'the whole-screen notice has drifted off its one shape').toMatch(
+        new RegExp(`if \\(!ready\\) return <SourceNotice state=\\{loaded\\} title="${title}" />;`),
+      );
     }
 
     for (const copy of ['Could not load', 'Working it out', 'Loading…']) {
@@ -157,6 +207,11 @@ describe('the scanners’ gate goes through the same renderer', () => {
 
     expect(source).toContain('sourceState(sources)');
     expect(source).toContain('<SourceNotice state={state} />');
+    // Same anchor, same reason: the gate owns the photo control for all four
+    // scanners, so a dead condition here is four silent screens.
+    expect(before(source, '<SourceNotice'), 'the notice is rendered behind a condition').not.toMatch(
+      /(&&|\|\||\?)\s*$/,
+    );
     expect(source).not.toMatch(/Could not load/);
     expect(source).not.toMatch(/Try again/);
   });

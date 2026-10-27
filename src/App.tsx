@@ -110,6 +110,24 @@ export default function App(): ReactNode {
       <SousProvider>
         <RequireKitchen>
           <Header />
+          {/*
+           * BETWEEN the header and the content, in the DOM, at every width.
+           *
+           * On desktop that is also the visual order, so Tab moves
+           * header → sections → content, which is the order a keyboard user
+           * expects and desktop is where keyboard navigation actually happens.
+           * On a phone CSS moves the bar to the bottom of the viewport and the
+           * two orders differ — acceptable there, because the way a screen
+           * reader user reaches navigation on a phone is by landmark, and both
+           * landmarks are real: this is a <nav aria-label="Sections"> and the
+           * content below is a <main>.
+           *
+           * ONE render site. There is no header copy and no bottom-bar copy to
+           * drift apart, so `aria-current`, the 44px targets and the focus ring
+           * are the same element in both positions rather than two that have to
+           * be kept in step.
+           */}
+          <TabBar />
           <main className="app-main">
             <div className="content">
               <Routes>
@@ -147,7 +165,6 @@ export default function App(): ReactNode {
               </Routes>
             </div>
           </main>
-          <TabBar />
         </RequireKitchen>
       </SousProvider>
     </KitchenProvider>

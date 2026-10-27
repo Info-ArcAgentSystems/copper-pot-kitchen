@@ -81,16 +81,32 @@ h3 {
   box-shadow: var(--shadow-card);
 }
 
+/* ---------------------------------------------------------------------------
+   THE APP SHELL — a fixed viewport with ONE scrolling area inside it.
+
+   `min-height: 100dvh` was the bug. "At least the viewport" lets the shell grow
+   to the height of its content, so on the Jobs dashboard `#root` measured
+   2677px against an 812px viewport: the PAGE scrolled, `.app-main` did not
+   (its `scrollTop` stayed 0, so its `overflow-y: auto` was dead code), and the
+   tab bar — the last item in a column taller than the screen — sat 2272px below
+   the fold. Reaching the navigation meant scrolling to the end of the content.
+
+   `height`, so the shell IS the viewport. dvh rather than vh because iOS
+   Safari's toolbar changes the viewport height.
+   --------------------------------------------------------------------------- */
+
 #root {
   display: flex;
   flex-direction: column;
-  min-height: 100dvh; /* dvh, not vh: iOS Safari's toolbar changes the viewport */
+  height: 100dvh;
 }
 
 .app-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  /* Chrome, not content: it keeps its own height whatever the content does. */
+  flex: none;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
   padding-top: max(var(--space-3), env(safe-area-inset-top));
@@ -121,28 +137,47 @@ h3 {
 
 .app-main {
   flex: 1;
+  /*
+   * THE SECOND HALF OF THE FIX, and the half that is easy to miss. A flex item
+   * defaults to `min-height: auto`, which refuses to shrink below its content —
+   * so even with `height: 100dvh` on the shell this box would still push past
+   * it and `overflow-y` would never engage. `0` lets it be smaller than what is
+   * inside it, which is what makes it the thing that scrolls.
+   */
+  min-height: 0;
   padding: var(--space-4);
   padding-bottom: var(--space-6);
   overflow-y: auto;
 }
 
-/* Bottom tabs: within thumb reach, clear of the home indicator. */
+/*
+ * ON A PHONE the bar moves to the BOTTOM of the viewport: within thumb reach,
+ * clear of the home indicator, and always on screen because it is a row of a
+ * viewport-height column rather than the end of a long document.
+ *
+ * `order: 1` is the only thing that moves it. In the DOM it sits between the
+ * header and the content at every width — see the comment in `App.tsx` — so
+ * desktop needs no override and gets a correct focus order for free; this is
+ * the deviation, and it is on the side where navigation is reached by landmark
+ * rather than by Tab.
+ *
+ * No `position: fixed`, so the bar overlays nothing and the content needs no
+ * bottom padding to clear it. `padding-bottom` here is the safe-area inset
+ * only — the home indicator, not the bar's own height.
+ *
+ * `overflow-x: auto` is gone. It was written for eight tabs, when `.tabs a`
+ * still carried `flex: 1 0 auto; min-width: 4.5rem`; `.tabs-inner a` later
+ * overrode both with `flex: 1 1 0; min-width: 0`, which makes the labels shrink
+ * instead of overflowing, so there has been nothing to scroll since. Measured
+ * at 375px and at 320px: `scrollWidth` equals `clientWidth` either way.
+ */
 .tabs {
   display: flex;
+  flex: none;
+  order: 1;
   border-top: 1px solid var(--border);
   background: var(--surface);
   padding-bottom: env(safe-area-inset-bottom);
-  /* Eight tabs at flex:1 gives ~47px each on a 375px screen, which clips the
-     longer labels. Scrolling keeps every label readable instead. Eight is already
-     too many for a bottom bar and wants a proper information-architecture
-     decision — noted in ARCHITECTURE.md rather than solved as a side effect of
-     adding Money. */
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.tabs::-webkit-scrollbar {
-  display: none;
 }
 
 .tabs a {
@@ -1194,6 +1229,47 @@ section.danger-zone h2 {
 .tabs-inner a {
   flex: 1 1 0;
   min-width: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   720px — ALL NAVIGATION MOVES TO THE TOP.
+
+   The same 720px as the reading column above, and deliberately not a new
+   number: it is the width at which the column stops growing, which is where the
+   layout changes character. The app's other three breakpoints (420, 480, 620)
+   are all phone-size refinements and none of them is a desktop boundary.
+
+   TWO ROWS, because one does not fit. Measured with the real fonts and tokens:
+   the brand is 148px, the five tabs 378px, and Ask Sous / Setup / Sign out
+   198px — 780px in one row with the gaps and padding, which overflows 720px by
+   60px and even 768px by 12px. One row would need a ~1024px breakpoint and
+   leave 720–1024px with no arrangement at all; and the brand is the kitchen
+   name out of the database, so a one-row layout would be one long name away
+   from breaking.
+
+   So: brand and actions on the header row, the tabs on their own row beneath
+   it, and the content scrolling below both. `order: 0` is just the bar
+   returning to its DOM position — this is where visual order, DOM order and
+   focus order all agree.
+   --------------------------------------------------------------------------- */
+
+@media (min-width: 720px) {
+  .tabs {
+    order: 0;
+    /* The border follows the bar. Under the header it divides the chrome from
+       the content below, which is the edge it is now drawing. */
+    border-top: 0;
+    border-bottom: 1px solid var(--border);
+    /* The home indicator is at the bottom of the screen, and the bar no longer
+       is. */
+    padding-bottom: 0;
+  }
+
+  /* The active tab's marker stays on the edge nearest the content, so it reads
+     as pointing at the panel it opens rather than at the header above it. */
+  .tabs a[aria-current='page'] {
+    box-shadow: inset 0 -2px 0 var(--accent);
+  }
 }
 
 /* ---------------------------------------------------------------------------

@@ -19,6 +19,21 @@ const tokens = readFileSync(join(STYLES, 'tokens.css'), 'utf8');
 const sheets = readdirSync(STYLES).filter((f) => f.endsWith('.css'));
 const allCss = sheets.map((f) => readFileSync(join(STYLES, f), 'utf8')).join('\n');
 
+/**
+ * The same CSS with the comments taken out.
+ *
+ * Needed by every assertion of the form "this declaration must NOT appear",
+ * because the comment that EXPLAINS why it must not appear contains it. The
+ * strengthened viewport guard below failed on its own prose the first time it
+ * ran: `min-height: 100dvh` was named in the comment describing the bug, and
+ * the regex found it.
+ *
+ * `allCss` is left as it is. The other assertions here are positive ones, which
+ * a comment cannot break in the same way — though a `not.toMatch` added to them
+ * later would carry the same hole, which is why this exists to be used.
+ */
+const css = allCss.replace(/\/\*[\s\S]*?\*\//g, '');
+
 describe('touch targets', () => {
   it('defines a 44px floor', () => {
     expect(tokens).toMatch(/--touch-min:\s*44px/);
@@ -271,5 +286,56 @@ describe('viewport', () => {
   it('respects the safe area at both ends', () => {
     expect(allCss).toMatch(/env\(safe-area-inset-top\)/);
     expect(allCss).toMatch(/env\(safe-area-inset-bottom\)/);
+  });
+
+  /*
+   * THE SHELL IS THE VIEWPORT, AND ONE THING INSIDE IT SCROLLS.
+   *
+   * `min-height: 100dvh` passed the assertion above for months and was the bug:
+   * "at least the viewport" lets the shell grow to its content, so on the Jobs
+   * dashboard `#root` measured 2677px against an 812px viewport. The PAGE
+   * scrolled, `.app-main` did not — its `scrollTop` stayed 0, so its
+   * `overflow-y: auto` was dead code — and the tab bar, last in a column taller
+   * than the screen, sat 2272px below the fold. Reaching the navigation meant
+   * scrolling to the end of the content.
+   *
+   * Both halves are asserted because either one alone leaves it broken: without
+   * `min-height: 0`, a flex item refuses to shrink below its content and
+   * `.app-main` pushes past the shell even when the shell is exactly the
+   * viewport. Verified by inversion, both ways round.
+   */
+  it('makes the shell exactly the viewport, not at least it', () => {
+    expect(css, 'the shell can grow past the viewport again').not.toMatch(
+      /min-height:\s*100dvh/,
+    );
+    expect(css).toMatch(/#root\s*\{[^}]*\bheight:\s*100dvh/);
+  });
+
+  it('lets the content area shrink below its content, so it is the thing that scrolls', () => {
+    const main = /\.app-main\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+
+    expect(main, '.app-main has no rule').not.toBe('');
+    expect(main).toMatch(/\boverflow-y:\s*auto/);
+    // Without this a flex item's `min-height: auto` keeps it as tall as its
+    // content, and the overflow above never engages.
+    expect(main, '.app-main cannot shrink, so nothing scrolls inside the shell').toMatch(
+      /\bmin-height:\s*0\b/,
+    );
+  });
+
+  it('pins the tab bar by layout rather than by overlaying the content', () => {
+    const tabs = /\n\.tabs\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+
+    expect(tabs, '.tabs has no rule').not.toBe('');
+    /*
+     * A row of a viewport-height column, not a fixed overlay. `position: fixed`
+     * would take the bar out of flow, and the content would then need bottom
+     * padding equal to the bar's height to clear it — a 44px dead strip that
+     * has to be kept in step with the bar by hand.
+     */
+    expect(tabs, 'the tab bar overlays the content again').not.toMatch(/position:\s*fixed/);
+    expect(tabs).toMatch(/\bflex:\s*none/);
+    // The home indicator. Not the bar's own height — nothing hides behind it.
+    expect(tabs).toMatch(/padding-bottom:\s*env\(safe-area-inset-bottom\)/);
   });
 });

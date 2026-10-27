@@ -24,6 +24,9 @@ import {
 } from '../../data/repositories';
 import { ChoiceField, Field } from '../../ui/Field';
 import { RecordForm, RecordScreen } from '../../ui/RecordScreen';
+import { SourceNotice } from '../../ui/SourceNotice';
+import { onHandNote } from '../../ui/stockView';
+import { sourceState, type DataSource } from '../../ui/sourceState';
 import { useAsync } from '../../ui/useAsync';
 import {
   byName,
@@ -63,6 +66,17 @@ export function Ingredients(): ReactNode {
   // Read once for the list so the on-hand figure is scannable down the column —
   // a stock-take means walking the shelves, not opening forty records.
   const stock = useAsync(() => stockRepository(db).list(), []);
+
+  const sources: readonly DataSource[] = [
+    {
+      what: 'what you have on hand',
+      why: 'without it this list cannot tell an uncounted shelf from an empty one',
+      state: stock.state,
+      reload: stock.reload,
+    },
+  ];
+  const stockState = sourceState(sources);
+
   const onHandFor = (id: IngredientId) =>
     stock.state.status === 'ready'
       ? stock.state.data.find((s) => s.ingredientId === id)
@@ -70,6 +84,11 @@ export function Ingredients(): ReactNode {
 
   return (
     <>
+    {/* Above the heading `RecordScreen` renders, which is not where it belongs
+        — the column it is about is further down. `RecordScreen` has no slot for
+        it yet; that is the next change. */}
+    <SourceNotice state={stockState} />
+
     <RecordScreen<Ingredient>
       title="Ingredients"
       addLabel="Add an ingredient"
@@ -87,13 +106,13 @@ export function Ingredients(): ReactNode {
                 ? 'no pack size'
                 : `${i.pack.size} ${i.pack.unit} pack${i.pack.assumed ? ' (assumed)' : ''}`,
               formatMoney(i.pricePerPack, 'unpriced'),
-              // Rule 8 on the list too: not counted reads differently from none.
-              (() => {
-                const held = onHandFor(i.id);
-                return held === undefined
-                  ? 'not counted'
-                  : `${held.onHand.value} ${held.onHand.unit} on hand`;
-              })(),
+              /*
+               * Rule 8 on the list too: not counted reads differently from
+               * none — and differently AGAIN from not loaded, which is the
+               * state this used to render as "not counted". The three live in
+               * one exhaustive function so they cannot collapse back together.
+               */
+              onHandNote(stockState, onHandFor(i.id)?.onHand),
             ]
               .filter((x) => x !== null)
               .join(' · ')}
@@ -151,6 +170,28 @@ function IngredientForm({
     stock.state.status === 'ready'
       ? stock.state.data.find((s) => s.ingredientId === ingredient?.id)
       : undefined;
+
+  /*
+   * The form's two reads. The stock one is declared because its failure reads
+   * as a blank On hand field — the same lie the list column told, one record
+   * deep, and this one invites him to type over a count he already took. What
+   * stops that figure replacing a real row is `existingStock !== undefined` in
+   * the save path below, which protects it by accident rather than by design.
+   */
+  const sources: readonly DataSource[] = [
+    {
+      what: 'your suppliers',
+      why: 'the supplier is chosen from them',
+      state: suppliers.state,
+      reload: suppliers.reload,
+    },
+    {
+      what: 'what you have on hand',
+      why: 'without it the On hand field shows blank, which is not the same as nothing on the shelf',
+      state: stock.state,
+      reload: stock.reload,
+    },
+  ];
 
   const [onHand, setOnHand] = useState<string | null>(null);
   // `null` means "not edited yet", so the field shows what is stored until he
@@ -286,6 +327,9 @@ function IngredientForm({
       onDelete={ingredient === null ? undefined : () => void remove()}
       deleteWarningText="Delete this ingredient? If a recipe uses it, the database will refuse and you will need to remove it from the recipe first."
     >
+      {/* Inline, no title: `RecordScreen` has already put the heading on. */}
+      <SourceNotice state={sourceState(sources)} />
+
       <Field label="Name" value={name} onChange={setName} required error={nameError} />
       <Field label="Category" value={category} onChange={setCategory} />
 

@@ -82,6 +82,30 @@ const GATED = [
    */
   { file: 'features/jobs/Jobs.tsx', reads: 6, title: null, gate: 'self' },
   /*
+   * The recipe form, where a failed read does not stop at silence. Both of its
+   * reads fall back to `[]`, so a broken ingredients read renders "Choose an
+   * ingredient" with nothing to choose. He cannot add a line, so he saves the
+   * recipe without one — and a recipe with no components costs null AND shows a
+   * production bucket with no gap beside it. The failed read ends up as a tray
+   * of something with no ingredients in it, two screens away.
+   */
+  { file: 'features/setup/Recipes.tsx', reads: 2, title: null, gate: 'self' },
+  /*
+   * Ingredients is the one where a failed read does not go quiet — it says
+   * something FALSE. `onHandFor` returns undefined both when he has never
+   * counted an ingredient and when the stock read broke, and the row renders
+   * the undefined case as "not counted". One failed read therefore tells him
+   * every shelf in the kitchen is uncounted, directly under a comment reading
+   * "Rule 8 on the list too: not counted reads differently from none".
+   *
+   * Three reads at TWO sites: the list's stock read, and the form's suppliers
+   * and its own stock read. The form's blank on-hand field is the same lie one
+   * record deep, and the thing standing between it and a lost stock-take is
+   * `existingStock !== undefined` in the save path — which protects the row by
+   * accident, not by design.
+   */
+  { file: 'features/setup/Ingredients.tsx', reads: 3, title: null, gate: 'self' },
+  /*
    * The scanners hand their reads to `PhotoGate`, which owns the photo control
    * and renders the notice for them — so THEY must not decide anything, and the
    * assertions below check the handover instead of the decision.

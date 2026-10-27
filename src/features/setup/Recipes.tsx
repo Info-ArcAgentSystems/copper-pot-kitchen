@@ -20,6 +20,8 @@ import { supabaseDb } from '../../data/client';
 import { ingredientRepository, recipeRepository } from '../../data/repositories';
 import { ChoiceField, Field } from '../../ui/Field';
 import { RecordForm, RecordScreen } from '../../ui/RecordScreen';
+import { SourceNotice } from '../../ui/SourceNotice';
+import { sourceState, type DataSource } from '../../ui/sourceState';
 import { useAsync } from '../../ui/useAsync';
 import { byName, parseCount, parseText, requireText, textValue } from '../../ui/form';
 import { courseDerivable } from '../../engine/rules';
@@ -164,6 +166,27 @@ function RecipeForm({ recipe, done }: { recipe: Recipe | null; done: () => void 
   const repo = recipeRepository(db);
   const ingredients = useAsync(() => ingredientRepository(db).list(), []);
   const recipes = useAsync(() => repo.list(), []);
+
+  /*
+   * Both reads feed dropdowns that fall back to `[]`, which is why their `why`
+   * clauses name the LINE rather than the list. An empty "Choose an
+   * ingredient" is not a dropdown he can work around — he saves a recipe with
+   * no components, and that costs null while still showing a production bucket.
+   */
+  const sources: readonly DataSource[] = [
+    {
+      what: 'your ingredients',
+      why: 'the lines of a recipe are chosen from them, and without them none can be added',
+      state: ingredients.state,
+      reload: ingredients.reload,
+    },
+    {
+      what: 'your other recipes',
+      why: 'a recipe can contain one of them as a sub-recipe',
+      state: recipes.state,
+      reload: recipes.reload,
+    },
+  ];
 
   const [name, setName] = useState(textValue(recipe?.name ?? null));
   const [course, setCourse] = useState<string>(recipe?.course ?? '');
@@ -317,6 +340,11 @@ function RecipeForm({ recipe, done }: { recipe: Recipe | null; done: () => void 
       onDelete={recipe === null ? undefined : () => void remove()}
       deleteWarningText="Delete this recipe? If another recipe uses it as a sub-recipe, or a job has it on the menu, the database will refuse."
     >
+      {/* Above the fields, because the consequence lands at the Lines section
+          below and an empty dropdown there says nothing for itself. Inline, no
+          title: `RecordScreen` has already put the heading on. */}
+      <SourceNotice state={sourceState(sources)} />
+
       <Field label="Name" value={name} onChange={setName} required error={nameError} />
       <ChoiceField
         label="Course"

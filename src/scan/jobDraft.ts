@@ -211,32 +211,52 @@ const guestCount = (text: string): number | null => {
 export function draftGaps(draft: JobSheetDraft): readonly Gap[] {
   const gaps: Gap[] = [];
 
+  /*
+   * ONLY AN AMBIGUITY BLOCKS A NAME.
+   *
+   * A job with no customer and no property is legitimate — Rule 8 stores null
+   * rather than inventing a name, `Jobs.tsx` offers "No customer" as a real
+   * option, and `prepView` labels such a job without complaint. Requiring one
+   * here would make a sheet whose header the camera could not read unsaveable,
+   * which is the defect this whole feature exists to remove.
+   *
+   * An AMBIGUITY is different, and it does block: the sheet named someone, two
+   * of his records match, and saving with null would silently throw away a name
+   * the camera read perfectly well.
+   *
+   * (Found by rewriting the Rule 7 guards onto this path: every fixture in
+   * `jobDraft.test.ts` happened to have a matching customer, so requiring one
+   * passed 33 tests.)
+   */
   const nameGap = (field: string, label: string, name: NameDraft): void => {
-    if (name.choice.kind !== 'none') return;
+    if (name.choice.kind !== 'none' || name.matches.length === 0) return;
 
     gaps.push({
       field,
-      label: name.matches.length > 0 ? `${label} matches more than one record` : `${label} is not set`,
-      // The candidates, or what the camera saw. Either way, something to judge.
-      saw: name.matches.length > 0 ? name.matches.join(', ') : name.read,
+      label: `${label} matches more than one record`,
+      // The candidates. Naming them is an answer; picking one would be a guess.
+      saw: name.matches.join(', '),
     });
   };
 
   nameGap('customer', 'The customer', draft.customer);
   nameGap('property', 'The property', draft.property);
 
+  /*
+   * The date blocks and the time does not.
+   *
+   * Without a date the job falls outside every range: it appears on no prep
+   * day, in no shopping window, in no money total. It is saved and invisible,
+   * which is worse than refused.
+   *
+   * A time is a detail of a day that is already placed — `anomalyScan` flags a
+   * missing one, which is the right weight for it. And the service type is a
+   * legitimate null under Rules 8 and 11: without it no rate matches, so
+   * revenue stays blank rather than wrong. Neither is worth making a sheet
+   * unsaveable for.
+   */
   if (draft.serviceDate.trim() === '') {
     gaps.push({ field: 'serviceDate', label: 'The date is not set', saw: draft.from.serviceDate });
-  }
-  if (draft.serviceTime.trim() === '') {
-    gaps.push({ field: 'serviceTime', label: 'The time is not set', saw: draft.from.serviceTime });
-  }
-  if (draft.serviceType.trim() === '') {
-    gaps.push({
-      field: 'serviceType',
-      label: 'The service type is not set',
-      saw: draft.from.serviceType,
-    });
   }
 
   if (guestCount(draft.guests) === null) {

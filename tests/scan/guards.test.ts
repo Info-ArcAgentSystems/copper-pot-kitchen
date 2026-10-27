@@ -21,6 +21,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { validateScan } from '../../src/scan/parseImage';
 import { reviewJobSheet } from '../../src/scan/jobSheet';
+import type { KitchenId, RecipeId } from '../../src/engine/types';
 
 const SCAN_DIR = fileURLToPath(new URL('../../src/scan', import.meta.url));
 const EDGE = fileURLToPath(new URL('../../supabase/functions/parse-image/index.ts', import.meta.url));
@@ -258,17 +259,40 @@ describe('RULE 7 — OCR cannot reach the database on its own', () => {
     }
   });
 
-  it('the commit path REFUSES a review with anything outstanding, WITHOUT touching the db', async () => {
-    const { commitScannedJob } = await import('../../src/scan/commit');
-
-    const review = reviewJobSheet(
-      {
-        customer: null, property: null, serviceDate: null, serviceTime: null,
-        serviceType: null, guests: null, guestsWording: null, dishes: [],
-        dietaries: [], notes: null, uncertain: [],
-      },
-      empty,
+  it('the commit path REFUSES a draft with anything outstanding, WITHOUT touching the db', async () => {
+    const { commitScannedDraft } = await import('../../src/scan/commit');
+    const { creationsFromDraft, draftFromReview, draftGaps } = await import(
+      '../../src/scan/jobDraft'
     );
+
+    /*
+     * THE DRAFT MATTERS AS MUCH AS THE DB DOES.
+     *
+     * An all-null sheet has gaps and NOTHING TO CREATE, so deleting the gap
+     * check leaves the database untouched anyway — `draftToJob` refuses a
+     * moment later and the test passes for the wrong reason. Verified by
+     * deleting the check and watching this stay green, which is the second time
+     * this same assertion has been fooled one layer out.
+     *
+     * So: gaps AND a customer the sheet named that he does not have. Now
+     * skipping the check writes a real customer row for a sheet he never
+     * confirmed — an orphan record created from an unread guest count — and
+     * `reached` catches it.
+     */
+    const draft = draftFromReview(
+      reviewJobSheet(
+        {
+          customer: 'Laura', property: null, serviceDate: null, serviceTime: null,
+          serviceType: null, guests: null, guestsWording: null, dishes: [],
+          dietaries: [], notes: null, uncertain: [],
+        },
+        empty,
+      ),
+    );
+
+    // Gaps to settle, and something creatable sitting behind them.
+    expect(draftGaps(draft).length).toBeGreaterThan(0);
+    expect(creationsFromDraft(draft).customers).toEqual(['Laura']);
 
     // A db that RECORDS being reached rather than one that throws.
     //
@@ -283,62 +307,203 @@ describe('RULE 7 — OCR cannot reach the database on its own', () => {
       {
         get() {
           reached = true;
-          throw new Error('the database was reached for a review with gaps');
+          throw new Error('the database was reached for a draft with gaps');
         },
       },
-    ) as Parameters<typeof commitScannedJob>[0];
+    ) as Parameters<typeof commitScannedDraft>[0];
 
-    const result = await commitScannedJob(db, review);
+    const result = await commitScannedDraft(db, draft, 'k1' as KitchenId);
 
-    expect(reached, 'a review with gaps reached the database').toBe(false);
+    expect(reached, 'a draft with gaps reached the database').toBe(false);
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error).toContain('confirming');
-  });
-
-  it('refuses an object that never came from the review path', async () => {
-    const { commitScannedJob } = await import('../../src/scan/commit');
-    const db = null as unknown as Parameters<typeof commitScannedJob>[0];
-
-    const result = await commitScannedJob(db, { readyToSave: true } as never);
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error).toContain('not a review');
   });
 
   it('a saved job never claims the guest count was confirmed', async () => {
     // He confirmed that the SCAN is a fair reading of the sheet. That is not the
     // same as confirming the sheet was right, and conflating them would tick a
     // readiness box nobody ticked.
-    const { jobFromReview } = await import('../../src/scan/commit');
+    const { draftFromReview, draftToJob } = await import('../../src/scan/jobDraft');
 
-    const review = reviewJobSheet(
-      {
-        customer: null, property: null, serviceDate: '2026-08-22', serviceTime: '18:00',
-        serviceType: 'Buffet', guests: 24, guestsWording: null, dishes: [],
-        dietaries: [], notes: null, uncertain: [],
-      },
-      empty,
+    const draft = draftFromReview(
+      reviewJobSheet(
+        {
+          customer: null, property: null, serviceDate: '2026-08-22', serviceTime: '18:00',
+          serviceType: 'Buffet', guests: 24, guestsWording: null, dishes: ['x'],
+          dietaries: [], notes: null, uncertain: [],
+        },
+        empty,
+      ),
     );
 
-    expect(jobFromReview(review).guestsConfirmed).toBe(false);
+    const built = draftToJob(draft, {
+      customerId: null,
+      propertyId: null,
+      recipeIds: new Map([['x', 'r1' as RecipeId]]),
+    });
+
+    expect(built.ok).toBe(true);
+    expect(built.ok && built.job.guestsConfirmed).toBe(false);
   });
 
-  it('a saved job carries no dietaries, because scanned wording is not a count', async () => {
-    const { jobFromReview } = await import('../../src/scan/commit');
+  /*
+   * THE REPLACED GUARANTEE. This read:
+   *
+   *   "a saved job carries no dietaries, because scanned wording is not a
+   *    count"
+   *
+   * True, and it threw the wording away — and because `reviewJobSheet` raises a
+   * gap for any dietary at all, the sheet could not be saved either, so the
+   * assertion was describing a path nothing could reach. It is replaced, not
+   * loosened: the wording survives VERBATIM as an unresolved requirement, there
+   * is still no count anywhere, and the three fields a photograph cannot supply
+   * are still never invented.
+   */
+  it('a saved job carries the scanned wording VERBATIM, and still no count', async () => {
+    const { draftFromReview, draftToJob } = await import('../../src/scan/jobDraft');
 
-    const review = reviewJobSheet(
-      {
-        customer: null, property: null, serviceDate: null, serviceTime: null,
-        serviceType: null, guests: null, guestsWording: null, dishes: [],
-        dietaries: [{ wording: '3 vegetarians' }], notes: null, uncertain: [],
-      },
-      empty,
+    const draft = draftFromReview(
+      reviewJobSheet(
+        {
+          customer: null, property: null, serviceDate: '2026-08-22', serviceTime: '18:00',
+          serviceType: 'Buffet', guests: 24, guestsWording: null, dishes: ['x'],
+          dietaries: [{ wording: '3 vegetarians' }], notes: null, uncertain: [],
+        },
+        empty,
+      ),
     );
 
-    // Rule 16: allocating those guests is a decision, made on the job screen.
-    expect(jobFromReview(review).dietaries).toEqual([]);
+    // Rule 9: none of the three was read off the sheet, so he sets them.
+    expect(draft.dietaries[0]?.dietType).toBe('');
+    expect(draft.dietaries[0]?.severity).toBeNull();
+    expect(draft.dietaries[0]?.excludesMeat).toBe(false);
+
+    const built = draftToJob(
+      {
+        ...draft,
+        dietaries: [
+          { wording: '3 vegetarians', dietType: 'vegetarian', severity: 'moderate', excludesMeat: true },
+        ],
+      },
+      { customerId: null, propertyId: null, recipeIds: new Map([['x', 'r1' as RecipeId]]) },
+    );
+
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+
+    const dietary = built.job.dietaries[0];
+    expect(built.job.dietaries).toHaveLength(1);
+    expect(dietary?.kind).toBe('unresolved');
+    expect(dietary?.kind === 'unresolved' && dietary.originalWording).toBe('3 vegetarians');
+    // Rule 16 — ONE row holding the words, and no field that could hold the 3.
+    expect(Object.values(dietary ?? {}).some((v) => typeof v === 'number')).toBe(false);
+  });
+
+  it('a saved job cannot carry a dietary he never classified (Rule 9)', async () => {
+    const { draftFromReview, draftToJob } = await import('../../src/scan/jobDraft');
+
+    const draft = draftFromReview(
+      reviewJobSheet(
+        {
+          customer: null, property: null, serviceDate: '2026-08-22', serviceTime: '18:00',
+          serviceType: 'Buffet', guests: 24, guestsWording: null, dishes: ['x'],
+          dietaries: [{ wording: 'severe nut allergy' }], notes: null, uncertain: [],
+        },
+        empty,
+      ),
+    );
+
+    // The sheet says "severe" in so many words. That is still not the system's
+    // decision to make, so the draft is refused rather than classified.
+    const built = draftToJob(draft, {
+      customerId: null,
+      propertyId: null,
+      recipeIds: new Map([['x', 'r1' as RecipeId]]),
+    });
+
+    expect(built.ok).toBe(false);
+  });
+
+  /*
+   * THE OTHER REPLACED GUARANTEE. `commit.ts` said it refuses to create a
+   * customer, property or recipe, because "a name flagged new is the owner's to
+   * add, deliberately, somewhere else". Somewhere else was the whole problem.
+   *
+   * Creation is now allowed, and narrowly: ONLY a name the camera read cleanly
+   * and could not find. The part Rule 8 cares about is untouched, and these two
+   * assertions are what hold it there.
+   */
+  it('creates ONLY a name read cleanly and not found', async () => {
+    const { draftFromReview, creationsFromDraft } = await import('../../src/scan/jobDraft');
+
+    const draft = draftFromReview(
+      reviewJobSheet(
+        {
+          customer: 'Laura', property: null, serviceDate: null, serviceTime: null,
+          serviceType: null, guests: null, guestsWording: null, dishes: [],
+          dietaries: [], notes: null, uncertain: [],
+        },
+        empty,
+      ),
+    );
+
+    expect(creationsFromDraft(draft).customers).toEqual(['Laura']);
+  });
+
+  it('NEVER creates a name that matched more than one record, nor one it could not read', async () => {
+    const { draftFromReview, creationsFromDraft } = await import('../../src/scan/jobDraft');
+
+    const duplicated = {
+      ...empty,
+      customers: [
+        { id: 'c1', kitchenId: 'k1', name: "O'Brien", phone: null, email: null, clientGroup: null, notes: null },
+        { id: 'c2', kitchenId: 'k1', name: 'O Brien', phone: null, email: null, clientGroup: null, notes: null },
+      ],
+    } as unknown as Parameters<typeof reviewJobSheet>[1];
+
+    // Ambiguous: two of his records match. Creating a THIRD is the worst of the
+    // three possible wrong answers.
+    const ambiguous = draftFromReview(
+      reviewJobSheet(
+        {
+          customer: "O'Brien", property: null, serviceDate: null, serviceTime: null,
+          serviceType: null, guests: null, guestsWording: null, dishes: [],
+          dietaries: [], notes: null, uncertain: [],
+        },
+        duplicated,
+      ),
+    );
+
+    expect(creationsFromDraft(ambiguous).customers).toEqual([]);
+
+    // Unread: there is nothing to create. An empty name is not a new customer.
+    const unread = draftFromReview(
+      reviewJobSheet(
+        {
+          customer: null, property: null, serviceDate: null, serviceTime: null,
+          serviceType: null, guests: null, guestsWording: null, dishes: [],
+          dietaries: [], notes: null, uncertain: [],
+        },
+        empty,
+      ),
+    );
+
+    expect(creationsFromDraft(unread).customers).toEqual([]);
+  });
+
+  it('there is only ONE way to commit a scanned sheet', () => {
+    /*
+     * Rule 5. `jobFromReview` and `commitScannedJob` were the read-only path and
+     * are gone: two ways to turn a sheet into a job would eventually disagree
+     * about what a scan saves, and the dead one would still read as a live
+     * guarantee.
+     */
+    const commit = scanFiles().find((f) => f.file === 'commit.ts');
+
+    expect(commit).toBeDefined();
+    expect(commit?.code, 'the read-only commit path is back').not.toContain('commitScannedJob');
+    expect(commit?.code, 'the read-only job builder is back').not.toContain('jobFromReview');
   });
 });
 

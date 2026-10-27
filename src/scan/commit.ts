@@ -43,16 +43,12 @@ import {
   type CreatedRecords,
   type JobSheetDraft,
 } from './jobDraft';
-import type { JobSheetReview } from './jobSheet';
 import type { InvoiceReview } from './invoice';
 import type { RecipeCardReview } from './recipeCard';
 import type {
   CustomerId,
   Ingredient,
   IngredientId,
-  IsoDate,
-  IsoTime,
-  Job,
   JobId,
   KitchenId,
   PropertyId,
@@ -60,119 +56,6 @@ import type {
   RecipeId,
   RecipeLineId,
 } from '../engine/types';
-
-export type ScanCommitResult =
-  | { readonly ok: true; readonly jobId: JobId }
-  | { readonly ok: false; readonly error: string };
-
-/**
- * Turn a reviewed sheet into the job that would be saved.
- *
- * Exported so the screen can show the owner the exact rows before he confirms,
- * rather than a summary of them. PURE — it writes nothing, and it invents
- * nothing: every value here came off the sheet or was typed by him afterwards.
- */
-export function jobFromReview(review: JobSheetReview): Job {
-  return {
-    // Empty means "new" to `save_job`, which mints the id. Kitchen comes from
-    // `my_kitchen_id()` inside the RPC, never from here.
-    id: '' as JobId,
-    kitchenId: '' as Job['kitchenId'],
-    customerId: review.customer.kind === 'matched' ? (review.customer.record.id as CustomerId) : null,
-    propertyId: review.property.kind === 'matched' ? (review.property.record.id as PropertyId) : null,
-    jobGroup: null,
-    serviceDate: review.serviceDate as IsoDate | null,
-    serviceTime: review.serviceTime as IsoTime | null,
-    serviceType: review.serviceType,
-    guests: review.guests,
-    // FALSE, always. The count came off a photograph, and the owner confirming
-    // that the scan is a fair reading of the sheet is not the same as confirming
-    // the sheet was right. He ticks that on the job itself.
-    guestsConfirmed: false,
-    meatEatingGuests: null,
-    pricing: { kind: 'rate_card' },
-    status: 'enquiry',
-    notes: review.notes,
-    // Only dishes matching a recipe he already has. A dish flagged `new` is not
-    // silently created as a recipe, and a job cannot reference one that has no
-    // row — so it is left off and stays on the review as something to add.
-    dishes: review.dishes.flatMap((d, position) =>
-      d.kind === 'matched'
-        ? [
-            {
-              id: '' as Job['dishes'][number]['id'],
-              jobId: '' as JobId,
-              recipeId: d.record.id,
-              // Null ASKS applyBuffetSplit to derive portions from the guest
-              // count. It can only answer for a main, a side or a dessert — for
-              // breakfast or a recipe with no course it leaves the dish null and
-              // `productionBuckets` drops it, so the dish sits on the menu
-              // contributing no prep, no shopping and no cost. `portionsDerivable`
-              // is the predicate for that, and `anomalyScan` flags what it catches.
-              //
-              // Null is still right here: the scanner read a menu, not a portion
-              // count, and inventing one would be Rule 8. Zero would be worse
-              // again — it means "make none of this dish".
-              portions: null,
-              note: null,
-              position,
-            },
-          ]
-        : [],
-    ),
-    // Rule 16: scanned wording is never a count, and this file will not invent
-    // the per-guest allocation that would make it one. Dietaries are added on
-    // the job screen, where guests can actually be named.
-    dietaries: [],
-    extras: [],
-  };
-}
-
-function looksLikeReview(value: unknown): value is JobSheetReview {
-  if (typeof value !== 'object' || value === null) return false;
-
-  const candidate = value as Partial<JobSheetReview>;
-  return (
-    typeof candidate.customer === 'object' &&
-    candidate.customer !== null &&
-    Array.isArray(candidate.dishes) &&
-    Array.isArray(candidate.gaps) &&
-    Array.isArray(candidate.newThings) &&
-    typeof candidate.readyToSave === 'boolean'
-  );
-}
-
-/**
- * Save a confirmed review.
- *
- * Called by the confirm handler in `ScanJobSheet.tsx` and nowhere else.
- */
-export async function commitScannedJob(
-  db: Db,
-  review: JobSheetReview,
-): Promise<ScanCommitResult> {
-  if (!looksLikeReview(review)) {
-    return { ok: false, error: 'That is not a review the owner was shown, so it cannot be saved.' };
-  }
-
-  if (!review.readyToSave || review.gaps.length > 0) {
-    // Rule 8 with teeth. Saving around a gap is how a guessed value gets in —
-    // not by being invented here, but by being absent and then forgotten.
-    return {
-      ok: false,
-      error: `${review.gaps.length} thing${review.gaps.length === 1 ? '' : 's'} still need confirming before this can be saved.`,
-    };
-  }
-
-  try {
-    return { ok: true, jobId: await jobRepository(db).save(jobFromReview(review)) };
-  } catch (cause) {
-    return {
-      ok: false,
-      error: cause instanceof Error ? cause.message : 'Could not save the job.',
-    };
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Recipe cards and invoices

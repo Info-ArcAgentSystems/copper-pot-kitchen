@@ -191,6 +191,51 @@ describe('RULE 8 — a blank field stays blank', () => {
   });
 });
 
+describe('what blocks a save, and what is a legitimate blank', () => {
+  /*
+   * THE BUG THIS BLOCK EXISTS FOR. `draftGaps` first required a customer and a
+   * property, and passed 33 tests because every fixture here happened to have
+   * one that matched. Rewriting the Rule 7 guards onto this path is what caught
+   * it — a sheet whose header the camera could not read was unsaveable, which
+   * is the exact defect the feature exists to remove.
+   */
+  it('lets a sheet save with no customer and no property', () => {
+    // A job with no customer is legitimate: Rule 8 stores null rather than
+    // inventing a name, and `Jobs.tsx` offers "No customer" as a real option.
+    const gaps = draftGaps(draftOf({ customer: null, property: null })).map((g) => g.field);
+
+    expect(gaps).not.toContain('customer');
+    expect(gaps).not.toContain('property');
+  });
+
+  it('still blocks when the sheet named someone and two records match', () => {
+    // Saving null here would throw away a name the camera read perfectly well.
+    const draft = draftFromReview(reviewJobSheet(read({ customer: "O'Brien" }), twoOBriens));
+
+    expect(draftGaps(draft).map((g) => g.field)).toContain('customer');
+  });
+
+  it('lets a sheet save with no time and no service type', () => {
+    /*
+     * A time is a detail of a day already placed, and `anomalyScan` flags a
+     * missing one — the right weight for it. A service type is a legitimate
+     * null under Rules 8 and 11: without it no rate matches, so revenue stays
+     * blank rather than wrong.
+     */
+    const gaps = draftGaps(draftOf({ serviceTime: null, serviceType: null })).map((g) => g.field);
+
+    expect(gaps).not.toContain('serviceTime');
+    expect(gaps).not.toContain('serviceType');
+  });
+
+  it('BLOCKS a sheet with no date', () => {
+    // Without a date the job falls outside every range: no prep day, no
+    // shopping window, no money total. Saved and invisible is worse than
+    // refused.
+    expect(draftGaps(draftOf({ serviceDate: null })).map((g) => g.field)).toContain('serviceDate');
+  });
+});
+
 describe('the sheet’s own words survive every edit', () => {
   it('keeps what the camera read after he overwrites the field', () => {
     /*

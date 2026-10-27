@@ -23,6 +23,8 @@ import { requirementsForRange } from '../../engine/shopping';
 import { buildPackingView } from '../../ui/packingView';
 import { EmptyState } from '../../ui/EmptyState';
 import { useAsync } from '../../ui/useAsync';
+import { SourceNotice } from '../../ui/SourceNotice';
+import { sourceState, type DataSource } from '../../ui/sourceState';
 import { useDateRange, type DateRange } from '../../ui/dateRange';
 import { useKitchen } from '../../auth/kitchenState';
 import type { JobId, KitchenId } from '../../engine/types';
@@ -103,13 +105,46 @@ export function Packing({ range }: { range?: DateRange }): ReactNode {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const ready =
-    jobs.state.status === 'ready' &&
-    recipes.state.status === 'ready' &&
-    ingredients.state.status === 'ready' &&
-    customers.state.status === 'ready' &&
-    templates.state.status === 'ready' &&
-    ticks.state.status === 'ready';
+  const sources: readonly DataSource[] = [
+    {
+      what: 'your jobs',
+      why: 'each job is packed and delivered separately',
+      state: jobs.state,
+      reload: jobs.reload,
+    },
+    {
+      what: 'your recipes',
+      why: 'the food lines come from each job\u2019s menu',
+      state: recipes.state,
+      reload: recipes.reload,
+    },
+    {
+      what: 'your ingredients',
+      why: 'anything unquantified is checked against them',
+      state: ingredients.state,
+      reload: ingredients.reload,
+    },
+    {
+      what: 'your customers',
+      why: 'each box says whose job it is',
+      state: customers.state,
+      reload: customers.reload,
+    },
+    {
+      what: 'your service templates',
+      why: 'the equipment lines come from them',
+      state: templates.state,
+      reload: templates.reload,
+    },
+    {
+      what: 'what you have already packed',
+      why: 'it is how this list remembers what is done',
+      state: ticks.state,
+      reload: ticks.reload,
+    },
+  ];
+  const loaded = sourceState(sources);
+  const ready = loaded.kind === 'ready';
 
   const view = useMemo(() => {
     if (!ready) return null;
@@ -146,28 +181,7 @@ export function Packing({ range }: { range?: DateRange }): ReactNode {
     }
   };
 
-  if (!ready) {
-    const failed = [
-      jobs.state,
-      recipes.state,
-      ingredients.state,
-      customers.state,
-      templates.state,
-      ticks.state,
-    ].find((s) => s.status === 'error');
-
-    if (failed !== undefined && failed.status === 'error') {
-      return (
-        <div>
-          <h1>Packing</h1>
-          <p className="error" role="alert">
-            Could not load: {failed.error.message}
-          </p>
-        </div>
-      );
-    }
-    return <p className="muted">Working it out…</p>;
-  }
+  if (!ready) return <SourceNotice state={loaded} title="Packing" />;
 
   return (
     <div>

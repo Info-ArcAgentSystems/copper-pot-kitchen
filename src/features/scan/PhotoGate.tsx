@@ -22,11 +22,14 @@
  *
  * Still loading says so and stays disabled, which is honest — the wait is real
  * and short. A failure says which read failed, what the scanner wanted it for,
- * what the failure itself said, and offers to run it again.
+ * what the failure itself said, and offers to run it again. Both sets of words
+ * come from `SourceNotice`, which the six non-scanner screens share, so the
+ * owner is never told the same thing two ways.
  */
 
 import type { ReactNode } from 'react';
 import { PhotoSource } from './PhotoSource';
+import { SourceNotice } from '../../ui/SourceNotice';
 import { sourceState, type DataSource } from '../../ui/sourceState';
 
 export function PhotoGate({
@@ -43,30 +46,18 @@ export function PhotoGate({
 
   return (
     <>
-      {/* Above the buttons, because it is the reason they are dead. */}
-      {state.kind === 'failed' && (
-        <div className="source-failure">
-          {state.failures.map((failure) => (
-            <p className="error" role="alert" key={failure.what}>
-              {failure.message} <span className="muted">({failure.detail})</span>
-            </p>
-          ))}
-          <button type="button" onClick={state.retry}>
-            Try again
-          </button>
-        </div>
-      )}
+      {/* ABOVE the buttons, because it is the reason they are dead: the
+          explanation has to reach the eye before the thing it explains. Renders
+          nothing at all when every read landed. */}
+      <SourceNotice state={state} />
 
       <PhotoSource
-        // Disabled is never the whole story here: every non-ready state above and
-        // below this line renders its own words.
+        // Disabled is never the whole story here — the line above says why.
         disabled={busy || state.kind !== 'ready'}
         onFile={(file) => {
           if (state.kind === 'ready') onFile(file);
         }}
       />
-
-      {state.kind === 'loading' && <p className="muted">{state.message}</p>}
     </>
   );
 }

@@ -134,47 +134,34 @@ describe('PhotoGate cannot be silently disabled', () => {
     expect(gate()).toContain('sourceState(sources)');
   });
 
-  it('renders the words for a FAILED read, with the failure’s own reason', () => {
-    const code = gate();
-
+  it('renders the words, through the renderer the other six screens use', () => {
     /*
-     * ANCHORED ON THE OPENING BRACE, and that is the whole lesson of this file.
-     * The first version of this assertion looked for `state.kind === 'failed'`
-     * anywhere in the source — and passed against
+     * PINNED WHOLE, AND THE REASON IS A GUARD THAT ONCE PASSED AGAINST THE BUG.
+     *
+     * An earlier version of this file asserted that `state.kind === 'failed'`
+     * appeared SOMEWHERE in PhotoGate — which it does in
      *
      *     {false && state.kind === 'failed' && (
      *
-     * which is the defect restored with the evidence of the fix still in place.
-     * Found by inverting this guard rather than by reasoning about it. Anchoring
-     * on `{` pins the START of the JSX expression, so nothing can be put in
-     * front of the condition without this going red.
+     * the defect restored with the evidence of the fix still sitting above it.
+     * Found by inverting this guard rather than by reading it. So the whole
+     * element is pinned: there is no condition left to neuter, and deleting it
+     * fails here.
+     *
+     * The words themselves live in `SourceNotice` and are asserted in
+     * `tests/ui/sourceNotice.test.ts`, which also pins the branch inside it.
      */
-    expect(code).toContain("{state.kind === 'failed' && (");
-    expect(code).toContain('failure.message');
-    // The detail is the part that was being thrown away.
-    expect(code).toContain('failure.detail');
-    expect(code).toContain('role="alert"');
-  });
-
-  it('offers a retry wired to the state that failed', () => {
-    const code = gate();
-
-    expect(code).toContain('Try again');
-    expect(code).toContain('onClick={state.retry}');
-  });
-
-  it('says it is loading while it is loading', () => {
-    const code = gate();
-
-    // Anchored for the same reason as the failure branch above.
-    expect(code).toContain("{state.kind === 'loading' && ");
-    expect(code).toContain('state.message');
+    expect(gate()).toContain('<SourceNotice state={state} />');
   });
 
   it('holds no message copy of its own — the words come from one place', () => {
-    // Four screens each inventing their own phrasing is how "could not be read"
-    // ended up meaning three different things.
-    expect(gate()).not.toMatch(/Could not load/);
-    expect(gate()).not.toMatch(/Loading your/);
+    // Four scanners and six screens each inventing their own phrasing is how
+    // "could not be read" ended up meaning three different things.
+    const code = gate();
+
+    expect(code).not.toMatch(/Could not load/);
+    expect(code).not.toMatch(/Loading your/);
+    expect(code).not.toContain('Try again');
+    expect(code).not.toContain('role="alert"');
   });
 });

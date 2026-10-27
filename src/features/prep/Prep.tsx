@@ -23,6 +23,8 @@ import { requirementsForRange } from '../../engine/shopping';
 import { buildPrepView } from '../../ui/prepView';
 import { EmptyState } from '../../ui/EmptyState';
 import { useAsync } from '../../ui/useAsync';
+import { SourceNotice } from '../../ui/SourceNotice';
+import { sourceState, type DataSource } from '../../ui/sourceState';
 import { useDateRange, type DateRange } from '../../ui/dateRange';
 import { useKitchen } from '../../auth/kitchenState';
 import type { IsoDate, KitchenId, RecipeId } from '../../engine/types';
@@ -59,12 +61,40 @@ export function Prep({ range }: { range?: DateRange }): ReactNode {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const ready =
-    jobs.state.status === 'ready' &&
-    recipes.state.status === 'ready' &&
-    ingredients.state.status === 'ready' &&
-    customers.state.status === 'ready' &&
-    ticks.state.status === 'ready';
+  const sources: readonly DataSource[] = [
+    {
+      what: 'your jobs',
+      why: 'the plan is worked out from them every time you open it',
+      state: jobs.state,
+      reload: jobs.reload,
+    },
+    {
+      what: 'your recipes',
+      why: 'batch sizes and make-ahead days come from them',
+      state: recipes.state,
+      reload: recipes.reload,
+    },
+    {
+      what: 'your ingredients',
+      why: 'anything unquantified is checked against them',
+      state: ingredients.state,
+      reload: ingredients.reload,
+    },
+    {
+      what: 'your customers',
+      why: 'each batch says which job and customer it is for',
+      state: customers.state,
+      reload: customers.reload,
+    },
+    {
+      what: 'what you have already prepped',
+      why: 'it is how this list remembers what is done',
+      state: ticks.state,
+      reload: ticks.reload,
+    },
+  ];
+  const loaded = sourceState(sources);
+  const ready = loaded.kind === 'ready';
 
   const jobList = jobs.state.status === 'ready' ? jobs.state.data : [];
 
@@ -126,23 +156,7 @@ export function Prep({ range }: { range?: DateRange }): ReactNode {
     }
   };
 
-  if (!ready) {
-    const failed = [jobs.state, recipes.state, ingredients.state, customers.state, ticks.state].find(
-      (s) => s.status === 'error',
-    );
-
-    if (failed !== undefined && failed.status === 'error') {
-      return (
-        <div>
-          <h1>Prep</h1>
-          <p className="error" role="alert">
-            Could not load: {failed.error.message}
-          </p>
-        </div>
-      );
-    }
-    return <p className="muted">Working it out…</p>;
-  }
+  if (!ready) return <SourceNotice state={loaded} title="Prep" />;
 
   const nothing = view === null || view.days.length === 0;
 

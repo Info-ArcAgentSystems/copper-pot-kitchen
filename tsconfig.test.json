@@ -5,6 +5,13 @@
     /* No DOM. The engine and its tests must run under plain Node — if a test ever
        needs a browser global, that is a signal the engine has stopped being pure. */
     "lib": ["ES2023"],
+
+    /* Lets a test typecheck an import of a .tsx module — `sourceNoticeRender`
+       renders SourceNotice through `renderToStaticMarkup` to assert the words a
+       person reads, not just the shape. This does NOT weaken the line above:
+       `jsx` governs how JSX is parsed, `lib` governs what globals exist, and DOM
+       is still absent. The test itself uses `createElement`, not JSX. */
+    "jsx": "react-jsx",
     "types": ["node"],
     "skipLibCheck": true,
 

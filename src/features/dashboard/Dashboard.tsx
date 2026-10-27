@@ -30,6 +30,8 @@ import { buildDashboardView } from '../../ui/dashboardView';
 import { BACKUP_STORAGE_KEY } from '../../ui/backup';
 import { formatMoney } from '../../ui/form';
 import { useAsync } from '../../ui/useAsync';
+import { SourceNotice } from '../../ui/SourceNotice';
+import { sourceState, type DataSource } from '../../ui/sourceState';
 import type { Cents } from '../../engine/types';
 
 const today = (): string => new Date().toISOString().slice(0, 10);
@@ -86,13 +88,46 @@ export function Dashboard(): ReactNode {
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(() => addDays(today(), 7));
 
-  const ready =
-    jobs.state.status === 'ready' &&
-    recipes.state.status === 'ready' &&
-    ingredients.state.status === 'ready' &&
-    customers.state.status === 'ready' &&
-    rates.state.status === 'ready' &&
-    stock.state.status === 'ready';
+  const sources: readonly DataSource[] = [
+    {
+      what: 'your jobs',
+      why: 'every figure on this screen is counted from them',
+      state: jobs.state,
+      reload: jobs.reload,
+    },
+    {
+      what: 'your recipes',
+      why: 'they turn a job into portions, batches and shopping',
+      state: recipes.state,
+      reload: recipes.reload,
+    },
+    {
+      what: 'your ingredients',
+      why: 'the outstanding shopping figure is counted in them',
+      state: ingredients.state,
+      reload: ingredients.reload,
+    },
+    {
+      what: 'your customers',
+      why: 'a job is listed under the customer it belongs to',
+      state: customers.state,
+      reload: customers.reload,
+    },
+    {
+      what: 'your rate card',
+      why: 'revenue is priced from it',
+      state: rates.state,
+      reload: rates.reload,
+    },
+    {
+      what: 'what you have in stock',
+      why: 'it comes off what still needs buying',
+      state: stock.state,
+      reload: stock.reload,
+    },
+  ];
+  const loaded = sourceState(sources);
+  const ready = loaded.kind === 'ready';
 
   /**
    * THE DERIVATION. Runs on every render, from the jobs, every time.
@@ -118,7 +153,34 @@ export function Dashboard(): ReactNode {
     });
   }, [ready, jobs.state, recipes.state, ingredients.state, customers.state, rates.state, stock.state, from, to]);
 
-  if (!ready || view === null) return <p className="muted">Loading…</p>;
+  /*
+   * THIS LINE USED TO SAY "Loading…" FOREVER.
+   *
+   * It was `if (!ready || view === null)` over a boolean that is false while
+   * loading AND false after a failed read, on the screen the app opens to. Six
+   * reads, any one of which could leave the owner looking at a word that was
+   * not true, with the reason sitting unused in `useAsync`.
+   */
+  if (!ready) return <SourceNotice state={loaded} title="Today" />;
+
+  /*
+   * Ready, so the derivation ran and `view` is an object. Separated from the
+   * line above rather than folded into it — `!ready || view === null` is how a
+   * failed read borrowed the word "loading" in the first place, and a bare
+   * `<SourceNotice>` here would render NOTHING, since a ready state has nothing
+   * to say. Unreachable, and said out loud anyway.
+   */
+  if (view === null) {
+    return (
+      <div>
+        <h1>Today</h1>
+        <p className="error" role="alert">
+          Today’s figures could not be worked out. Your data is fine — this is a fault in the
+          app.
+        </p>
+      </div>
+    );
+  }
 
   const money = view.money;
 

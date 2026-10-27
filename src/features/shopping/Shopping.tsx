@@ -27,6 +27,8 @@ import { requirementsForRange, outstandingShopping } from '../../engine/shopping
 import { buildShoppingView, shoppingText } from '../../ui/shoppingView';
 import { EmptyState } from '../../ui/EmptyState';
 import { useAsync } from '../../ui/useAsync';
+import { SourceNotice } from '../../ui/SourceNotice';
+import { sourceState, type DataSource } from '../../ui/sourceState';
 import { useDateRange, type DateRange } from '../../ui/dateRange';
 import { useKitchen } from '../../auth/kitchenState';
 import type { IngredientId, IsoDate, KitchenId, StockUnit } from '../../engine/types';
@@ -71,13 +73,46 @@ export function Shopping({ range }: { range?: DateRange }): ReactNode {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const ready =
-    jobs.state.status === 'ready' &&
-    recipes.state.status === 'ready' &&
-    ingredients.state.status === 'ready' &&
-    stock.state.status === 'ready' &&
-    suppliers.state.status === 'ready' &&
-    ticks.state.status === 'ready';
+  const sources: readonly DataSource[] = [
+    {
+      what: 'your jobs',
+      why: 'the list is worked out from them every time you open it',
+      state: jobs.state,
+      reload: jobs.reload,
+    },
+    {
+      what: 'your recipes',
+      why: 'they turn each job into ingredients',
+      state: recipes.state,
+      reload: recipes.reload,
+    },
+    {
+      what: 'your ingredients',
+      why: 'pack sizes and prices come from them',
+      state: ingredients.state,
+      reload: ingredients.reload,
+    },
+    {
+      what: 'what you have in stock',
+      why: 'it comes off what you need to buy',
+      state: stock.state,
+      reload: stock.reload,
+    },
+    {
+      what: 'your suppliers',
+      why: 'the list is grouped by them',
+      state: suppliers.state,
+      reload: suppliers.reload,
+    },
+    {
+      what: 'what you have already bought',
+      why: 'it comes off what is still outstanding',
+      state: ticks.state,
+      reload: ticks.reload,
+    },
+  ];
+  const loaded = sourceState(sources);
+  const ready = loaded.kind === 'ready';
 
   const jobList = jobs.state.status === 'ready' ? jobs.state.data : [];
 
@@ -173,20 +208,7 @@ export function Shopping({ range }: { range?: DateRange }): ReactNode {
     }
   };
 
-  if (!ready) {
-    const failed = [jobs.state, recipes.state, ingredients.state, stock.state, suppliers.state, ticks.state]
-      .find((s) => s.status === 'error');
-
-    if (failed !== undefined && failed.status === 'error') {
-      return (
-        <div>
-          <h1>Shopping</h1>
-          <p className="error" role="alert">Could not load: {failed.error.message}</p>
-        </div>
-      );
-    }
-    return <p className="muted">Working it out…</p>;
-  }
+  if (!ready) return <SourceNotice state={loaded} title="Shopping" />;
 
   const tickFor = (ingredientId: IngredientId) =>
     view?.ticks.find((t) => t.ingredientId === ingredientId);

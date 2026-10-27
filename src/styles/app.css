@@ -1053,6 +1053,19 @@ section.danger-zone h2 {
    the keyboard path has to keep working.
    --------------------------------------------------------------------------- */
 
+/* A read the scanner needs FAILED, and this is why the buttons below are dead.
+   It sits above them deliberately: the reason has to arrive before the eye
+   reaches the thing it explains. Spacing only — the words are `.error`, and the
+   retry is an ordinary button, so both follow the palette rather than carrying
+   colour of their own. */
+.source-failure {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
 /* The two photo routes sit side by side, and wrap on a narrow phone rather than
    squeezing either below the 44px floor. */
 .photo-source {

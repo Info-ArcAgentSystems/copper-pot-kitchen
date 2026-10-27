@@ -31,9 +31,10 @@ import { commitScannedJob } from '../../scan/commit';
 import { reviewJobSheet, type JobSheetReview } from '../../scan/jobSheet';
 import { parseJobSheet } from '../../scan/parseImage';
 import { toScaledDataUrl } from './scaleImage';
-import { PhotoSource } from './PhotoSource';
+import { PhotoGate } from './PhotoGate';
 import { EmptyState } from '../../ui/EmptyState';
 import { useAsync } from '../../ui/useAsync';
+import type { DataSource } from '../../ui/sourceState';
 
 /** What resolution to show beside a read name, in words rather than a code. */
 const resolutionOf = (r: JobSheetReview['customer'] | JobSheetReview['property']): string => {
@@ -64,14 +65,34 @@ export function ScanJobSheet(): ReactNode {
   const [review, setReview] = useState<JobSheetReview | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
 
-  const ready =
-    customers.state.status === 'ready' &&
-    properties.state.status === 'ready' &&
-    recipes.state.status === 'ready';
+  /**
+   * The three reads a photograph is no use without, each named as he would name
+   * it. THE MOST EXPOSED SCREEN IN THE APP: three repositories, any one of which
+   * can fail, and before `PhotoGate` a failure in any of them greyed the buttons
+   * silently and permanently.
+   */
+  const sources: readonly DataSource[] = [
+    {
+      what: 'your customers',
+      why: 'the scanner matches the name on the sheet against them',
+      state: customers.state,
+      reload: customers.reload,
+    },
+    {
+      what: 'your properties',
+      why: 'the scanner matches the address on the sheet against them',
+      state: properties.state,
+      reload: properties.reload,
+    },
+    {
+      what: 'your recipes',
+      why: 'the scanner matches the dishes on the sheet against them',
+      state: recipes.state,
+      reload: recipes.reload,
+    },
+  ];
 
   const scan = async (file: File): Promise<void> => {
-    if (!ready) return;
-
     setBusy(true);
     setRefusal(null);
     setReview(null);
@@ -132,7 +153,7 @@ export function ScanJobSheet(): ReactNode {
         Photograph the sheet. Nothing is saved until you have checked it and tapped confirm.
       </p>
 
-      <PhotoSource onFile={(file) => void scan(file)} disabled={busy || !ready} />
+      <PhotoGate sources={sources} busy={busy} onFile={(file) => void scan(file)} />
 
       {busy && <p className="muted">Reading it…</p>}
 

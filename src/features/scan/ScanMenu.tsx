@@ -24,8 +24,9 @@ import { parseMenu } from '../../scan/parseImage';
 import { findRecipes } from '../../scan/findRecipes';
 import { draftFromWebReview, reviewWebRecipe, type WebRecipeReview } from '../../scan/webRecipe';
 import { toScaledDataUrl } from './scaleImage';
-import { PhotoSource } from './PhotoSource';
+import { PhotoGate } from './PhotoGate';
 import { useAsync } from '../../ui/useAsync';
+import type { DataSource } from '../../ui/sourceState';
 import type { Ingredient } from '../../engine/types';
 
 interface DishState {
@@ -56,7 +57,15 @@ export function ScanMenu(): ReactNode {
   const [dishes, setDishes] = useState<readonly string[]>([]);
   const [byDish, setByDish] = useState<Readonly<Record<string, DishState>>>({});
 
-  const ready = ingredients.state.status === 'ready';
+  const sources: readonly DataSource[] = [
+    {
+      what: 'your ingredients',
+      why: 'a recipe found on the web is matched against them before you see it',
+      state: ingredients.state,
+      reload: ingredients.reload,
+    },
+  ];
+
   const ownerIngredients: readonly Ingredient[] =
     ingredients.state.status === 'ready' ? ingredients.state.data : [];
 
@@ -142,7 +151,7 @@ export function ScanMenu(): ReactNode {
         one opens in the recipe editor for you to check and adjust to your own portions first.
       </p>
 
-      <PhotoSource onFile={(file) => void scan(file)} disabled={busy || !ready} />
+      <PhotoGate sources={sources} busy={busy} onFile={(file) => void scan(file)} />
 
       {busy && <p className="muted">Reading it…</p>}
 

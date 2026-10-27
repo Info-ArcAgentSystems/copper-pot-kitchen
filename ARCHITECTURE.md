@@ -83,6 +83,8 @@ session reads to work out where things stand.
 | 23 Aug 2026 | **Recipe search fixed, and a diagnostics hole closed.** `find-recipes` returned 404 on every call: `gpt-4o-search-preview` was shut down 2026-07-23, and that family does not support function calling anyway. Moved to `/v1/responses` + `gpt-5.6-terra` + `tools: [{type:'web_search'}]`. `webRecipe.ts` and its 26 tests were untouched — the review layer never knew where the JSON came from. All three functions now surface the upstream error body; a status with no body had cost two diagnoses. **1170 unit** |
 | 23 Aug 2026 | **Copper re-skin.** Parchment and ink, Bitter 900 headings, uppercase JetBrains Mono section labels, small-radius cards. Presentation only — no engine, no data, no markup; the named ramp's SIZES are unchanged, only the families rendering at them. Restores the copper identity the slate/teal pass dropped, with amber kept strictly for the Rule 8 signal and a guard to hold the line. Nine new token guards, five verified by inversion. **1180 unit, golden pack unmoved** |
 | 23 Aug 2026 | **Neutral re-skin.** Near-white/near-black greys, one blue accent used sparingly, system sans throughout, mono kept for micro labels. Splits ABSENCE from WARNING — the two had shared a filled-amber treatment, which alarmed on honest nulls and buried real ones. Scan control became a proper button. Presentation only; golden pack unmoved at 15/2/2. **1185 unit** |
+| 27 Oct 2026 | **The scanners say why their buttons are dead.** All four gated `PhotoSource` on `ready`, a boolean over two or three repository reads — false while loading and false FOREVER after a failed one, so a failed read left the photo buttons at opacity 0.6 with no message and the reason sitting unused inside `useAsync`. ScanJobSheet reads three repositories. Readiness became a value: `src/ui/sourceState.ts` returns `ready` / `loading` (naming what is outstanding) / `failed` (naming the read, what the scanner wanted it for, and the error's own words) with a retry, and `failed` BEATS `loading` so a failure cannot hide behind a sibling in flight. `PhotoGate` is now the only file that may render `PhotoSource`, so a scanner cannot grey the buttons at all. Eleven inversions, one of which caught the guard itself. **1276 unit, golden pack unmoved** |
+| 27 Oct 2026 | **The same fix carried to the other six screens.** Dashboard said "Loading…" FOREVER after a failed read — the screen the app opens to, six reads, a word that was not true. Shopping, Prep, Packing and Money hunted the failure themselves with `.find(s => s.status === 'error')` over a list maintained BESIDE `ready`: first failure only, naming neither which read nor what it cost, no retry, and two lists that can drift. Ask Sous disabled the Ask button silently. All ten screens now declare `sources` and render `SourceNotice`, the one renderer, which `PhotoGate` also uses. The guard counts each screen's sources against its `useAsync` calls, so a read left out of the gate fails a test rather than a Saturday. Thirteen inversions, and one caught the new guard the same way the last one did. **1331 unit, golden pack unmoved** |
 | | *Next: the four owner questions — two block golden tests; and the `confidence` decision above* |
 
 ---
@@ -273,6 +275,48 @@ plain Node with no browser and no database — which is the whole reason this re
 
 Writes go the other way and always pass through a repository, never direct from a component.
 Any write to `jobs`, `job_dishes` or `job_dietaries` also writes a `job_changes` row.
+
+---
+
+### Readiness is a value, not a boolean
+
+`src/ui/sourceState.ts` turns a screen's repository reads into `ready` / `loading` / `failed`,
+and **there is no non-ready value without words in it**. That is the fix for a defect the
+scanners shipped with: `const ready = a.status === 'ready' && b.status === 'ready'` is false
+while loading and false forever after a FAILED read, and a boolean cannot tell the two apart.
+All four scanners rendered `<PhotoSource disabled={busy || !ready} />`, so a failed read left
+two greyed buttons, no message, and the error discarded — the same shape as the swallowed
+OpenAI body, one layer up.
+
+`failed` takes precedence over `loading`: one errored read beside one still in flight is a
+broken screen, not a slow one.
+
+`src/features/scan/PhotoGate.tsx` is **the only file permitted to render `PhotoSource`**. A
+scanner hands over its reads, named in the owner's words, and gets back the control plus
+whatever needs saying about it — so a scanner has no way to disable the buttons silently,
+rather than merely being discouraged from it. `tests/scan/photoGate.test.ts` holds that, and
+`tests/ui/sourceState.test.ts` walks all 27 combinations of three reads under plain Node.
+
+**All ten gating screens now go through it** — the four scanners via `PhotoGate`, and
+Dashboard, Shopping, Prep, Packing, Money and Ask Sous directly. `src/ui/SourceNotice.tsx` is
+the only place the words are rendered: with a `title` it replaces the screen, and without one
+it sits inline, above the control it explains, which is what the scanners and Ask Sous need
+(a transcript is still worth reading when a read has failed).
+
+`tests/ui/sourceNotice.test.ts` counts each screen's declared sources against its `useAsync`
+calls. That is the drift this cannot allow: a read added to a screen and left out of the gate
+renders before it lands, or reports ready while it is broken.
+
+**Still carrying the old pattern**, and not fixed here: `Jobs.tsx`'s `JobForm` (a failed read
+silently kills the live impact preview — the most consequential one left), `Recipes.tsx`'s
+`RecipeForm` (empty dropdowns rather than a message) and `Ingredients.tsx`. `RecordScreen.tsx`
+and `Backup.tsx` already report a failed read with a retry, in their own words.
+
+**The rendering itself was verified outside the suite**, not by inspection: a throwaway
+`.tsx` test under `tests/` using `renderToStaticMarkup` from `react-dom/server` (no jsdom
+needed), run with `npx vitest` and deleted. It is not committed, because `tsconfig.test.json`
+deliberately has no DOM lib and no `jsx` — committing it would mean adding both to the test
+project. The same trick works for any future component check.
 
 ---
 

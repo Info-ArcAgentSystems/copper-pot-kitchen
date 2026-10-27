@@ -29,6 +29,8 @@ import { buildMoneyView } from '../../ui/moneyView';
 import { EmptyState } from '../../ui/EmptyState';
 import { Field } from '../../ui/Field';
 import { useAsync } from '../../ui/useAsync';
+import { SourceNotice } from '../../ui/SourceNotice';
+import { sourceState, type DataSource } from '../../ui/sourceState';
 
 const addDays = (date: string, days: number): string => {
   const [y, m, d] = date.split('-').map(Number) as [number, number, number];
@@ -51,12 +53,40 @@ export function Money(): ReactNode {
   const customers = useAsync(() => customerRepository(db).list(), []);
   const rates = useAsync(() => clientRateRepository(db).list(), []);
 
-  const ready =
-    jobs.state.status === 'ready' &&
-    recipes.state.status === 'ready' &&
-    ingredients.state.status === 'ready' &&
-    customers.state.status === 'ready' &&
-    rates.state.status === 'ready';
+  const sources: readonly DataSource[] = [
+    {
+      what: 'your jobs',
+      why: 'revenue and food cost are counted from them',
+      state: jobs.state,
+      reload: jobs.reload,
+    },
+    {
+      what: 'your recipes',
+      why: 'food cost is built up from their ingredients',
+      state: recipes.state,
+      reload: recipes.reload,
+    },
+    {
+      what: 'your ingredients',
+      why: 'the prices come from them',
+      state: ingredients.state,
+      reload: ingredients.reload,
+    },
+    {
+      what: 'your customers',
+      why: 'a rate is found by client group',
+      state: customers.state,
+      reload: customers.reload,
+    },
+    {
+      what: 'your rate card',
+      why: 'revenue is priced from it',
+      state: rates.state,
+      reload: rates.reload,
+    },
+  ];
+  const loaded = sourceState(sources);
+  const ready = loaded.kind === 'ready';
 
   const jobList = jobs.state.status === 'ready' ? jobs.state.data : [];
 
@@ -91,23 +121,7 @@ export function Money(): ReactNode {
     return buildMoneyView(inputs, total, customerList);
   }, [ready, jobList, recipes.state, ingredients.state, customers.state, rates.state, from, to]);
 
-  if (!ready) {
-    const failed = [jobs.state, recipes.state, ingredients.state, customers.state, rates.state].find(
-      (s) => s.status === 'error',
-    );
-
-    if (failed !== undefined && failed.status === 'error') {
-      return (
-        <div>
-          <h1>Money</h1>
-          <p className="error" role="alert">
-            Could not load: {failed.error.message}
-          </p>
-        </div>
-      );
-    }
-    return <p className="muted">Working it out…</p>;
-  }
+  if (!ready) return <SourceNotice state={loaded} title="Money" />;
 
   return (
     <div>

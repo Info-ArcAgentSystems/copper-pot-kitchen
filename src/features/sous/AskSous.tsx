@@ -36,6 +36,8 @@ import { commitProposal } from '../../sous/commit';
 import { runIntent, type Proposal, type SousData } from '../../sous/tools';
 import { Field } from '../../ui/Field';
 import { useAsync } from '../../ui/useAsync';
+import { SourceNotice } from '../../ui/SourceNotice';
+import { sourceState, type DataSource } from '../../ui/sourceState';
 import { supabaseClient } from '../../data/client';
 
 const today = (): string => new Date().toISOString().slice(0, 10);
@@ -89,14 +91,59 @@ export function AskSous(): ReactNode {
    */
   const turns = turnsOf(transcript);
 
-  const ready =
-    jobs.state.status === 'ready' &&
-    recipes.state.status === 'ready' &&
-    ingredients.state.status === 'ready' &&
-    customers.state.status === 'ready' &&
-    rates.state.status === 'ready' &&
-    stock.state.status === 'ready' &&
-    templates.state.status === 'ready';
+  /*
+   * EVERY READ SOUS ANSWERS FROM. The model computes nothing (Rule 2) — it
+   * returns an intent and the engine runs here, over these — so a read that
+   * failed is not a degraded answer, it is no answer. The Ask button used to go
+   * quietly dead; `SourceNotice` sits above the composer now and says which
+   * read failed and why it matters.
+   */
+  const sources: readonly DataSource[] = [
+    {
+      what: 'your jobs',
+      why: 'Sous answers from them, not from the model',
+      state: jobs.state,
+      reload: jobs.reload,
+    },
+    {
+      what: 'your recipes',
+      why: 'quantities are scaled from them',
+      state: recipes.state,
+      reload: recipes.reload,
+    },
+    {
+      what: 'your ingredients',
+      why: 'prices and pack sizes come from them',
+      state: ingredients.state,
+      reload: ingredients.reload,
+    },
+    {
+      what: 'your customers',
+      why: 'a question about a customer is matched to them',
+      state: customers.state,
+      reload: customers.reload,
+    },
+    {
+      what: 'your rate card',
+      why: 'any money answer is priced from it',
+      state: rates.state,
+      reload: rates.reload,
+    },
+    {
+      what: 'what you have in stock',
+      why: 'it comes off anything you need to buy',
+      state: stock.state,
+      reload: stock.reload,
+    },
+    {
+      what: 'your service templates',
+      why: 'packing answers are built from them',
+      state: templates.state,
+      reload: templates.reload,
+    },
+  ];
+  const loaded = sourceState(sources);
+  const ready = loaded.kind === 'ready';
 
   const data: SousData | null = useMemo(() => {
     if (!ready) return null;
@@ -297,6 +344,10 @@ export function AskSous(): ReactNode {
       {outcome !== null && <p className="muted">{outcome}</p>}
 
       <div className="chat-composer">
+        {/* Above the composer rather than replacing the screen: the transcript
+            is still worth reading when a read has failed. */}
+        <SourceNotice state={loaded} />
+
         <Field
           label="What do you want to know?"
           value={question}

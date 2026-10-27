@@ -62,7 +62,10 @@ function Header(): ReactNode {
 
   return (
     <header className="app-header">
-      <span>{state.membership.kitchenName}</span>
+      {/* The BAR is full-width; its CONTENTS align to the reading column, so the
+          bottom border still reaches both window edges. */}
+      <div className="app-header-inner">
+        <span>{state.membership.kitchenName}</span>
       {/* Ask Sous lives here rather than in the bottom bar: it is cross-cutting,
           and the bar is already past the point where another tab fits. */}
       <NavLink to="/sous" className="tap">
@@ -71,14 +74,15 @@ function Header(): ReactNode {
       <NavLink to="/setup" className="tap">
         Setup
       </NavLink>
-      <button
-        type="button"
-        onClick={() => {
-          void signOut();
-        }}
-      >
-        Sign out
-      </button>
+        <button
+          type="button"
+          onClick={() => {
+            void signOut();
+          }}
+        >
+          Sign out
+        </button>
+      </div>
     </header>
   );
 }
@@ -86,11 +90,13 @@ function Header(): ReactNode {
 function TabBar(): ReactNode {
   return (
     <nav className="tabs" aria-label="Sections">
-      {TABS.map((tab) => (
-        <NavLink key={tab.to} to={tab.to} end={tab.to === '/'} className="tap">
-          {tab.label}
-        </NavLink>
-      ))}
+      <div className="tabs-inner">
+        {TABS.map((tab) => (
+          <NavLink key={tab.to} to={tab.to} end={tab.to === '/'} className="tap">
+            {tab.label}
+          </NavLink>
+        ))}
+      </div>
     </nav>
   );
 }
@@ -105,7 +111,8 @@ export default function App(): ReactNode {
         <RequireKitchen>
           <Header />
           <main className="app-main">
-            <Routes>
+            <div className="content">
+              <Routes>
               <Route path="/" element={<Jobs />} />
               {/* Bookmarks from the eight-tab era. Each resolves rather than
                   404s — see tests/ui/routes.test.ts. */}
@@ -137,7 +144,8 @@ export default function App(): ReactNode {
               <Route path="/setup/rates" element={<RateCard />} />
               <Route path="/setup/templates" element={<ServiceTemplates />} />
               <Route path="/setup/backup" element={<BackupScreen />} />
-            </Routes>
+              </Routes>
+            </div>
           </main>
           <TabBar />
         </RequireKitchen>

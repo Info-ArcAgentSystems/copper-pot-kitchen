@@ -102,7 +102,10 @@ h3 {
 /* At 375px the kitchen name, the Ask Sous link and Sign out do not all fit, and
    every one of them was wrapping mid-phrase. The name is the only part that can
    afford to be cut, so it is the only part allowed to. */
-.app-header > span:first-child {
+/* Descendant, not child: the brand now sits inside `.app-header-inner`, and a
+   direct-child selector silently stopped matching — which dropped `nowrap` and
+   let "Copper Pot Kitchen" wrap to two lines, growing the header by 3px. */
+.app-header span:first-child {
   font-weight: var(--weight-semi);
   min-width: 0;
   overflow: hidden;
@@ -1094,4 +1097,195 @@ section.danger-zone h2 {
 .scan-button:focus-within {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+   THE READING COLUMN.
+
+   Until now nothing capped the content width, so on a laptop a shopping list
+   ran the full 1400px of the window — a line of text three feet long and a
+   quantity column stranded at the far right. Phone-first is right for this app;
+   phone-ONLY is not, because the owner does his pricing and recipe entry sitting
+   down.
+
+   ADDITIVE AND VIEWPORT-NEUTRAL. `max-width` with `margin: 0 auto` does nothing
+   at all below 720px, so a phone renders byte-identically to before. Verified
+   by measuring element geometry at 375px either side of this change rather than
+   by eye: every box matched to the pixel.
+
+   The BARS stay full-width and only their CONTENTS align to the column —
+   otherwise the header's bottom border and the tab bar's top border would stop
+   short of the window edge and the chrome would look broken.
+   --------------------------------------------------------------------------- */
+
+.content,
+.app-header-inner,
+.tabs-inner {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+/* The tab bar gets a little more room: five labels need it, and the tabs read
+   as chrome rather than as part of the column. */
+.tabs-inner {
+  max-width: 760px;
+  display: flex;
+}
+
+.app-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+/* Five tabs share the width evenly instead of each claiming a minimum and
+   overflowing. `min-width: 0` lets a long label ellipsis rather than push. */
+.tabs-inner a {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   SEGMENTED CONTROL — Shopping/Prep/Packing, Recipes/Ingredients.
+   --------------------------------------------------------------------------- */
+
+.segmented {
+  display: flex;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: var(--space-4);
+}
+
+.segmented button {
+  flex: 1;
+  min-height: var(--touch-min);
+  border: none;
+  border-right: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--card);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--size-small);
+  font-weight: var(--weight-semi);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+}
+
+.segmented button:last-child {
+  border-right: none;
+}
+
+.segmented button[aria-selected='true'] {
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+
+/* The ring sits inside, or it is clipped by the rounded overflow. */
+.segmented button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Three labels share 375px on a phone, so the short wording shows there and the
+   full wording takes over as soon as there is room. */
+.seg-short {
+  display: inline;
+}
+
+.seg-long {
+  display: none;
+}
+
+@media (min-width: 420px) {
+  .seg-short {
+    display: none;
+  }
+
+  .seg-long {
+    display: inline;
+  }
+}
+
+/* A tab panel is focusable so the keyboard lands in the content after the tabs;
+   it is not itself an interactive control, so it carries no visible ring. */
+[role='tabpanel']:focus {
+  outline: none;
+}
+
+[role='tabpanel']:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* From/To sit side by side once there is room, and stack on a phone. */
+.date-pair {
+  display: grid;
+  gap: var(--space-3);
+}
+
+@media (min-width: 480px) {
+  .date-pair {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .date-pair .field {
+    margin-bottom: 0;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   SCAN HUB — four cards, 2x2 on a phone and 4-across once the column allows.
+   --------------------------------------------------------------------------- */
+
+.scan-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+@media (min-width: 620px) {
+  .scan-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.scan-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  min-height: var(--touch-min);
+  padding: var(--space-4);
+  text-align: left;
+  text-decoration: none;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+}
+
+.scan-card:active {
+  background: var(--surface);
+}
+
+/* Sized in em so it rides the type ramp rather than pinning a pixel height. */
+.scan-card-icon {
+  width: 1.5em;
+  height: 1.5em;
+  margin-bottom: var(--space-1);
+  color: var(--accent);
+}
+
+.scan-card-title {
+  font-weight: var(--weight-semi);
+}
+
+.scan-card-blurb {
+  font-size: var(--size-small);
+  color: var(--text-muted);
 }

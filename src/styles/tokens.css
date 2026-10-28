@@ -118,6 +118,12 @@
   --space-6: 32px;
 
   --radius: 8px;
+  /*
+   * Buttons alone. The shared 8px is on cards, inputs, tinted blocks and the
+   * segmented control, and moving it would re-round the whole app to restyle
+   * one control.
+   */
+  --radius-button: 10px;
   --radius-pill: 999px;
 
   /* -------------------------------------------------------------------------
@@ -172,6 +178,23 @@
   --ok: #15803d; /* 4.81 */
   --danger: #dc2626; /* 4.63 */
   --danger-subtle: #fef2f2;
+  /*
+   * The outline on a destructive button. Subtle enough not to shout on a form
+   * he is only editing, strong enough to be the thing that identifies the
+   * control: 3.53 on a card, where 3.0 is the floor for a component boundary.
+   *
+   * The mock proposed #e3b4ae, which is 1.84 — invisible as an edge, and the
+   * edge is the whole treatment once the fill is gone.
+   */
+  --danger-border: #c96f65;
+
+  /*
+   * THE QUIET CHEVRON. A "›" after a secondary link, in place of making the
+   * link itself blue. 4.06 on a card — it is a glyph carrying meaning, not
+   * decoration, so it is held to the component floor rather than left to taste.
+   * The mock's #9aa3ac is 2.56.
+   */
+  --chevron: #767f8a;
 
   /*
    * THE WARNING. Reserved for "you need to look at this" — never an absence,
@@ -226,8 +249,10 @@
     --accent-text: #0f0f0f;
 
     --ok: #4ade80;
-    --danger: #f87171;
+    --danger: #f87171; /* 6.32 on a card */
     --danger-subtle: #2a1414;
+    --danger-border: #b85b55; /* 3.89 */
+    --chevron: #7b8694; /* 4.73 */
 
     /* 9.58 on its own tint, 11.17 on the page. The body text inside it is
        --text at 13.48, which is the rule that keeps amber off the content. */

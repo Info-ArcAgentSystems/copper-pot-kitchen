@@ -184,12 +184,14 @@ export function RecordForm({
         </p>
       )}
 
+      {/* Cancel first, Save last — so the primary is rightmost under the thumb
+          AND the focus order matches what the eye sees. */}
       <div className="actions">
-        <button type="submit" className="primary" disabled={saving}>
-          {saving ? 'Saving…' : 'Save'}
-        </button>
         <button type="button" onClick={onCancel} disabled={saving}>
           Cancel
+        </button>
+        <button type="submit" className="primary" disabled={saving}>
+          {saving ? 'Saving…' : 'Save'}
         </button>
       </div>
 

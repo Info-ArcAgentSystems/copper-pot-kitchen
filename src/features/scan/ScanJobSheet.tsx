@@ -459,6 +459,7 @@ export function ScanJobSheet(): ReactNode {
                   }
                 />
                 <button
+                  className="sm"
                   type="button"
                   onClick={() => patch({ dishes: draft.dishes.filter((_, i) => i !== at) })}
                 >
@@ -554,7 +555,12 @@ export function ScanJobSheet(): ReactNode {
             </section>
           )}
 
+          {/* Discard first, save last. Discard is secondary, not danger: it
+              throws away a draft, not a record. */}
           <div className="actions">
+            <button type="button" onClick={() => setDraft(null)} disabled={busy}>
+              Discard
+            </button>
             <button
               type="button"
               className="primary"
@@ -562,9 +568,6 @@ export function ScanJobSheet(): ReactNode {
               onClick={() => void confirm()}
             >
               {busy ? 'Saving…' : 'Confirm and save as a new job'}
-            </button>
-            <button type="button" onClick={() => setDraft(null)} disabled={busy}>
-              Discard
             </button>
           </div>
 

@@ -34,6 +34,42 @@ const allCss = sheets.map((f) => readFileSync(join(STYLES, f), 'utf8')).join('\n
  */
 const css = allCss.replace(/\/\*[\s\S]*?\*\//g, '');
 
+/**
+ * WCAG relative-luminance contrast, so a colour decision is CHECKED rather than
+ * eyeballed.
+ *
+ * It lives here rather than inside one describe because three separate rules
+ * now depend on a measured ratio — the absence grey, the chevron and the
+ * destructive button's edge — and three copies of this would drift.
+ */
+const channel = (c: number): number => {
+  const v = c / 255;
+  return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+};
+
+const luminance = (hex: string): number => {
+  const h = hex.replace('#', '');
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  return (
+    0.2126 * channel(r as number) + 0.7152 * channel(g as number) + 0.0722 * channel(b as number)
+  );
+};
+
+const contrastOf = (a: string, b: string): number => {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
+  return (hi + 0.05) / (lo + 0.05);
+};
+
+/** One theme's token block out of `tokens.css`. */
+const palette = (theme: 'light' | 'dark'): string =>
+  (theme === 'light'
+    ? /:root\s*\{([\s\S]*?)\n\}/.exec(tokens)?.[1]
+    : /prefers-color-scheme: dark\)\s*\{\s*:root\s*\{([\s\S]*?)\n  \}/.exec(tokens)?.[1]) ?? '';
+
+/** A hex token's value inside one of those blocks. */
+const tokenValue = (block: string, name: string): string =>
+  new RegExp(`--${name}:\\s*(#[0-9a-f]{6})`, 'i').exec(block)?.[1] ?? '';
+
 describe('touch targets', () => {
   it('defines a 44px floor', () => {
     expect(tokens).toMatch(/--touch-min:\s*44px/);
@@ -413,6 +449,104 @@ describe('the absence colour is legible on every ground it lands on', () => {
         `the absence colour ${muted} is ${ratio.toFixed(2)}:1 on --${ground} ${against}`,
       ).toBeGreaterThanOrEqual(4.5);
     }
+  });
+});
+
+/**
+ * BLUE IS FOR ACTING, NOT FOR GOING.
+ *
+ * The dashboard had five bright-blue links on it — "Open the shopping list",
+ * "Open Money", "Open backup", "All jobs" and every job row — so the loudest
+ * colour on the screen was spent on its least urgent content, and the one
+ * primary button had nothing left to be louder than. An accent that appears
+ * everywhere is a texture.
+ *
+ * Blue now means one of three things and nothing else: the active nav tab, the
+ * one primary action on a screen, and a link that LEAVES the app. Navigation
+ * within the app is ink plus a chevron.
+ */
+describe('blue is reserved for acting', () => {
+  /*
+   * COMMENTS STRIPPED, for the fifth time in this codebase. The comment on that
+   * screen explains that the link USED to be `<Link to="/jobs">` — and the raw
+   * scan below read that sentence as a sixth link and failed on the very prose
+   * documenting the fix. JSX comments are `{/* … *\/}`, so the block-comment
+   * strip catches them.
+   */
+  const dashboard = readFileSync(
+    fileURLToPath(new URL('../../src/features/dashboard/Dashboard.tsx', import.meta.url)),
+    'utf8',
+  ).replace(/\/\*[\s\S]*?\*\//g, '');
+
+  it('the dashboard navigates quietly', () => {
+    /*
+     * Every `<Link>` and in-page `<a>` on the dashboard carries `qlink` or is a
+     * whole-row `record` target. Counted off the file rather than listed, so a
+     * sixth link added later is caught rather than assumed.
+     */
+    const links = [...dashboard.matchAll(/<(?:Link|a)\b([^>]*)>/g)].map((m) => m[1] ?? '');
+
+    expect(links.length).toBeGreaterThan(3);
+    for (const attrs of links) {
+      expect(
+        /className="[^"]*\b(qlink|record)\b/.test(attrs),
+        `a dashboard link is neither quiet nor a whole-row target: ${attrs.trim()}`,
+      ).toBe(true);
+    }
+  });
+
+  it('a quiet link is ink, never the accent', () => {
+    const rule = /\n\.qlink \{([^}]*)\}/.exec(css)?.[1] ?? '';
+
+    expect(rule).not.toBe('');
+    expect(rule, 'the quiet link went blue again').not.toMatch(/var\(--accent/);
+    expect(rule).toMatch(/color:\s*var\(--label\)/);
+  });
+
+  it('a whole-row target is ink, so the card is the affordance', () => {
+    const rule = /a\.record \{([^}]*)\}/.exec(css)?.[1] ?? '';
+
+    expect(rule, 'a.record has no rule, so it inherits the accent').not.toBe('');
+    expect(rule).toMatch(/color:\s*var\(--text\)/);
+  });
+
+  it('the chevron clears the 3:1 floor for a glyph that carries meaning', () => {
+    // It says "there is more through here". The mock's #9aa3ac is 2.56.
+    for (const theme of ['light', 'dark'] as const) {
+      const block = palette(theme);
+      const ratio = contrastOf(tokenValue(block, 'chevron'), tokenValue(block, 'card'));
+
+      expect(ratio, `${theme} chevron is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('a destructive button is identified by its edge, so the edge is visible', () => {
+    /*
+     * `danger` lost its solid fill — a red button on every setup form is the
+     * loudest thing on a screen he opened to change a price. With the fill gone
+     * the border is what says "this one deletes", so it is held to the 3:1
+     * component floor. The mock's #e3b4ae is 1.84 and would have made the
+     * control indistinguishable from a secondary.
+     */
+    for (const theme of ['light', 'dark'] as const) {
+      const block = palette(theme);
+      const edge = contrastOf(tokenValue(block, 'danger-border'), tokenValue(block, 'card'));
+      const text = contrastOf(tokenValue(block, 'danger'), tokenValue(block, 'card'));
+
+      expect(edge, `${theme} danger edge is ${edge.toFixed(2)}:1`).toBeGreaterThanOrEqual(3);
+      expect(text, `${theme} danger text is ${text.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
+    }
+
+    expect(css, 'the danger button is a solid fill again').not.toMatch(
+      /button\.danger \{[^}]*background:\s*var\(--danger\)/,
+    );
+  });
+
+  it('a button never shrinks below the touch floor to look small', () => {
+    const small = /button\.sm \{([^}]*)\}/.exec(css)?.[1] ?? '';
+
+    expect(small, 'there is no small variant').not.toBe('');
+    expect(small, 'the small button sets a height').not.toMatch(/height:/);
   });
 });
 

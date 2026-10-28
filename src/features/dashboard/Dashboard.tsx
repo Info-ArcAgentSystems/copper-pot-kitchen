@@ -241,7 +241,7 @@ export function Dashboard(): ReactNode {
 
           The list is already here. Going to it is a fragment, not a journey. */}
       <p className="hint muted">
-        <a href="#jobs-list">All jobs</a>
+        <a className="qlink" href="#jobs-list">See all jobs</a>
       </p>
 
       {/* ------------------------------------------------------------------ */}
@@ -259,7 +259,7 @@ export function Dashboard(): ReactNode {
           )}
         </dl>
         <p className="hint muted">
-          <Link to="/shopping">Open the shopping list</Link>
+          <Link className="qlink" to="/shopping">Shopping list</Link>
         </p>
       </section>
 
@@ -306,7 +306,7 @@ export function Dashboard(): ReactNode {
           />
         </dl>
         <p className="hint muted">
-          <Link to="/money">Open Money</Link>
+          <Link className="qlink" to="/money">Open Money</Link>
         </p>
       </section>
 
@@ -343,7 +343,7 @@ export function Dashboard(): ReactNode {
           {view.backup.message}
         </p>
         <p className="hint muted">
-          <Link to="/setup/backup">Open backup</Link>
+          <Link className="qlink" to="/setup/backup">Open backup</Link>
         </p>
       </section>
     </section>

@@ -549,7 +549,11 @@ function JobForm({ job, done }: { job: Job | null; done: () => void }): ReactNod
               numeric
               hint={portionsHint(recipeById.get(d.recipeId))}
             />
-            <button type="button" onClick={() => setDishes((all) => all.filter((x) => x.key !== d.key))}>
+            <button
+              className="sm"
+              type="button"
+              onClick={() => setDishes((all) => all.filter((x) => x.key !== d.key))}
+            >
               Remove dish
             </button>
           </div>
@@ -629,6 +633,7 @@ function JobForm({ job, done }: { job: Job | null; done: () => void }): ReactNod
             />
 
             <button
+              className="sm"
               type="button"
               onClick={() => setDietaries((all) => all.filter((x) => x.key !== d.key))}
             >
@@ -685,7 +690,11 @@ function JobForm({ job, done }: { job: Job | null; done: () => void }): ReactNod
               inputMode="numeric"
               numeric
             />
-            <button type="button" onClick={() => setExtras((all) => all.filter((x) => x.key !== e.key))}>
+            <button
+              className="sm"
+              type="button"
+              onClick={() => setExtras((all) => all.filter((x) => x.key !== e.key))}
+            >
               Remove
             </button>
           </div>

@@ -451,6 +451,7 @@ function RecipeForm({ recipe, done }: { recipe: Recipe | null; done: () => void 
               />
             )}
             <button
+              className="sm"
               type="button"
               onClick={() => setLines((all) => all.filter((l) => l.key !== line.key))}
             >
@@ -502,6 +503,7 @@ function RecipeForm({ recipe, done }: { recipe: Recipe | null; done: () => void 
               }
             />
             <button
+              className="sm"
               type="button"
               onClick={() => setUnquantified((all) => all.filter((x) => x.key !== u.key))}
             >

@@ -338,13 +338,30 @@ textarea {
    --------------------------------------------------------------------------- */
 
 button {
-  padding: var(--space-3) var(--space-4);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  /*
+   * Horizontal padding only. The height comes from `--touch-min` in
+   * `tokens.css`, so "a smaller button" is a narrower one — never a shorter tap
+   * target. A wet thumb in a supermarket does not get a 32px button because the
+   * row it sits in is tight.
+   */
+  padding: 0 var(--space-4);
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-button);
   background: var(--card);
   color: var(--text);
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-semi);
+  line-height: 1;
   cursor: pointer;
+  white-space: nowrap;
+}
+
+/* Inline row actions — "Remove" beside a dish. Narrower, never shorter. */
+button.sm {
+  padding: 0 var(--space-3);
 }
 
 button:active {
@@ -353,8 +370,8 @@ button:active {
 
 .signin button[type='submit'] {
   margin-top: var(--space-4);
-  /* The fill step, for the same reason `button.primary` uses it: white on brand
-     copper is 3.79:1 and fails AA. */
+  /* The fill step, for the same reason `button.primary` uses it — and no longer
+     for the reason this comment used to give, which was about brand copper. */
   background: var(--accent-strong);
   color: var(--accent-text);
   border-color: var(--accent-strong);
@@ -470,8 +487,20 @@ button:disabled {
   flex-direction: column;
 }
 
+/*
+ * AN ACTION ROW, ORGANISED.
+ *
+ * The primary sits LAST in the DOM and therefore rightmost — which is where it
+ * is reached for, and which puts the safe action first under a thumb travelling
+ * left to right. It is a DOM order rather than a CSS `order`, so focus order
+ * matches: Cancel, then Save.
+ *
+ * A real Delete is not in this row at all. It lives below, in `.danger-zone`,
+ * set apart so it is never the button reached for by accident.
+ */
 .actions {
   display: flex;
+  align-items: center;
   gap: var(--space-2);
 }
 
@@ -479,8 +508,62 @@ button:disabled {
   flex: 1;
 }
 
-/* `--accent-strong`, not brand copper: white on #b87333 is 3.79:1 and fails AA
-   for button text. On #7d4a1f it is 7.31:1. */
+/* ---------------------------------------------------------------------------
+   THE QUIET LINK — blue is for ACTING, not for going.
+
+   Blue appears in exactly three places now: the active nav tab, the one primary
+   button on a screen, and a genuine inline action. Everything that merely NAVIGATES
+   reads as text with a chevron, because a dashboard whose every "Open X" was
+   bright blue spent its one loud colour on the least urgent thing on the page.
+
+   A link that leaves the app keeps the accent — that is a different promise, and
+   `ScanMenu`'s source URLs are the only ones that make it.
+   --------------------------------------------------------------------------- */
+
+/*
+ * A WHOLE-ROW TARGET IS NOT A BLUE SENTENCE. `.record` is a card the owner taps;
+ * the card is the affordance, so its text is ink. Without this it inherits the
+ * accent from `a` and every row on the dashboard and in Setup reads as a link.
+ */
+a.record {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.qlink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--touch-min);
+  color: var(--label);
+  font-size: var(--size-small);
+  font-weight: var(--weight-semi);
+  text-decoration: none;
+}
+
+.qlink::after {
+  content: '›';
+  /* A glyph that says "there is more through here", so it is held to the 3:1
+     component floor rather than left as decoration. */
+  color: var(--chevron);
+  font-size: 1.15em;
+  line-height: 1;
+}
+
+/* Paired, because a touch screen has no hover. */
+.qlink:hover,
+.qlink:focus-visible {
+  color: var(--text);
+}
+
+/*
+ * THE ONE MAIN ACTION PER SCREEN, and the only solid fill in the family.
+ *
+ * (This comment used to justify the colour as "not brand copper: white on
+ * #b87333 is 3.79:1". Copper has not been the accent for two design passes and
+ * is now a 26px mark under the kitchen name and nothing else. White on
+ * `--accent-strong` is 6.42; on `--accent` it is 5.17.)
+ */
 button.primary {
   background: var(--accent-strong);
   color: var(--accent-text);
@@ -492,10 +575,25 @@ button.primary:active {
   border-color: var(--accent);
 }
 
+/*
+ * A REAL DELETE, AND NOTHING ELSE. Never Cancel, never Discard — those are
+ * secondary, because they throw away a draft rather than a record.
+ *
+ * An OUTLINE, not a fill. A solid red button is the loudest thing on any screen
+ * it appears on, and `RecordScreen` renders one on every setup form the owner
+ * opens to change a price. It should be findable when he wants it and quiet
+ * when he does not; the border is what identifies it, which is why
+ * `--danger-border` is held to the 3:1 component floor rather than chosen to
+ * look soft.
+ */
 button.danger {
-  background: var(--danger);
-  color: #ffffff;
-  border-color: var(--danger);
+  background: var(--card);
+  color: var(--danger);
+  border-color: var(--danger-border);
+}
+
+button.danger:active {
+  background: var(--danger-subtle);
 }
 
 /* Set apart, below the save actions, so it is never the button reached for by

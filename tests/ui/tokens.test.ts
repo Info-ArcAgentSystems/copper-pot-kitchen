@@ -570,6 +570,93 @@ describe('blue is reserved for acting', () => {
     }
   });
 
+  it('THE CHROME FOLLOWS THE THEME, and is legible on it in both', () => {
+    /*
+     * The header and the tab bar were a fixed `--ink: #20262d` in BOTH themes,
+     * which took a hairline to rescue in dark: 1.25:1 against the page, a bar
+     * that all but vanished into its own background.
+     *
+     * Three colours written for that dark bar failed outright when it went
+     * light — #9fd0ff at 1.62, #b8bfc7 at 1.86, #8d97a2 at 2.97 — which is why
+     * this checks the TEXT on the chrome and not just that the chrome exists.
+     * A background swap alone would have shipped an invisible header.
+     */
+    for (const theme of ['light', 'dark'] as const) {
+      const block = palette(theme);
+      const chrome = tokenValue(block, 'chrome');
+
+      expect(chrome, `${theme} has no --chrome`).not.toBe('');
+
+      for (const [what, token, floor] of [
+        ['the brand', 'text', 4.5],
+        ['the idle tab', 'text-muted', 4.5],
+        ['the active tab', 'accent', 4.5],
+        ['the copper mark', 'copper', 3],
+      ] as const) {
+        const ratio = contrastOf(tokenValue(block, token), chrome);
+        expect(
+          ratio,
+          `${theme}: ${what} is ${ratio.toFixed(2)}:1 on the chrome`,
+        ).toBeGreaterThanOrEqual(floor);
+      }
+    }
+  });
+
+  it('the chrome BELONGS TO THE SURFACE STACK, rather than floating above it', () => {
+    /*
+     * FOUND BY INVERTING. The assertion above checks that text is legible ON
+     * the chrome — and forcing the dark chrome back to the old fixed
+     * `#20262d` passed it comfortably, because white-on-ink was never the
+     * problem. The problem was that the ink belonged to no palette: it sat
+     * LIGHTER than the dark theme's own cards, so the header read as a foreign
+     * slab laid over the app rather than as part of it, and a hairline was
+     * doing the work the fill should have done.
+     *
+     * So the real invariant is positional, not a ratio: the chrome sits
+     * somewhere between the page and the card, in the same stack as every
+     * other surface. `#20262d` is outside it; `#11161b` is inside it.
+     */
+    for (const theme of ['light', 'dark'] as const) {
+      const block = palette(theme);
+      const [page, card, chrome] = (['bg', 'card', 'chrome'] as const).map((t) =>
+        luminance(tokenValue(block, t)),
+      ) as [number, number, number];
+
+      const low = Math.min(page, card);
+      const high = Math.max(page, card);
+
+      expect(
+        chrome >= low && chrome <= high,
+        `${theme}: the chrome sits outside the page/card stack — it is a slab, not a surface`,
+      ).toBe(true);
+    }
+  });
+
+  it('the chrome is separated by a border, never by its fill alone', () => {
+    // In both themes the step between chrome and page is slight by design —
+    // 1.12 light, 1.05 dark. The border is what draws the edge, and the old
+    // chrome needed one too despite being a far bigger value jump.
+    for (const theme of ['light', 'dark'] as const) {
+      expect(tokenValue(palette(theme), 'chrome-border'), `${theme} has no --chrome-border`).not.toBe(
+        '',
+      );
+    }
+
+    expect(css).toMatch(/border-bottom: 1px solid var\(--chrome-border\)/);
+    expect(css).toMatch(/border-top: 1px solid var\(--chrome-border\)/);
+  });
+
+  it('no colour written for the old dark bar survives in the chrome', () => {
+    /*
+     * Counted off the rules rather than trusted. These three were hardcoded
+     * hex, not tokens, so a theme change could not reach them — and each was
+     * unreadable the moment the bar went light.
+     */
+    for (const dead of ['#9fd0ff', '#b8bfc7', '#8d97a2', 'var(--on-ink', 'var(--ink']) {
+      expect(css, `the chrome still carries ${dead}, written for a dark bar`).not.toContain(dead);
+    }
+  });
+
   it('a destructive button is identified by its edge, so the edge is visible', () => {
     /*
      * `danger` lost its solid fill — a red button on every setup form is the

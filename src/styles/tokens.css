@@ -163,12 +163,12 @@
      COLOUR — light. Neutral greys, one accent, used sparingly.
      Every value below clears WCAG AA for the size it is used at.
      ------------------------------------------------------------------------- */
-  --bg: #f6f7f8; /* the page — steel-tinted off-white */
-  --surface: #eef0f3; /* a sunk panel */
+  --bg: #f0f2f5; /* the page — a light grey canvas the cards sit on */
+  --surface: #e8ebef; /* a sunk panel */
   --card: #ffffff; /* anything that reads as one object */
-  --border: #e2e5e9; /* hairline */
-  --border-strong: #cdd3da;
-  --text: #161b20; /* 16.16 on the page */
+  --border: #e4e6eb; /* hairline */
+  --border-strong: #d2d6dc;
+  --text: #1c1e21; /* 15.17 on the page */
   /*
    * THE ABSENCE COLOUR, and the reason it is not the Steel mock's #8c96a0.
    *
@@ -178,26 +178,39 @@
    * the dashboard's absent figure is worse again at 2.56.
    *
    * This is the same steel hue carried down until it passes on all three
-   * grounds it is used against: 4.62 on the page, 4.96 on a card, 4.78 on the
-   * warning tint.
+   * grounds it is used against.
+   *
+   * DARKENED AGAIN when the canvas went from #f6f7f8 to #f0f2f5. The old
+   * #66717f measured 4.42 on the new page — it passed on the lighter canvas and
+   * failed on this one, by a change that had nothing to do with it. That is the
+   * whole reason the guard computes this rather than asserting a hex: a value
+   * can stop being legible because something ELSE moved.
+   *
+   * 4.82 on the page, 5.41 on a card, 5.12 on the warning tint.
    */
-  --text-muted: #66717f;
+  --text-muted: #616b78;
   /* A field label: quieter than body, darker than an absence. 5.83 on a card. */
   --label: #5d6670;
 
   /* -------------------------------------------------------------------------
-     THE CHROME. Dark ink, the header and the tab bar, both themes.
+     THE CHROME — a surface that FOLLOWS THE THEME, not a fixed dark ink.
+
+     It was `--ink: #20262d` in both themes, which took a hairline to rescue in
+     dark: the ink measured 1.25:1 against the dark page and the header all but
+     vanished into it. A themed surface with a border separates on its own, in
+     both themes, and the five `--on-ink*` tokens that existed to put legible
+     text on a dark bar are gone with it.
      ------------------------------------------------------------------------- */
-  --ink: #20262d;
-  --ink-2: #2b333c;
-  --ink-border: #313a44;
-  --on-ink: #ffffff; /* 15.26 on the ink */
-  --on-ink-muted: #b8bfc7; /* 8.22 */
+  --chrome: #ffffff;
+  --chrome-border: #e4e6eb;
 
   /*
    * THE ONLY DECORATIVE COLOUR IN THE APP, and it is used once: a 2px stroke
-   * under the kitchen name. 4.50 on the ink, which it needs to be visible
-   * rather than legible — it is never text.
+   * under the kitchen name.
+   *
+   * It survived the move from a dark bar to a light one without changing: 4.50
+   * on the old ink, 3.39 on white. Both clear the 3:1 a mark needs — it is
+   * never text, so it has to be VISIBLE rather than legible.
    */
   --copper: #c47a3d;
 
@@ -238,22 +251,30 @@
   --warn-border: #f59e0b;
 
   /*
-   * BORDERS, NOT SHADOWS. Every card carried the same soft drop shadow, which
-   * at eight call sites reads as a texture rather than as elevation — nothing
-   * is lifted when everything is. The 1px border does the separating.
+   * A HAIRLINE DOES THE SEPARATING, and a very faint shadow lifts the card off
+   * the canvas behind it.
+   *
+   * The Steel pass set this to `none` because every card carried the same soft
+   * shadow and nothing is lifted when everything is. That reasoning held while
+   * the page was near-white — a border was the only thing distinguishing a card
+   * from its background. On a grey canvas there is already a value step, and
+   * 4% of black at 1px reads as a hairline's worth of depth rather than as a
+   * texture. The border is still what separates.
    */
-  --shadow-card: none;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 4%);
 }
 
 /*
- * DARK. The same steel, and the chrome stays ink in both themes.
+ * DARK. The same steel, and the chrome follows the theme like everything else.
  *
- * THE ONE PROBLEM THIS PALETTE HAD TO SOLVE: the ink chrome measures 1.22:1
- * against a #0f1317 page and 1.25:1 against this one — the header and the tab
- * bar all but vanish into the background. Darkening the page further barely
- * moves it. So in dark mode the chrome is separated by a hairline rather than
- * by its fill, and the copper stroke lightens to #d08c52 (5.49 on the ink) so
- * the signature survives on a screen at night.
+ * THE PROBLEM THIS PALETTE USED TO HAVE, now gone: the chrome was a fixed ink
+ * in both themes, and that ink measured 1.25:1 against this page — the header
+ * and the tab bar all but vanished into it, and a hairline was doing the work
+ * the fill should have done. The chrome is a themed surface now, one step up
+ * from the page with its own border, so it separates the way every other
+ * surface in the app does.
+ *
+ * The copper still lightens to #d08c52 so the signature survives at night.
  */
 @media (prefers-color-scheme: dark) {
   :root {
@@ -266,13 +287,15 @@
     --text-muted: #9aa5b1; /* 7.63 / 6.99 — an absence is still body text */
     --label: #9aa5b1;
 
-    /* The chrome does not invert: it is ink in both themes. What changes is
-       that it now needs its edge drawn. */
-    --ink: #20262d;
-    --ink-2: #2b333c;
-    --ink-border: #39424d;
-    --on-ink: #ffffff;
-    --on-ink-muted: #b8bfc7;
+    /*
+     * The chrome FOLLOWS the theme now. One step up from the page, with its own
+     * border — which is what the old fixed ink needed a hairline to fake, at
+     * 1.25:1 against the page.
+     *
+     * Brand 15.32 on it, idle tab 7.27, active tab 7.15, copper 6.54.
+     */
+    --chrome: #11161b;
+    --chrome-border: #232a32;
 
     --copper: #d08c52;
 

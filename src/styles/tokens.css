@@ -26,6 +26,13 @@
  * normally. `tests/ui/tokens.test.ts` asserts an absence is never given a warning
  * colour or a fill, so the two cannot collapse back into one.
  *
+ * COPPER IS A SIGNATURE, NOT A SIGNAL. It appears exactly once in the whole
+ * app: a 2px stroke under the kitchen name. It is never on data, never on a
+ * control, never on a warning, and never anywhere a colour has to MEAN
+ * something — the five that mean something are amber, grey, blue, red and
+ * green, and a sixth decorative colour that looked like them would be a sixth
+ * thing to read. `tests/ui/tokens.test.ts` holds it to the one use.
+ *
  * WHY BLUE AND AMBER SIT TOGETHER SAFELY. They contrast 1.03:1 against each
  * other — luminance-identical, exactly as copper and amber were. The difference
  * is hue: copper and amber were the same family and genuinely confusable, where
@@ -35,11 +42,22 @@
  * worst case for those readers; this is close to the best.
  * ---------------------------------------------------------------------------
  *
- * ONE WEB FONT, FOR LABELS ONLY. Body text is the system stack: on the iPhone
- * this is actually used on, `-apple-system` IS SF Pro — the neutral sans every
- * modern app falls back to anyway — so a webfont for body would buy nothing and
- * cost a swap on the one thing that must never wait. Only the small uppercase
- * data labels use a face that has to load, and they degrade to SF Mono.
+ * ONE WEB FONT, AND IT IS NOT FOR TYPOGRAPHY. Body, labels and headings are all
+ * the system stack: on the iPhone this is actually used on, `-apple-system` IS
+ * SF Pro — the neutral sans every modern app falls back to anyway — so a webfont
+ * for body would buy nothing and cost a swap on the one thing that must never
+ * wait.
+ *
+ * The Steel direction named Archivo for display and Inter for body. Neither
+ * ships, deliberately. Inter on body would mean rewriting the guard that keeps
+ * body text off a webfont, for a difference nobody can see at 13px; Archivo
+ * would mean a new font file for headings that the system stack already sets
+ * well at 23/700 with tight tracking. The direction's substance is the
+ * HIERARCHY — four clear steps, and no uppercase mono labels — and that is pure
+ * CSS. It all ships. The typefaces were the finish, not the fix.
+ *
+ * JetBrains Mono survives with exactly one job: the raw backup text, where a
+ * fixed-width face is correct and has nothing to do with labels.
  */
 
 /*
@@ -81,7 +99,8 @@
   --size-body: 1rem; /* 16px — everything else */
   --size-lead: 1.0625rem; /* 17px — h2, h3, an answer's first line */
   --size-figure: 1.125rem; /* 18px — the quantity on a row */
-  --size-h1: 1.3125rem; /* 21px — the screen's name */
+  --size-h1: 1.4375rem; /* 23px — the screen's name */
+  --size-label: 0.8125rem; /* 13px — a field label */
 
   --weight-normal: 400;
   --weight-medium: 500;
@@ -90,9 +109,6 @@
 
   --leading-tight: 1.3;
   --leading-body: 1.5;
-
-  /* Enough to read a 12px uppercase label as a label, and no more. */
-  --track-label: 0.06em;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -108,13 +124,43 @@
      COLOUR — light. Neutral greys, one accent, used sparingly.
      Every value below clears WCAG AA for the size it is used at.
      ------------------------------------------------------------------------- */
-  --bg: #fafafa; /* the page */
-  --surface: #f4f4f5; /* a sunk panel */
+  --bg: #f6f7f8; /* the page — steel-tinted off-white */
+  --surface: #eef0f3; /* a sunk panel */
   --card: #ffffff; /* anything that reads as one object */
-  --border: #e5e7eb; /* hairline */
-  --border-strong: #d4d4d8;
-  --text: #1a1a1a; /* 16.67 on the page */
-  --text-muted: #6b7280; /* 4.63 — passes body text, which is why an absence can use it */
+  --border: #e2e5e9; /* hairline */
+  --border-strong: #cdd3da;
+  --text: #161b20; /* 16.16 on the page */
+  /*
+   * THE ABSENCE COLOUR, and the reason it is not the Steel mock's #8c96a0.
+   *
+   * That value measures 2.80 on the page and 3.01 on a card — it fails AA for
+   * body text in both places, and an absence is body text: "not known" is a
+   * statement the owner reads, not a decoration. The mock's lighter #9aa3ac for
+   * the dashboard's absent figure is worse again at 2.56.
+   *
+   * This is the same steel hue carried down until it passes on all three
+   * grounds it is used against: 4.62 on the page, 4.96 on a card, 4.78 on the
+   * warning tint.
+   */
+  --text-muted: #66717f;
+  /* A field label: quieter than body, darker than an absence. 5.83 on a card. */
+  --label: #5d6670;
+
+  /* -------------------------------------------------------------------------
+     THE CHROME. Dark ink, the header and the tab bar, both themes.
+     ------------------------------------------------------------------------- */
+  --ink: #20262d;
+  --ink-2: #2b333c;
+  --ink-border: #313a44;
+  --on-ink: #ffffff; /* 15.26 on the ink */
+  --on-ink-muted: #b8bfc7; /* 8.22 */
+
+  /*
+   * THE ONLY DECORATIVE COLOUR IN THE APP, and it is used once: a 2px stroke
+   * under the kitchen name. 4.50 on the ink, which it needs to be visible
+   * rather than legible — it is never text.
+   */
+  --copper: #c47a3d;
 
   /* The ONE accent. Active tab, primary button, links. Not a fill for anything
      else, and never a decoration. */
@@ -135,18 +181,44 @@
   --warn-bg: #fffbeb;
   --warn-border: #f59e0b;
 
-  --shadow-card: 0 1px 2px rgb(16 24 40 / 5%);
+  /*
+   * BORDERS, NOT SHADOWS. Every card carried the same soft drop shadow, which
+   * at eight call sites reads as a texture rather than as elevation — nothing
+   * is lifted when everything is. The 1px border does the separating.
+   */
+  --shadow-card: none;
 }
 
+/*
+ * DARK. The same steel, and the chrome stays ink in both themes.
+ *
+ * THE ONE PROBLEM THIS PALETTE HAD TO SOLVE: the ink chrome measures 1.22:1
+ * against a #0f1317 page and 1.25:1 against this one — the header and the tab
+ * bar all but vanish into the background. Darkening the page further barely
+ * moves it. So in dark mode the chrome is separated by a hairline rather than
+ * by its fill, and the copper stroke lightens to #d08c52 (5.49 on the ink) so
+ * the signature survives on a screen at night.
+ */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0f0f0f;
-    --surface: #18181b;
-    --card: #18181b;
-    --border: #27272a;
-    --border-strong: #3f3f46;
-    --text: #fafafa;
-    --text-muted: #a1a1aa;
+    --bg: #0c1014;
+    --surface: #11161b;
+    --card: #151a20;
+    --border: #232a32;
+    --border-strong: #333c46;
+    --text: #e8ecf0; /* 16.08 on the page, 14.43 on a card */
+    --text-muted: #9aa5b1; /* 7.63 / 6.99 — an absence is still body text */
+    --label: #9aa5b1;
+
+    /* The chrome does not invert: it is ink in both themes. What changes is
+       that it now needs its edge drawn. */
+    --ink: #20262d;
+    --ink-2: #2b333c;
+    --ink-border: #39424d;
+    --on-ink: #ffffff;
+    --on-ink-muted: #b8bfc7;
+
+    --copper: #d08c52;
 
     --accent: #60a5fa;
     --accent-strong: #93c5fd;
@@ -157,6 +229,8 @@
     --danger: #f87171;
     --danger-subtle: #2a1414;
 
+    /* 9.58 on its own tint, 11.17 on the page. The body text inside it is
+       --text at 13.48, which is the rule that keeps amber off the content. */
     --warn: #fbbf24;
     --warn-bg: #2a2010;
     --warn-border: #a16207;

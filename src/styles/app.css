@@ -19,19 +19,56 @@
    looked unfinished.
    --------------------------------------------------------------------------- */
 
+/* ---------------------------------------------------------------------------
+   FOUR STEPS, AND YOU CAN TELL THEM APART.
+
+   The page used to read flat, and the cause was not the colours. Eight rules in
+   this file set the same small uppercase mono, so a nav label, a section
+   heading, a data label and a figure caption all arrived at one weight — the
+   ramp existed in `tokens.css` and was overridden into a monotone everywhere it
+   mattered. Nothing was LOUD, so nothing was quiet either.
+
+     1  page title      23 / 700, tight tracking
+     2  section head    16 / 600, with a hairline under it
+     3  field label     13 / 500, muted, sentence case
+     4  help text       12, muted, lightest
+
+   No uppercase anywhere in the four. Case is not a level.
+   --------------------------------------------------------------------------- */
+
 h1 {
   font-size: var(--size-h1);
-  font-weight: var(--weight-semi);
+  font-weight: var(--weight-bold);
   line-height: var(--leading-tight);
-  letter-spacing: -0.01em;
-  margin: 0 0 var(--space-2);
+  letter-spacing: -0.015em;
+  margin: 0 0 var(--space-4);
 }
 
+/*
+ * The hairline is what makes a section a section. It was previously a heading
+ * floating above a list, which is why a long screen read as one undivided run.
+ */
 h2 {
-  font-size: var(--size-lead);
-  font-weight: var(--weight-medium);
+  font-size: var(--size-body);
+  font-weight: var(--weight-semi);
   line-height: var(--leading-tight);
-  margin: 0 0 var(--space-2);
+  letter-spacing: -0.005em;
+  margin: 0 0 var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+/*
+ * A heading INSIDE a tinted block is not dividing a page into sections — it is
+ * naming the block it sits in, and the block already has an edge. The rule
+ * there would be a second line a few pixels from the first.
+ */
+.unresolved-block > h2,
+.warn > h2,
+.needs-fixing > h2,
+.card > h2 {
+  border-bottom: 0;
+  padding-bottom: 0;
 }
 
 /* A heading that OPENS a card gets no top margin; one that starts a new section
@@ -56,12 +93,10 @@ h3 {
    copper is 3.37:1 on parchment and this is 12px text, which needs 4.5. The two
    are indistinguishable at this size; the contrast is not. */
 .eyebrow {
-  font-family: var(--font-mono);
-  font-size: var(--size-micro);
-  font-weight: var(--weight-bold);
-  text-transform: uppercase;
-  letter-spacing: var(--track-label);
-  color: var(--text-muted);
+  font-size: var(--size-label);
+  font-weight: var(--weight-semi);
+  letter-spacing: 0;
+  color: var(--label);
 }
 
 /* ---------------------------------------------------------------------------
@@ -110,9 +145,53 @@ h3 {
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
   padding-top: max(var(--space-3), env(safe-area-inset-top));
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
+  border-bottom: 1px solid var(--ink-border);
+  background: var(--ink);
+  color: var(--on-ink);
   font-weight: var(--weight-medium);
+}
+
+/*
+ * THE SIGNATURE, and the only place copper appears in the app.
+ *
+ * A 2px stroke under the kitchen name, 26px wide — short enough to read as a
+ * mark rather than as an underline, which would make the name look like a link.
+ * Decoration and nothing else: no state, no meaning, nothing to act on, and
+ * never used on data, a control or a warning.
+ */
+.app-header span:first-child {
+  /*
+   * Drawn as a background rather than as a sized pseudo-element, and that is
+   * not a style choice. The 44px touch floor is enforced by a blanket scan for
+   * any `height` under 44px — deliberately blunt, "whatever it looks like" —
+   * and a 2px decoration trips it. Widening an accessibility floor to let a
+   * flourish through would be the wrong trade, so the flourish goes round it:
+   * a 26px x 2px gradient pinned to the bottom-left, no `height` declared.
+   *
+   * 26px, not full width: an underline the length of the name would make the
+   * kitchen name look like a link.
+   */
+  padding-bottom: 3px;
+  background-image: linear-gradient(var(--copper), var(--copper));
+  background-size: 26px 2px;
+  background-repeat: no-repeat;
+  background-position: left bottom;
+}
+
+/* On ink, the header's own controls take the ink palette rather than the page's. */
+.app-header a.tap {
+  color: #9fd0ff; /* 9.40 on the ink */
+}
+
+.app-header button {
+  color: var(--on-ink-muted);
+  background: transparent;
+  border: 1px solid var(--ink-border);
+}
+
+.app-header button:focus-visible,
+.app-header a:focus-visible {
+  outline-color: var(--on-ink);
 }
 
 /* At 375px the kitchen name, the Ask Sous link and Sign out do not all fit, and
@@ -175,8 +254,8 @@ h3 {
   display: flex;
   flex: none;
   order: 1;
-  border-top: 1px solid var(--border);
-  background: var(--surface);
+  border-top: 1px solid var(--ink-border);
+  background: var(--ink);
   padding-bottom: env(safe-area-inset-bottom);
 }
 
@@ -188,20 +267,22 @@ h3 {
   justify-content: center;
   min-height: var(--touch-min);
   padding: var(--space-3) var(--space-2);
-  color: var(--text-muted);
+  color: #8d97a2; /* 5.14 on the ink */
   text-decoration: none;
-  /* Uppercase mono, like every other label in the app. Navigation is a set of
-     section labels, and now reads as one. */
-  font-family: var(--font-mono);
+  /*
+   * NOT uppercase mono any more, and that is the hierarchy fix rather than a
+   * preference. EIGHT places in this stylesheet set small uppercase mono, so a
+   * nav label, a section heading and a data label all arrived at the same
+   * weight — which is most of why the page read as flat. Sentence case, body
+   * face, small step.
+   */
   font-size: var(--size-small);
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-weight: var(--weight-semi);
+  letter-spacing: 0.01em;
 }
 
 .tabs a[aria-current='page'] {
-  color: var(--accent);
-  font-weight: var(--weight-bold);
+  color: var(--on-ink);
   box-shadow: inset 0 2px 0 var(--accent);
 }
 
@@ -364,12 +445,18 @@ button:disabled {
   margin-bottom: var(--space-4);
 }
 
+/* STEP 3. Quieter than body and darker than an absence, so a label never
+   competes with the value it names — and never reads as missing data. */
 .field label {
-  font-weight: 600;
+  font-size: var(--size-label);
+  font-weight: var(--weight-medium);
+  color: var(--label);
 }
 
+/* STEP 4. The lightest thing on the screen. */
 .hint {
-  font-size: var(--size-small);
+  font-size: var(--size-micro);
+  color: var(--text-muted);
   margin: 0;
 }
 
@@ -585,21 +672,15 @@ button.link {
 .unresolved-block > h2,
 .warn > h2,
 .warn-label {
-  font-family: var(--font-mono);
   font-size: var(--size-micro);
   font-weight: var(--weight-semi);
-  text-transform: uppercase;
-  letter-spacing: var(--track-label);
   color: var(--warn);
   margin: 0 0 var(--space-2);
 }
 
 .unresolved-block h2 {
-  font-family: var(--font-mono);
   font-size: var(--size-micro);
   font-weight: var(--weight-bold);
-  text-transform: uppercase;
-  letter-spacing: var(--track-label);
   color: var(--warn);
 }
 
@@ -625,11 +706,8 @@ button.link {
    Same treatment as `.eyebrow`; this adds only the rule beneath it. */
 .supplier-group h2,
 .prep-day h2 {
-  font-family: var(--font-mono);
   font-size: var(--size-micro);
   font-weight: var(--weight-medium);
-  text-transform: uppercase;
-  letter-spacing: var(--track-label);
   color: var(--text-muted);
   border-bottom: 1px solid var(--border-strong);
   padding-bottom: var(--space-2);
@@ -802,11 +880,8 @@ button.link {
 }
 
 .pack-section {
-  font-family: var(--font-mono);
   font-size: var(--size-micro);
   font-weight: var(--weight-medium);
-  text-transform: uppercase;
-  letter-spacing: var(--track-label);
   color: var(--text-muted);
   margin: var(--space-3) 0 var(--space-1);
 }
@@ -893,11 +968,8 @@ button.link {
 }
 
 .money-figures dt {
-  font-family: var(--font-mono);
   font-size: var(--size-micro);
   font-weight: var(--weight-medium);
-  text-transform: uppercase;
-  letter-spacing: var(--track-label);
   color: var(--text-muted);
 }
 
@@ -1292,11 +1364,8 @@ section.danger-zone h2 {
   border-radius: 0;
   background: var(--card);
   color: var(--text-muted);
-  font-family: var(--font-mono);
   font-size: var(--size-small);
   font-weight: var(--weight-semi);
-  text-transform: uppercase;
-  letter-spacing: var(--track-label);
 }
 
 .segmented button:last-child {

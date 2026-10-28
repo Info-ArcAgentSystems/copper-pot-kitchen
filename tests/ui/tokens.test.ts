@@ -277,6 +277,145 @@ describe('the warning is its own signal, distinct from the accent', () => {
   });
 });
 
+/**
+ * COPPER IS A SIGNATURE, NOT A SIGNAL.
+ *
+ * Five colours in this app MEAN something: amber warns, grey says nobody
+ * entered it, blue says you can act, red says destructive, green says fine. A
+ * sixth colour that looked like one of them would be a sixth thing to read on
+ * a screen he is holding one-handed in a supermarket.
+ *
+ * So copper appears exactly once, as a 26px stroke under the kitchen name. It
+ * is decoration: no state, nothing to act on. These guards hold it there, and
+ * the point of counting rather than eyeballing is that the SECOND use is the
+ * one that does the damage — one flourish reads as a brand mark, two read as a
+ * category nobody has explained.
+ */
+describe('copper is used once, and never to mean anything', () => {
+  /**
+   * Every rule as (selector, body).
+   *
+   * Counting `var(--copper)` occurrences was the first version of this and it
+   * was wrong twice over: the stroke is drawn as
+   * `linear-gradient(var(--copper), var(--copper))`, which names the token
+   * twice in ONE use, and a bare `a` or `button` in a selector list matched as
+   * a SUBSTRING — `.app-header span:first-child` contains an "a". What matters
+   * is how many rules carry it, and which.
+   */
+  const rules = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].map(([, selector, body]) => ({
+    selector: (selector ?? '').trim(),
+    body: body ?? '',
+  }));
+
+  const carriers = rules.filter((r) => /var\(--copper\)/.test(r.body));
+
+  it('is declared in both themes', () => {
+    // Light and dark need different values: #c47a3d is 4.50 on the ink chrome,
+    // which is fine by day and thin at night, so dark lightens it to #d08c52.
+    expect([...tokens.matchAll(/--copper:/g)]).toHaveLength(2);
+  });
+
+  it('is carried by EXACTLY ONE rule', () => {
+    /*
+     * The second use is the one that does the damage: one flourish reads as a
+     * brand mark, two read as a category nobody has explained.
+     */
+    expect(
+      carriers.map((r) => r.selector),
+      `copper is carried by ${carriers.length} rules`,
+    ).toHaveLength(1);
+  });
+
+  it('and that rule is the brand', () => {
+    expect(carriers[0]?.selector).toBe('.app-header span:first-child');
+  });
+
+  it('never touches anything that carries meaning', () => {
+    /*
+     * Checked against the one rule that has it rather than by scanning for
+     * selectors, which is both simpler and impossible to fool: if copper is on
+     * an absence, a warning or a control, it is by definition not on the brand
+     * alone and the assertion above has already failed.
+     *
+     * This states the consequence the other two are protecting, in the terms
+     * that matter: copper on an absence would make "not known" look like a
+     * warning; on a warning it would put two warm colours in one block; on a
+     * control it would make decoration look tappable.
+     */
+    for (const word of ['unresolved', 'warn', 'needs-fixing', 'tabs', 'primary']) {
+      expect(
+        carriers[0]?.selector ?? '',
+        `copper reached a ${word} rule`,
+      ).not.toContain(word);
+    }
+  });
+});
+
+/**
+ * THE ABSENCE IS BODY TEXT, SO IT HAS TO BE READABLE AS BODY TEXT.
+ *
+ * "not known" is a statement the owner reads and acts on — it is the reason he
+ * opens Ingredients and types a price. It is not a decoration, and a grey that
+ * only just reads in good light is the same defect as hiding it.
+ *
+ * COMPUTED, NOT ASSERTED BY EYE. The Steel direction's own mock proposed
+ * #8c96a0 for this, which measures 2.80 on the page — it reads fine on a
+ * designer's monitor and fails outright on a phone in a supermarket. The value
+ * that shipped was derived by walking the same hue down until it passed on all
+ * three grounds it is actually used against.
+ */
+describe('the absence colour is legible on every ground it lands on', () => {
+  const channel = (c: number): number => {
+    const v = c / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+
+  const luminance = (hex: string): number => {
+    const h = hex.replace('#', '');
+    const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+    return (
+      0.2126 * channel(r as number) + 0.7152 * channel(g as number) + 0.0722 * channel(b as number)
+    );
+  };
+
+  const contrast = (a: string, b: string): number => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
+    return (hi + 0.05) / (lo + 0.05);
+  };
+
+  /** Read a token's value out of a block of `tokens.css`. */
+  const valueOf = (block: string, name: string): string =>
+    new RegExp(`--${name}:\\s*(#[0-9a-f]{6})`, 'i').exec(block)?.[1] ?? '';
+
+  const light = /:root\s*\{([\s\S]*?)\n\}/.exec(tokens)?.[1] ?? '';
+  const dark = /prefers-color-scheme: dark\)\s*\{\s*:root\s*\{([\s\S]*?)\n  \}/.exec(tokens)?.[1] ?? '';
+
+  it('reads both palettes', () => {
+    expect(valueOf(light, 'text-muted')).not.toBe('');
+    expect(valueOf(dark, 'text-muted')).not.toBe('');
+  });
+
+  it.each([
+    ['light', () => light],
+    ['dark', () => dark],
+  ])('clears 4.5:1 on the page, a card and the warning tint — %s', (_name, get) => {
+    const block = get();
+    const muted = valueOf(block, 'text-muted');
+
+    // The three grounds an absence actually appears on. The warning tint is in
+    // the list because an unresolved value sits inside a warning block.
+    for (const ground of ['bg', 'card', 'warn-bg']) {
+      const against = valueOf(block, ground);
+      const ratio = contrast(muted, against);
+
+      expect(
+        ratio,
+        `the absence colour ${muted} is ${ratio.toFixed(2)}:1 on --${ground} ${against}`,
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});
+
 describe('viewport', () => {
   it('uses dvh, since the iOS Safari toolbar changes the viewport height', () => {
     expect(allCss).toMatch(/100dvh/);

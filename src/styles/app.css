@@ -1026,12 +1026,89 @@ button.link {
    answer.
    --------------------------------------------------------------------------- */
 
+/*
+ * AN EMPTY STATE MUST NEVER BE THE LOUDEST THING ON THE SCREEN.
+ *
+ * This was `border: 1px solid var(--accent)` over `background:
+ * var(--accent-subtle)` — a blue-ringed, blue-tinted block. On a fresh kitchen
+ * every figure in it reads "not known", so the one thing the dashboard
+ * highlighted hardest was the one thing that had nothing to say. It is an
+ * ordinary card now, and `.tile` below makes it a target rather than a
+ * decoration.
+ */
 .money-summary {
-  border: 1px solid var(--accent);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: var(--space-3);
   margin-bottom: var(--space-4);
-  background: var(--accent-subtle);
+  background: var(--card);
+}
+
+/* ---------------------------------------------------------------------------
+   AT A GLANCE — the whole tile is the target.
+
+   Two summaries that each used to end in a bright-blue "Open X" sentence. The
+   card is the affordance now, so there is no blue text inside one at all, and
+   the chevron does the saying.
+
+   A figure inside a tile keeps the SAME absence treatment as everywhere else:
+   `.unresolved`, grey, no fill. The point of the restyle was to stop an empty
+   state shouting, not to stop it speaking — an absence that got quietly
+   rendered as a dash with no words would be the other failure.
+   --------------------------------------------------------------------------- */
+
+.tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+@media (max-width: 520px) {
+  .tiles {
+    grid-template-columns: 1fr;
+  }
+}
+
+.tile {
+  display: block;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+  text-decoration: none;
+}
+
+/* Paired with focus-visible: a touch screen has no hover. */
+.tile:hover,
+.tile:focus-visible {
+  border-color: var(--border-strong);
+}
+
+.tile > h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--size-label);
+  font-weight: var(--weight-semi);
+  color: var(--label);
+}
+
+/* The chevron line at the foot of a tile. Same glyph, same floor as `.qlink`. */
+.tile-go {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: var(--space-3) 0 0;
+  font-size: var(--size-small);
+  font-weight: var(--weight-semi);
+  color: var(--label);
+}
+
+.tile-go::after {
+  content: '›';
+  color: var(--chevron);
+  font-size: 1.15em;
+  line-height: 1;
 }
 
 .money-row {

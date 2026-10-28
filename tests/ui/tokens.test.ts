@@ -486,11 +486,23 @@ describe('blue is reserved for acting', () => {
      */
     const links = [...dashboard.matchAll(/<(?:Link|a)\b([^>]*)>/g)].map((m) => m[1] ?? '');
 
+    /*
+     * Three recognised quiet forms, and nothing else:
+     *
+     *   qlink   text plus a chevron
+     *   record  a whole row, as in the jobs list
+     *   tile    a whole card, as in "At a glance"
+     *
+     * `tile` was added when the two summaries became tiles — and this guard is
+     * what noticed, which is the point of listing the forms rather than
+     * checking for the absence of blue. A fourth form has to be argued for
+     * here before it can ship.
+     */
     expect(links.length).toBeGreaterThan(3);
     for (const attrs of links) {
       expect(
-        /className="[^"]*\b(qlink|record)\b/.test(attrs),
-        `a dashboard link is neither quiet nor a whole-row target: ${attrs.trim()}`,
+        /className="[^"]*\b(qlink|record|tile)\b/.test(attrs),
+        `a dashboard link is none of the three quiet forms: ${attrs.trim()}`,
       ).toBe(true);
     }
   });
@@ -540,6 +552,48 @@ describe('blue is reserved for acting', () => {
     expect(css, 'the danger button is a solid fill again').not.toMatch(
       /button\.danger \{[^}]*background:\s*var\(--danger\)/,
     );
+  });
+
+  it('AN EMPTY STATE IS NEVER THE LOUDEST THING ON THE SCREEN', () => {
+    /*
+     * `.money-summary` was `border: 1px solid var(--accent)` over
+     * `background: var(--accent-subtle)`. On a fresh kitchen every figure in it
+     * reads "not known", so the single block the dashboard highlighted hardest
+     * was the one with nothing to say.
+     *
+     * This guard was MISSING when the change shipped — inverting (b) found both
+     * of its decisions unguarded, which is why it exists now rather than later.
+     */
+    const rule = /\.money-summary \{([^}]*)\}/.exec(css)?.[1] ?? '';
+
+    expect(rule, '.money-summary has no rule').not.toBe('');
+    expect(rule, 'the empty-state card is highlighted in the accent again').not.toMatch(
+      /var\(--accent/,
+    );
+  });
+
+  it('a tile is a card you tap, not a blue sentence', () => {
+    const tile = /\n\.tile \{([^}]*)\}/.exec(css)?.[1] ?? '';
+
+    expect(tile, '.tile has no rule').not.toBe('');
+    expect(tile).toMatch(/color:\s*var\(--text\)/);
+    expect(tile, 'a tile went blue').not.toMatch(/var\(--accent/);
+  });
+
+  it('every chevron is the chevron colour, so one of them cannot drift blue', () => {
+    /*
+     * Two of them — `.qlink::after` and `.tile-go::after` — and they say the
+     * same thing, so they must look the same. Asserted over both rather than
+     * one, because the second is exactly the kind that gets changed alone.
+     */
+    const chevrons = [...css.matchAll(/::after \{([^}]*content:\s*'›'[^}]*)\}/g)].map(
+      (m) => m[1] ?? '',
+    );
+
+    expect(chevrons.length, 'the chevrons moved or multiplied').toBe(2);
+    for (const rule of chevrons) {
+      expect(rule, 'a chevron is not the chevron token').toMatch(/color:\s*var\(--chevron\)/);
+    }
   });
 
   it('a button never shrinks below the touch floor to look small', () => {

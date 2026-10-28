@@ -244,24 +244,35 @@ export function Dashboard(): ReactNode {
         <a className="qlink" href="#jobs-list">See all jobs</a>
       </p>
 
-      {/* ------------------------------------------------------------------ */}
-      <h2>To buy</h2>
-      <section className="money-row">
-        <dl className="money-figures">
-          <Figure label="Lines outstanding" value={String(view.shopping.outstanding)} />
-          {/* Carried separately on purpose: a dropped line counts ZERO above, so
-              an empty list and an uncomputable one look identical without this. */}
-          {view.shopping.blocked > 0 && (
-            <div>
-              <dt>Could not be worked out</dt>
-              <dd className="unresolved">{view.shopping.blocked}</dd>
-            </div>
-          )}
-        </dl>
-        <p className="hint muted">
-          <Link className="qlink" to="/shopping">Shopping list</Link>
-        </p>
-      </section>
+      {/* ------------------------------------------------------------------
+          AT A GLANCE — two summaries, each a single tile the owner taps.
+
+          They used to be two bordered blocks each ending in a bright-blue
+          "Open X" sentence. The card is the affordance now, so there is no blue
+          text inside either, and the chevron does the saying.
+
+          Every figure keeps the treatment it had: `Figure` still renders a null
+          as `.unresolved` "not known", and the blocked count is still carried
+          separately. Making an empty state quieter must not make it silent.
+          ------------------------------------------------------------------ */}
+      <h2>At a glance</h2>
+      <div className="tiles">
+        <Link className="tile" to="/shopping">
+          <h3>To buy</h3>
+          <dl className="money-figures">
+            <Figure label="Lines outstanding" value={String(view.shopping.outstanding)} />
+            {/* Carried separately on purpose: a dropped line counts ZERO above,
+                so an empty list and an uncomputable one look identical without
+                this. */}
+            {view.shopping.blocked > 0 && (
+              <div>
+                <dt>Could not be worked out</dt>
+                <dd className="unresolved">{view.shopping.blocked}</dd>
+              </div>
+            )}
+          </dl>
+          <p className="tile-go">Shopping list</p>
+        </Link>
 
       {/* ------------------------------------------------------------------ */}
       {view.anomalies.length > 0 && (
@@ -288,27 +299,29 @@ export function Dashboard(): ReactNode {
         </section>
       )}
 
-      {/* ------------------------------------------------------------------ */}
-      <h2>Money in these dates</h2>
-      <section className="money-summary">
-        <dl className="money-figures">
-          <Figure
-            label="Revenue"
-            value={money.revenue.total === null ? null : formatMoney(money.revenue.total as Cents)}
-          />
-          <Figure
-            label="Food cost"
-            value={money.foodCost.total === null ? null : formatMoney(money.foodCost.total as Cents)}
-          />
-          <Figure
-            label="Margin"
-            value={money.margin.total === null ? null : formatMoney(money.margin.total as Cents)}
-          />
-        </dl>
-        <p className="hint muted">
-          <Link className="qlink" to="/money">Open Money</Link>
-        </p>
-      </section>
+        <Link className="tile" to="/money">
+          <h3>Money in these dates</h3>
+          <dl className="money-figures">
+            <Figure
+              label="Revenue"
+              value={
+                money.revenue.total === null ? null : formatMoney(money.revenue.total as Cents)
+              }
+            />
+            <Figure
+              label="Food cost"
+              value={
+                money.foodCost.total === null ? null : formatMoney(money.foodCost.total as Cents)
+              }
+            />
+            <Figure
+              label="Margin"
+              value={money.margin.total === null ? null : formatMoney(money.margin.total as Cents)}
+            />
+          </dl>
+          <p className="tile-go">Open Money</p>
+        </Link>
+      </div>
 
       <h2>Covers</h2>
       <section className="money-row">

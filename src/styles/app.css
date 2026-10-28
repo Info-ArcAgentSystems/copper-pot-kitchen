@@ -1238,7 +1238,13 @@ section.danger-zone h2 {
   color: var(--text-muted);
 }
 
-.scan-button input[type='file'] {
+/*
+ * The input is now a SIBLING of its label rather than a child — nesting it
+ * fired the picker twice, because the click the label forwards to the input
+ * bubbles back up through the label. It is still visually hidden and still the
+ * real control; the label is still the 44px target.
+ */
+.scan-button-input {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -1249,8 +1255,15 @@ section.danger-zone h2 {
   white-space: nowrap;
 }
 
-/* The label carries the ring, since the input it belongs to is not visible. */
-.scan-button:focus-within {
+/*
+ * The label carries the ring, since the input it belongs to is not visible.
+ *
+ * `:focus-within` no longer works for that — the input is outside the label
+ * now — so it is the adjacent sibling, which is why the input is rendered
+ * BEFORE its label. Without this the keyboard has no visible focus on either
+ * photo button at all.
+ */
+.scan-button-input:focus-visible + .scan-button {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }

@@ -833,6 +833,66 @@ describe('a scanner can reach the camera and the gallery', () => {
     );
   });
 
+  it('NEVER nests the input inside its label — that fires the picker twice', () => {
+    /*
+     * THE BUG, found live by the owner: choosing a file opened the native
+     * picker twice.
+     *
+     * Not a stray `input.click()` — there is none. `<label><input/>…</label>`
+     * is the ordinary idiom and it fires twice on its own. Instrumented on a
+     * copy of this control:
+     *
+     *   label click   target=SPAN     the real tap
+     *   input click   trusted         the label forwards activation
+     *   label click   target=INPUT    the forwarded click BUBBLES BACK UP
+     *                                 through the label, because the input is
+     *                                 inside it
+     *
+     * The third event is the second picker. Pairing by `for`/`id` with the
+     * input OUTSIDE the label removes it; measured on the same page, the third
+     * line is simply gone.
+     *
+     * Asserted structurally rather than by counting pickers, because a picker
+     * opening is not observable from a test. What is observable is the shape
+     * that causes it.
+     */
+    /*
+     * ANCHORED ON THE CLOSING TAG. A bare `[\s\S]*?` between the two spans
+     * right across `</label>`, so it matches a label followed by any LATER
+     * sibling input — which is the fixed arrangement, and the first version of
+     * this assertion failed on it. The tempered match stops at the close.
+     */
+    const nested = /<label\b[^>]*>(?:(?!<\/label>)[\s\S])*?<input\b[^>]*type="file"/.exec(
+      shared,
+    );
+
+    expect(nested, 'a file input is inside a label again').toBeNull();
+
+    // And every input is still paired to a label, or the control is unlabelled
+    // and the 44px target does nothing.
+    for (const input of fileInputs(shared)) {
+      expect(input, 'a file input has no id to pair a label to').toMatch(/id=\{/);
+    }
+    expect([...shared.matchAll(/htmlFor=\{/g)], 'a label lost its pairing').toHaveLength(
+      fileInputs(shared).length,
+    );
+  });
+
+  it('keeps a visible focus ring now that the input is outside the label', () => {
+    /*
+     * `:focus-within` stopped working the moment the input moved out, and the
+     * input itself is clipped to 1x1 — so without a replacement the keyboard
+     * lands on an invisible control with no ring anywhere. The input is
+     * rendered BEFORE its label precisely so an adjacent sibling can carry it.
+     */
+    const css = readFileSync(
+      fileURLToPath(new URL('../../src/styles/app.css', import.meta.url)),
+      'utf8',
+    );
+
+    expect(css).toMatch(/\.scan-button-input:focus-visible \+ \.scan-button/);
+  });
+
   it('clears the input so the same photo can be picked twice', () => {
     // After a failed scan, re-choosing the identical file is the obvious next
     // move — and without this it fires no change event at all.

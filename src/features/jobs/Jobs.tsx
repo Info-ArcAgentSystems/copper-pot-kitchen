@@ -89,7 +89,12 @@ export function Jobs(): ReactNode {
           Still its own component in `features/dashboard/` — `derived.test.ts`
           guards that directory by name, and it writes nothing. */}
       <Dashboard />
-      <RecordScreen<Job>
+
+      {/* The target of the dashboard's "All jobs". A fragment on the same
+          screen rather than a route, because the list IS on the same screen —
+          the comment at that link records what the route did instead. */}
+      <div id="jobs-list">
+        <RecordScreen<Job>
         title="Jobs"
         why="everything the kitchen does is one of them, and shopping, prep and packing are all derived from this list"
         addLabel="Add a job"
@@ -117,8 +122,9 @@ export function Jobs(): ReactNode {
             )}
           </>
         )}
-          renderForm={(job, done) => <JobForm job={job} done={done} />}
-      />
+            renderForm={(job, done) => <JobForm job={job} done={done} />}
+        />
+      </div>
     </>
   );
 }

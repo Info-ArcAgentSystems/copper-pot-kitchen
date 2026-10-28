@@ -25,7 +25,7 @@
  * is still a laptop.
  */
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 
 /*
  * PLACEHOLDER ICONS — the app has no icon system. `public/icons.svg` is
@@ -75,6 +75,30 @@ export function PhotoSource({
 }): ReactNode {
   const hasCamera = useHasCamera();
 
+  /*
+   * THE INPUT IS A SIBLING OF ITS LABEL, NOT A CHILD, AND THAT IS THE FIX.
+   *
+   * It was nested, which is the ordinary idiom and quietly fires the picker
+   * TWICE. Instrumented, the sequence is:
+   *
+   *   label click   target=SPAN        the real tap
+   *   input click   trusted            the label forwards activation
+   *   label click   target=INPUT       the forwarded click BUBBLES BACK UP
+   *                                    through the label, because the input is
+   *                                    inside it
+   *
+   * The third event is the second picker. Pairing by `for`/`id` with the input
+   * outside the label removes it — measured on the same page: the third line is
+   * simply gone. `stopPropagation` would also silence it, but it would be
+   * suppressing a loop rather than not building one.
+   *
+   * `useId` because there are two of these controls on a phone and four
+   * scanners; a hardcoded id would pair the wrong label to the wrong input the
+   * moment two appeared on one screen.
+   */
+  const cameraId = useId();
+  const fileId = useId();
+
   const take = (event: React.ChangeEvent<HTMLInputElement>): void => {
     const file = event.target.files?.[0];
     if (file !== undefined) onFile(file);
@@ -87,23 +111,37 @@ export function PhotoSource({
     <div className="photo-source">
       {/* Only where the OS will actually open a camera. */}
       {hasCamera && (
-        <label className="scan-button">
+        <>
+          {/* The input comes FIRST so the label can carry its focus ring
+              through an adjacent-sibling selector — it is visually hidden, so
+              without that the keyboard has no visible focus at all. */}
           <input
+            id={cameraId}
+            className="scan-button-input"
             type="file"
             accept="image/*"
             capture="environment"
             disabled={disabled}
             onChange={take}
           />
-          <Icon d={CAMERA} />
-          <span className="scan-button-label">Take a photo</span>
-          <span className="scan-button-sub">Opens the camera</span>
-        </label>
+          <label className="scan-button" htmlFor={cameraId}>
+            <Icon d={CAMERA} />
+            <span className="scan-button-label">Take a photo</span>
+            <span className="scan-button-sub">Opens the camera</span>
+          </label>
+        </>
       )}
 
-      <label className="scan-button">
-        {/* NO `capture`: this is the one that must reach the gallery. */}
-        <input type="file" accept="image/*" disabled={disabled} onChange={take} />
+      {/* NO `capture`: this is the one that must reach the gallery. */}
+      <input
+        id={fileId}
+        className="scan-button-input"
+        type="file"
+        accept="image/*"
+        disabled={disabled}
+        onChange={take}
+      />
+      <label className="scan-button" htmlFor={fileId}>
         <Icon d={FOLDER} />
         <span className="scan-button-label">Choose a file</span>
         <span className="scan-button-sub">

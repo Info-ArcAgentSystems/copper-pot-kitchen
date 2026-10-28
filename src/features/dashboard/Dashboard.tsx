@@ -205,7 +205,12 @@ export function Dashboard(): ReactNode {
         <ul className="records">
           {view.nextJobs.map((n) => (
             <li key={n.job.id}>
-              <Link className="record" to="/jobs">
+              {/* Same fragment, same reason. This row cannot OPEN the job it
+                  describes — no route addresses one, because `RecordScreen`
+                  holds its editing state internally — so it takes him to the
+                  list, where the job can be tapped. The real fix is logged
+                  rather than bolted on here. */}
+              <a className="record" href="#jobs-list">
                 <strong>
                   {n.job.serviceType ?? 'Job'} · {n.job.serviceDate ?? 'no date'}
                 </strong>
@@ -218,13 +223,25 @@ export function Dashboard(): ReactNode {
                     {n.blocked} {n.blocked === 1 ? 'quantity' : 'quantities'} could not be worked out
                   </span>
                 )}
-              </Link>
+              </a>
             </li>
           ))}
         </ul>
       )}
+      {/* A LINK DOWN THE PAGE, NOT A ROUTE.
+
+          This was `<Link to="/jobs">`, which looked right and was not: `/jobs`
+          is a redirect left over from the eight-tab era and it sends you to
+          `/` — the screen you are already on, because this dashboard renders at
+          the top of it with the jobs list directly below. The round trip
+          remounted `Jobs`, which remounted this dashboard's six reads AND the
+          list's own, blanking the whole screen to its loading state and
+          repopulating it. It read as a full page reload, and it landed back
+          where it started.
+
+          The list is already here. Going to it is a fragment, not a journey. */}
       <p className="hint muted">
-        <Link to="/jobs">All jobs</Link>
+        <a href="#jobs-list">All jobs</a>
       </p>
 
       {/* ------------------------------------------------------------------ */}

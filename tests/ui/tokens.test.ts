@@ -187,17 +187,55 @@ describe('loads on a supermarket connection', () => {
     }
   });
 
-  it('EVERY @font-face swaps rather than blocking', () => {
-    // `font-display: swap` is the difference between a slow font and invisible
-    // text. FOIT on a supermarket connection is a blank screen.
+  it('EVERY @font-face REFUSES TO HIDE TEXT — swap or optional, never the default', () => {
+    /*
+     * This read `toMatch(/font-display:\s*swap/)` and was widened to admit
+     * `optional`. That is not a loosening, and the distinction matters enough
+     * to record.
+     *
+     * The property being protected is that text is never invisible: FOIT on a
+     * supermarket connection is a blank screen. Measured against THAT, the two
+     * values are not equal — `optional` is STRICTER. It gives the font a ~100ms
+     * window and then commits to the fallback for the whole page load, so the
+     * text is never hidden AND never repaints later. `swap` leaves the door
+     * open to a reflow at any moment the file happens to arrive.
+     *
+     * What is forbidden is unchanged and is the only thing that was ever the
+     * danger: the DEFAULT, `block` and `fallback` — the three that can leave a
+     * word invisible for up to three seconds.
+     */
     const faces = [...allCss.matchAll(/@font-face\s*\{([^}]+)\}/g)].map((m) => m[1] ?? '');
 
     expect(faces.length).toBeGreaterThan(0);
     for (const face of faces) {
-      expect(face, 'an @font-face does not declare font-display: swap').toMatch(
-        /font-display:\s*swap/,
-      );
+      const declared = /font-display:\s*([a-z]+)/.exec(face)?.[1] ?? 'none declared';
+
+      expect(
+        ['swap', 'optional'],
+        `an @font-face declares "${declared}", which can hide text`,
+      ).toContain(declared);
     }
+  });
+
+  it('the DISPLAY family is policed by the fallback rule, not exempt from it', () => {
+    /*
+     * The mock named this token `--display`. The fallback guard above matches
+     * `--font[a-z-]*`, so `--display` would have escaped it entirely and been
+     * free to ship with no system stack behind it — a silent blank heading if
+     * the file ever failed. The NAME is the enforcement.
+     */
+    expect(tokens, 'the display family is named so the fallback guard misses it').not.toMatch(
+      /^\s*--display:/m,
+    );
+    expect(tokens).toMatch(/--font-display:\s*'Archivo'/);
+  });
+
+  it('BODY still never waits on a web font', () => {
+    // Archivo is for headings. The sentence the owner is reading is still the
+    // system stack, which is the rule that stopped Inter shipping.
+    const body = /--font:\s*([^;]+);/.exec(tokens)?.[1] ?? '';
+
+    expect(body, 'a web font reached body text').not.toMatch(/Archivo|Inter/);
   });
 
   it('fetches fonts from THIS origin, never a third party', () => {

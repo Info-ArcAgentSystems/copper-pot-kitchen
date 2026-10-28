@@ -61,6 +61,32 @@
  */
 
 /*
+ * ARCHIVO — HEADINGS ONLY, AND IT CANNOT MAKE A HEADING WAIT.
+ *
+ * `font-display: optional` rather than `swap`, and the difference is the whole
+ * reason this is allowed to exist. `optional` gives the font a ~100ms window
+ * and then commits to the fallback FOR THAT PAGE LOAD — so a heading is never
+ * invisible and never repaints under the owner's eye. `swap` would show SF Pro
+ * and then jump to Archivo at whatever moment the file arrived.
+ *
+ * The cost is honest: on the very first load on a device the headings are the
+ * system stack. From the second load they are Archivo, with no reflow ever.
+ * For a tool opened every day that is the right side of the trade.
+ *
+ * Self-hosted, latin subset, variable 500–700 — one file for all three heading
+ * weights, 34KB. No `<link>` to fonts.googleapis.com: that is a DNS lookup and
+ * a TLS handshake to a third party before the first word paints, and
+ * `tests/ui/tokens.test.ts` forbids it.
+ */
+@font-face {
+  font-family: 'Archivo';
+  src: url('/fonts/archivo-latin.woff2') format('woff2');
+  font-weight: 500 700;
+  font-style: normal;
+  font-display: optional;
+}
+
+/*
  * Self-hosted, latin subset, variable weight axis. `font-display: swap` is not a
  * preference: FOIT on a supermarket connection is a blank screen.
  */
@@ -91,6 +117,13 @@
      Both end in a generic family, so nothing breaks if a file never arrives.
      ------------------------------------------------------------------------- */
   --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /*
+   * NAMED `--font-display`, not `--display`, and that is deliberate. The guard
+   * that requires every family to end in a system stack matches `--font[a-z-]*`
+   * — so a token called `--display` would have escaped the check entirely and
+   * been free to ship with no fallback. The name is what keeps it policed.
+   */
+  --font-display: 'Archivo', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* One ramp, named. Sizes are unchanged by the re-skin. */

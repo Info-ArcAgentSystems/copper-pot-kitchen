@@ -60,6 +60,7 @@ h1:has(+ .page-sub) {
 }
 
 h1 {
+  font-family: var(--font-display);
   font-size: var(--size-h1);
   font-weight: var(--weight-bold);
   line-height: var(--leading-tight);
@@ -72,6 +73,7 @@ h1 {
  * floating above a list, which is why a long screen read as one undivided run.
  */
 h2 {
+  font-family: var(--font-display);
   font-size: var(--size-body);
   font-weight: var(--weight-semi);
   line-height: var(--leading-tight);
@@ -103,6 +105,7 @@ h3:not(:first-child) {
 }
 
 h3 {
+  font-family: var(--font-display);
   font-size: var(--size-body);
   font-weight: var(--weight-medium);
   line-height: var(--leading-tight);
@@ -183,6 +186,7 @@ h3 {
  * never used on data, a control or a warning.
  */
 .app-header span:first-child {
+  font-family: var(--font-display);
   /*
    * Drawn as a background rather than as a sized pseudo-element, and that is
    * not a style choice. The 44px touch floor is enforced by a blanket scan for
@@ -291,6 +295,7 @@ h3 {
   min-height: var(--touch-min);
   padding: var(--space-3) var(--space-2);
   color: #8d97a2; /* 5.14 on the ink */
+  font-family: var(--font-display);
   text-decoration: none;
   /*
    * NOT uppercase mono any more, and that is the hierarchy fix rather than a

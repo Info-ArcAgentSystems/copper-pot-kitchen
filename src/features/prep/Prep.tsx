@@ -163,6 +163,7 @@ export function Prep({ range }: { range?: DateRange }): ReactNode {
   return (
     <div>
       <h1>Prep</h1>
+      <p className="page-sub">What to make on each day, consolidated across every job.</p>
 
 
       {error !== null && (

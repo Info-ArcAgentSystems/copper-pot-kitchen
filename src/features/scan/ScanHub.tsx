@@ -64,11 +64,7 @@ export function ScanHub(): ReactNode {
   return (
     <section>
       <h1>Scan</h1>
-      <p className="muted hint">
-        Photograph a page and it becomes a draft you check before saving. Nothing is saved
-        until you confirm it.
-      </p>
-
+      <p className="page-sub">Photograph a page and it becomes a draft you check before anything is saved.</p>
       <div className="scan-grid">
         {MODES.map((mode) => (
           <Link key={mode.to} to={mode.to} className="scan-card">

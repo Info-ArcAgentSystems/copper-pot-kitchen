@@ -216,6 +216,7 @@ export function Shopping({ range }: { range?: DateRange }): ReactNode {
   return (
     <div>
       <h1>Shopping</h1>
+      <p className="page-sub">What to buy for these dates, grouped by supplier.</p>
 
 
       {/* The filter, stated. Rule 15 keeps cancelled and completed jobs; it does

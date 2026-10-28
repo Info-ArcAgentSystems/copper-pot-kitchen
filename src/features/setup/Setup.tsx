@@ -23,6 +23,7 @@ export function Setup(): ReactNode {
   return (
     <div>
       <h1>Setup</h1>
+      <p className="page-sub">Customers, properties, suppliers, rates and backups.</p>
       <ul className="records">
         {SECTIONS.map((s) => (
           <li key={s.to}>

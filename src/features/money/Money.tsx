@@ -126,6 +126,7 @@ export function Money(): ReactNode {
   return (
     <div>
       <h1>Money</h1>
+      <p className="page-sub">Revenue, food cost and margin for jobs serving in these dates.</p>
 
       <fieldset className="units">
         <legend>Which dates</legend>

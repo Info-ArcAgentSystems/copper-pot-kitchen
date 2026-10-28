@@ -36,6 +36,29 @@
    No uppercase anywhere in the four. Case is not a level.
    --------------------------------------------------------------------------- */
 
+/*
+ * THE ONE-LINE PAGE DESCRIPTION, under every title.
+ *
+ * Step 1.5 of the four: it says what the screen is FOR, in his terms, and it
+ * does not restate the title. "Service" is a tab name; "Shopping, prep and
+ * packing for the jobs in these dates" is an answer to what he is looking at.
+ *
+ * Muted and sized between the title and the body, so it reads as a subtitle
+ * rather than as the screen's first sentence of content.
+ */
+.page-sub {
+  margin: 0 0 var(--space-5);
+  color: var(--text-muted);
+  font-size: var(--size-small);
+  line-height: var(--leading-body);
+}
+
+/* The title loses its bottom gap when a description follows — they are one
+   block, and 16px between them reads as two. */
+h1:has(+ .page-sub) {
+  margin-bottom: var(--space-1);
+}
+
 h1 {
   font-size: var(--size-h1);
   font-weight: var(--weight-bold);

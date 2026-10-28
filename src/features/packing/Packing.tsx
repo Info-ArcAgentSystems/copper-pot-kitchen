@@ -186,6 +186,7 @@ export function Packing({ range }: { range?: DateRange }): ReactNode {
   return (
     <div>
       <h1>Packing</h1>
+      <p className="page-sub">What goes in the van for each job.</p>
 
 
       <p className="muted">

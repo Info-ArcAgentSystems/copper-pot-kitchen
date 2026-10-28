@@ -33,6 +33,7 @@ export function Library(): ReactNode {
   return (
     <section>
       <h1>Library</h1>
+      <p className="page-sub">Your recipes and the ingredients they are built from.</p>
 
       <Segmented
         label="Library view"

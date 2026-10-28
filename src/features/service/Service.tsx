@@ -62,6 +62,7 @@ function ServiceView({ view, onView }: { view: View; onView: (v: View) => void }
   return (
     <section>
       <h1>Service</h1>
+      <p className="page-sub">Shopping, prep and packing for the jobs in these dates.</p>
 
       <Segmented label="Service view" segments={SEGMENTS} active={view} onChange={onView} />
 

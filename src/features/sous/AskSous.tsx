@@ -260,6 +260,7 @@ export function AskSous(): ReactNode {
   return (
     <div className="chat">
       <h1>Ask Sous</h1>
+      <p className="page-sub">Ask about shopping, prep, packing, money or whether a job is ready.</p>
 
       {exchanges.length === 0 && (
         <p className="muted">

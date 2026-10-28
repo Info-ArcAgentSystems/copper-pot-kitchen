@@ -187,6 +187,7 @@ export function Dashboard(): ReactNode {
   return (
     <section>
       <h1>Today</h1>
+      <p className="page-sub">What's coming up in your chosen dates, and where the gaps are.</p>
 
       <div className="field">
         <label htmlFor="dash-from">From</label>

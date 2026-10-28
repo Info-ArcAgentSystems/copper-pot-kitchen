@@ -604,6 +604,69 @@ describe('blue is reserved for acting', () => {
   });
 });
 
+/**
+ * EVERY SCREEN SAYS WHAT IT IS FOR.
+ *
+ * The four-step hierarchy from the Steel pass had a hole between step 1 and
+ * step 2: a title, then straight into content. "Service" is a tab name, not an
+ * answer — the owner arriving on it had to infer from the controls what the
+ * screen was about.
+ *
+ * So every page carries one line under its title. The guard is that they EXIST
+ * and that none of them is filler: a description that restates its own title
+ * has cost a line of screen and said nothing.
+ */
+describe('every screen says what it is for', () => {
+  const SCREENS = [
+    ['features/dashboard/Dashboard.tsx', 'Today'],
+    ['features/service/Service.tsx', 'Service'],
+    ['features/money/Money.tsx', 'Money'],
+    ['features/library/Library.tsx', 'Library'],
+    ['features/scan/ScanHub.tsx', 'Scan'],
+    ['features/setup/Setup.tsx', 'Setup'],
+    ['features/shopping/Shopping.tsx', 'Shopping'],
+    ['features/prep/Prep.tsx', 'Prep'],
+    ['features/packing/Packing.tsx', 'Packing'],
+    ['features/sous/AskSous.tsx', 'Ask Sous'],
+  ] as const;
+
+  const sourceOf = (file: string): string =>
+    readFileSync(fileURLToPath(new URL(`../../src/${file}`, import.meta.url)), 'utf8');
+
+  it.each(SCREENS)('%s carries a description that is not its own title', (file, title) => {
+    const source = sourceOf(file);
+    const description = /<p className="page-sub">([^<]+)<\/p>/.exec(source)?.[1] ?? '';
+
+    expect(description, `${file} has no page description`).not.toBe('');
+    // Long enough to carry a thought. "Your jobs." is not a description.
+    expect(description.split(' ').length, `${file}: "${description}" is not a sentence`,).toBeGreaterThan(5);
+    expect(
+      description.toLowerCase().replace(/[^a-z ]/g, '').trim(),
+      `${file}: the description just restates the title`,
+    ).not.toBe(title.toLowerCase());
+  });
+
+  it('no two screens describe themselves the same way', () => {
+    /*
+     * The cheapest way to satisfy ten required strings is to paste one into all
+     * ten, and it would pass every assertion above. Ten identical descriptions
+     * is one description and nine screens that lie about what they do.
+     */
+    const all = SCREENS.map(
+      ([file]) => /<p className="page-sub">([^<]+)<\/p>/.exec(sourceOf(file))?.[1] ?? '',
+    );
+
+    expect(new Set(all).size, 'two screens share a description').toBe(all.length);
+  });
+
+  it('the description is styled as a subtitle, not as content', () => {
+    const rule = /\.page-sub \{([^}]*)\}/.exec(css)?.[1] ?? '';
+
+    expect(rule, '.page-sub has no rule').not.toBe('');
+    expect(rule).toMatch(/color:\s*var\(--text-muted\)/);
+  });
+});
+
 describe('viewport', () => {
   it('uses dvh, since the iOS Safari toolbar changes the viewport height', () => {
     expect(allCss).toMatch(/100dvh/);

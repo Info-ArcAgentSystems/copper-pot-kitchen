@@ -289,6 +289,45 @@ input[type='date'] {
   -webkit-appearance: none;
   appearance: none;
   text-align: left;
+  /*
+   * Already inherited from `:root`, and stated here anyway.
+   *
+   * `color-scheme` is what makes the SYSTEM calendar come up dark on a dark
+   * page rather than as a white sheet in his face at six in the morning. It
+   * inherits, so this line changes nothing today — it is here so that scoping
+   * the root declaration differently later cannot quietly take the native popup
+   * with it. The popup is the one piece of this control the stylesheet cannot
+   * reach any other way.
+   */
+  color-scheme: light dark;
+}
+
+/*
+ * The calendar glyph, muted to match the rest of the field.
+ *
+ * OPACITY RATHER THAN A FILTER, and that is the whole trick: the glyph is drawn
+ * by the browser in its own ink, so `opacity` lands on roughly --text-muted in
+ * BOTH themes without naming a colour — black at 0.55 on white is ~#737373,
+ * white at 0.55 on the dark card is ~#969a9f. A `filter: invert()` would need a
+ * second rule per theme and would still not hit a token.
+ *
+ * HORIZONTAL padding only, and measured rather than assumed. Sizing this box
+ * with a width and a height would trip the 44px floor, which is a blanket scan
+ * for any height under 44px — but padding it on all four sides grew the FIELD
+ * from 47px to 58px, 11px taller than every other input on the screen, which is
+ * the opposite of matching them. The field already clears the floor vertically,
+ * so only the sideways reach needs help.
+ */
+input[type='date']::-webkit-calendar-picker-indicator {
+  opacity: 0.55;
+  padding: 0 var(--space-2);
+  cursor: pointer;
+}
+
+input[type='date']::-webkit-calendar-picker-indicator:hover,
+input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
+  /* Full ink on contact. Paired, because a touch screen has no hover. */
+  opacity: 1;
 }
 
 /* A ticked box is the owner's own mark on a derived list — the one thing on these

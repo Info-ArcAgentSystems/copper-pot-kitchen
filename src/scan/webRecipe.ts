@@ -347,3 +347,64 @@ export function draftFromWebReview(review: WebRecipeReview): Recipe {
     ],
   };
 }
+
+/**
+ * Filling an EXISTING stub from a page, in place.
+ *
+ * `draftFromWebReview` above builds a NEW recipe: it was written for a dish
+ * found from a menu photo, where nothing local exists yet, so it sets `id: ''`
+ * and `name` from the page. `recipeRepository.save` maps an empty id to null
+ * and `save_recipe` INSERTS on null.
+ *
+ * So reusing it to "fill" a stub would have left the stub untouched and added a
+ * second recipe beside it — a duplicate carrying the website's title, while
+ * every job that named the dish still pointed at the empty original. That is
+ * the one failure in this feature that corrupts data rather than annoying
+ * someone, which is why the identity here comes from the STUB and only the
+ * cooking comes from the page:
+ *
+ *   from the stub   id, kitchen, name, and his own service decisions
+ *   from the page   components, unquantified items, yield, portions, source
+ *
+ * He can still rename it in the editor afterwards. What he cannot do is have it
+ * renamed FOR him by a site that called the dish something else.
+ */
+export function fillStub(stub: Recipe, review: WebRecipeReview): Recipe {
+  if (stub.components.length > 0) {
+    /*
+     * Not a silent no-op. This action is only offered on an empty recipe, and
+     * if it is ever reached on a written-up one, a page's ingredient list
+     * replacing his own is not something to do quietly — "fill" would be the
+     * wrong word for it.
+     */
+    throw new Error('That recipe already has components, so it is not a stub to fill.');
+  }
+
+  const fromPage = draftFromWebReview(review);
+
+  return {
+    ...fromPage,
+
+    // --- the stub's, because a recipe page knows none of it ----------------
+    id: stub.id,
+    kitchenId: stub.kitchenId,
+    /* His name for the dish — usually the one the job sheet used. */
+    name: stub.name,
+    /* Decisions about HIS kitchen and his van, not facts about a dish.
+       Overwriting these would silently move the work to a different prep day. */
+    makeAheadDays: stub.makeAheadDays,
+    sameDayOnly: stub.sameDayOnly,
+    freezable: stub.freezable,
+    onsiteFinish: stub.onsiteFinish,
+    /* A course he has already chosen stands; the page fills one he never set.
+       Neither invents one the page did not state. */
+    course: stub.course ?? fromPage.course,
+
+    /* A note he typed — "Nolan asked for extra béchamel" — is something only he
+       knew. The source line joins it rather than replacing it. */
+    note:
+      stub.note === null || stub.note.trim() === ''
+        ? fromPage.note
+        : `${stub.note.trim()}\n\n${fromPage.note ?? ''}`.trim(),
+  };
+}

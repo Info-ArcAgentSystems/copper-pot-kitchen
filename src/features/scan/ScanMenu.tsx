@@ -23,6 +23,7 @@ import { ingredientRepository } from '../../data/repositories';
 import { parseMenu } from '../../scan/parseImage';
 import { findRecipes } from '../../scan/findRecipes';
 import { draftFromWebReview, reviewWebRecipe, type WebRecipeReview } from '../../scan/webRecipe';
+import { WebCandidates } from './WebCandidates';
 import { toScaledDataUrl } from './scaleImage';
 import { PhotoGate } from './PhotoGate';
 import { useAsync } from '../../ui/useAsync';
@@ -173,72 +174,18 @@ export function ScanMenu(): ReactNode {
 
                 {state.error !== null && <p className="error">{state.error}</p>}
 
-                {state.candidates.map((candidate) => (
-                  <div key={candidate.sourceUrl} className="line">
-                    <strong>{candidate.title ?? 'untitled recipe'}</strong>
-
-                    {/* The source, always. He can open it and judge for himself. */}
-                    <p className="hint muted">
-                      <a href={candidate.sourceUrl} target="_blank" rel="noreferrer noopener">
-                        {candidate.sourceUrl}
-                      </a>
-                    </p>
-
-                    <p className="muted num">
-                      {candidate.yieldType === 'batch'
-                        ? `serves ${candidate.portionsPerBatch ?? '?'}`
-                        : candidate.yieldType === 'per_person'
-                          ? 'per person'
-                          : 'yield not stated'}
-                      {' · '}
-                      {candidate.components.length} with quantities
-                      {candidate.unquantified.length > 0 &&
-                        ` · ${candidate.unquantified.length} without`}
-                    </p>
-
-                    {candidate.warnings.map((w) => (
-                      <p key={w} className="unresolved">
-                        {w}
-                      </p>
-                    ))}
-
-                    {candidate.newThings.length > 0 && (
-                      <p className="muted">
-                        New to your ingredients: {candidate.newThings.map((n) => n.read).join(', ')}
-                      </p>
-                    )}
-
-                    {candidate.gaps.length > 0 && (
-                      <ul className="unresolved-block">
-                        {candidate.gaps.map((g) => (
-                          <li key={g.field}>{g.label}</li>
-                        ))}
-                      </ul>
-                    )}
-
-                    <div className="actions">
-                      <button
-                        type="button"
-                        className="primary"
-                        disabled={!candidate.readyToSave}
-                        onClick={() =>
-                          navigate('/recipes', {
-                            state: { draft: draftFromWebReview(candidate) },
-                          })
-                        }
-                      >
-                        Open in editor
-                      </button>
-                    </div>
-                  </div>
-                ))}
-
-                {state.refused > 0 && (
-                  <p className="unresolved">
-                    {state.refused} result{state.refused === 1 ? '' : 's'} came back with no source
-                    link and {state.refused === 1 ? 'was' : 'were'} not kept.
-                  </p>
-                )}
+                {/* ONE renderer, shared with the Recipes editor's "find it
+                    online". What picking MEANS differs — here it opens a NEW
+                    recipe; there it fills the stub it was opened from — so the
+                    caller decides that and the list only reports. */}
+                <WebCandidates
+                  candidates={state.candidates}
+                  refused={state.refused}
+                  pickLabel="Open in editor"
+                  onPick={(candidate) =>
+                    navigate('/recipes', { state: { draft: draftFromWebReview(candidate) } })
+                  }
+                />
 
                 <button type="button" disabled={state.busy} onClick={() => void search(dish)}>
                   {state.busy

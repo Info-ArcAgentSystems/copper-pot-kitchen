@@ -23,6 +23,10 @@ import { RecordForm, RecordScreen } from '../../ui/RecordScreen';
 import { SourceNotice } from '../../ui/SourceNotice';
 import { sourceState, type DataSource } from '../../ui/sourceState';
 import { useAsync } from '../../ui/useAsync';
+import { findRecipes } from '../../scan/findRecipes';
+import { fillStub, reviewWebRecipe, type WebRecipeReview } from '../../scan/webRecipe';
+import { WebCandidates } from '../scan/WebCandidates';
+import { supabaseClient } from '../../data/client';
 import { byName, parseCount, parseText, requireText, textValue } from '../../ui/form';
 import { courseDerivable } from '../../engine/rules';
 import { useKitchen } from '../../auth/kitchenState';
@@ -163,6 +167,7 @@ const newKey = (): string => `l${(seq += 1)}`;
 
 function RecipeForm({ recipe, done }: { recipe: Recipe | null; done: () => void }): ReactNode {
   const { state } = useKitchen();
+  const navigate = useNavigate();
   const db = supabaseDb();
   const repo = recipeRepository(db);
   const ingredients = useAsync(() => ingredientRepository(db).list(), []);
@@ -201,6 +206,26 @@ function RecipeForm({ recipe, done }: { recipe: Recipe | null; done: () => void 
   const [sameDayOnly, setSameDayOnly] = useState(recipe?.sameDayOnly ?? true);
   const [method, setMethod] = useState(textValue(recipe?.method ?? null));
   const [note, setNote] = useState(textValue(recipe?.note ?? null));
+
+  /*
+   * FINDING A STUB'S INGREDIENTS ONLINE.
+   *
+   * A stub is a recipe that is a name and nothing else — usually one created
+   * when a scanned job sheet named a dish with no recipe behind it. Until it
+   * has ingredients it cannot be costed or shopped, and the prep sheet marks
+   * the line as such. This is the shortest route from that state to a real
+   * recipe, and it is the same search `ScanMenu` uses, asked by name.
+   *
+   * Nothing here writes. A pick builds a filled DRAFT and opens it in this same
+   * editor for him to confirm — the identity stays the stub's, so saving
+   * updates rather than inserting (`fillStub`).
+   */
+  const [finding, setFinding] = useState(false);
+  const [findError, setFindError] = useState<string | null>(null);
+  const [candidates, setCandidates] = useState<readonly WebRecipeReview[]>([]);
+  const [refusedCount, setRefusedCount] = useState(0);
+  /** Sources already offered, so "show me others" does not repeat itself. */
+  const [seen, setSeen] = useState<readonly string[]>([]);
 
   const [lines, setLines] = useState<LineDraft[]>(
     (recipe?.components ?? []).map((c) => ({
@@ -310,6 +335,60 @@ function RecipeForm({ recipe, done }: { recipe: Recipe | null; done: () => void 
       );
       setSaving(false);
     }
+  };
+
+  /*
+   * THE STUB THIS ACTION IS FOR, captured once rather than re-asked.
+   *
+   * `recipe.components.length === 0` is the stub condition the rest of the app
+   * uses. `lines.length === 0` is the second half: if he has started typing
+   * components here, filling from a page would replace what he wrote — and
+   * "fill" is the wrong word for that. A recipe with no name has nothing to
+   * search for.
+   *
+   * Bound as a value so the non-null narrowing survives into the pick
+   * callback, which is nested far enough that TypeScript cannot carry it.
+   */
+  const stub =
+    recipe !== null && recipe.components.length === 0 && lines.length === 0 && name.trim() !== ''
+      ? recipe
+      : null;
+
+  /** Ask the same search `ScanMenu` uses, by this recipe's name. */
+  const findOnline = async (): Promise<void> => {
+    setFinding(true);
+    setFindError(null);
+
+    const reply = await findRecipes(name.trim(), seen, {
+      url: `${import.meta.env.VITE_SUPABASE_URL ?? ''}/functions/v1/find-recipes`,
+      token: (await supabaseClient().auth.getSession()).data.session?.access_token ?? '',
+    });
+
+    setFinding(false);
+
+    if (reply.kind === 'unresolved') {
+      // The function's own words, passed through. "The key is not set" must not
+      // become "no recipes found".
+      setFindError(reply.reason);
+      return;
+    }
+
+    /*
+     * Reviewed HERE, against his own ingredients, by the same matcher every
+     * other import uses. The search function resolved nothing — it reported
+     * what a page said.
+     *
+     * A candidate with no source is refused outright and counted rather than
+     * shown: there is nothing to judge it by, and provenance is the whole basis
+     * on which he is being asked to trust any of this.
+     */
+    const owner = { ingredients: ingredients.state.status === 'ready' ? ingredients.state.data : [] };
+    const outcomes = reply.candidates.map((c) => reviewWebRecipe(c, owner));
+    const kept = outcomes.flatMap((o) => (o.kind === 'reviewed' ? [o.review] : []));
+
+    setCandidates(kept);
+    setRefusedCount(outcomes.length - kept.length);
+    setSeen((prior) => [...prior, ...kept.map((k) => k.sourceUrl)]);
   };
 
   const targetOptions = (kind: LineDraft['kind']) =>
@@ -460,17 +539,59 @@ function RecipeForm({ recipe, done }: { recipe: Recipe | null; done: () => void 
           </div>
         ))}
 
-        <button
-          type="button"
-          onClick={() =>
-            setLines((all) => [
-              ...all,
-              { key: newKey(), kind: 'ingredient', target: '', displayName: '', qty: '', unit: '' },
-            ])
-          }
-        >
-          Add a component
-        </button>
+        <div className="actions">
+          <button
+            type="button"
+            onClick={() =>
+              setLines((all) => [
+                ...all,
+                {
+                  key: newKey(),
+                  kind: 'ingredient',
+                  target: '',
+                  displayName: '',
+                  qty: '',
+                  unit: '',
+                },
+              ])
+            }
+          >
+            Add a component
+          </button>
+
+          {stub !== null && (
+            <button type="button" disabled={finding} onClick={() => void findOnline()}>
+              {finding ? 'Searching…' : candidates.length === 0 ? 'Find it online' : 'Show me others'}
+            </button>
+          )}
+        </div>
+
+        {findError !== null && (
+          <p className="error" role="alert">
+            {findError}
+          </p>
+        )}
+
+        {stub !== null && candidates.length > 0 && (
+          <>
+            <p className="hint muted">
+              Nothing is saved. Picking one opens it here, filled in, for you to check against
+              your own portions first — the quantities below are the page's, not yours.
+            </p>
+
+            {/* The same renderer `ScanMenu` uses. What picking MEANS differs:
+                there it opens a NEW recipe, here it fills THIS one — which is
+                why the draft carries this recipe's id. */}
+            <WebCandidates
+              candidates={candidates}
+              refused={refusedCount}
+              pickLabel="Fill this recipe"
+              onPick={(candidate) =>
+                navigate('/recipes', { state: { draft: fillStub(stub, candidate) } })
+              }
+            />
+          </>
+        )}
       </fieldset>
 
       {/* --- unquantified ----------------------------------------------- */}

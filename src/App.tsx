@@ -32,6 +32,7 @@ import { ScanRecipeCard } from './features/scan/ScanRecipeCard';
 import { ScanInvoice } from './features/scan/ScanInvoice';
 import { ScanMenu } from './features/scan/ScanMenu';
 import { Money } from './features/money/Money';
+import { NotFound } from './features/NotFound';
 import { AskSous } from './features/sous/AskSous';
 import { SousProvider } from './features/sous/SousContext';
 
@@ -162,6 +163,16 @@ export default function App(): ReactNode {
               <Route path="/setup/rates" element={<RateCard />} />
               <Route path="/setup/templates" element={<ServiceTemplates />} />
               <Route path="/setup/backup" element={<BackupScreen />} />
+
+              {/* LAST, and it must stay last: `<Routes>` picks the best match
+                  rather than the first, but a reader scanning this list should
+                  find the catch-all where a catch-all belongs.
+
+                  It exists because of `vercel.json`. The rewrite that makes a
+                  refresh on `/service/shopping` work also answers a typo with
+                  the app and a 200, and before this the typo rendered the shell
+                  around an empty column. */}
+              <Route path="*" element={<NotFound />} />
               </Routes>
             </div>
           </main>

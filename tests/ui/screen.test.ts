@@ -76,6 +76,9 @@ const SCREENS = [
   'features/shopping/Shopping.tsx',
   'features/prep/Prep.tsx',
   'features/packing/Packing.tsx',
+  // Not a feature, but it is a screen and the rules are the rules: one title,
+  // drawn by `Screen`, inside the container that owns the rhythm.
+  'features/NotFound.tsx',
 ] as const;
 
 /** The three rendered INSIDE the Service shell, which draws their title. */
@@ -123,8 +126,10 @@ describe('every screen sits in the container, so every screen has the rhythm', (
   it.each(SCREENS)('%s renders a Screen', (file) => {
     const source = code(file);
 
+    // The depth of the path is not the point and varies — `features/NotFound.tsx`
+    // sits one level up from the rest. That it is THE shared Screen is.
     expect(source, `${file} does not import Screen`).toMatch(
-      /import \{ Screen \} from '\.\.\/\.\.\/ui\/Screen';/,
+      /import \{ Screen \} from '(\.\.\/)+ui\/Screen';/,
     );
     expect(source, `${file} imports Screen without rendering one`).toContain('<Screen');
   });

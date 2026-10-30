@@ -66,9 +66,23 @@ const sources = (dir = ''): readonly string[] =>
 const app = strip(read('App.tsx'));
 
 /** `path` for every `<Route>` App declares, with whether it only redirects. */
-const ROUTES: readonly { readonly path: string; readonly redirectOnly: boolean }[] = [
+const ALL_ROUTES: readonly { readonly path: string; readonly redirectOnly: boolean }[] = [
   ...app.matchAll(/<Route\s+path="([^"]+)"\s+element=\{(<[A-Za-z]+)/g),
 ].map((m) => ({ path: m[1] as string, redirectOnly: m[2] === '<Navigate' }));
+
+/**
+ * The same list WITHOUT the catch-all, and that exclusion is load-bearing.
+ *
+ * `path="*"` matches every string there is. Left in, the audit below would
+ * resolve any destination at all — including a stranded one, if it ever sat
+ * earlier in the file — and report a clean sweep while every link in the app
+ * pointed at the not-found screen. A guard that cannot fail is worse than no
+ * guard, because it reads like reassurance.
+ *
+ * So the catch-all is checked as its own thing, and never counted as somewhere
+ * a link may legitimately lead.
+ */
+const ROUTES = ALL_ROUTES.filter((r) => r.path !== '*');
 
 /** A route pattern as a matcher, so `/library/recipes` resolves `/library/:view`. */
 const matches = (pattern: string, path: string): boolean =>
@@ -137,6 +151,50 @@ describe('the route table still welcomes an old bookmark', () => {
     for (const legacy of ['/jobs', '/today', '/recipes', '/ingredients', '/shopping', '/prep']) {
       expect(redirects, `${legacy} no longer resolves for an old bookmark`).toContain(legacy);
     }
+  });
+
+  it('has the SPA fallback that makes a refresh work at all', () => {
+    /*
+     * UNGUARDED UNTIL NOW, and found by inverting: deleting the rewrite left
+     * every test in this repo green while refreshing `/service/shopping`
+     * returned Vercel's 404. Nothing in `src/` can see a hosting config, so
+     * nothing was looking at it.
+     *
+     * Vercel serves a real file first and only rewrites what it cannot find, so
+     * this does not shadow the bundle, the fonts or anything else in `public/`
+     * — verified on the deployed URL, where the JS, the CSS and the woff2 all
+     * come back as themselves and only the routes come back as `index.html`.
+     *
+     * The Supabase edge functions are on `*.supabase.co` and are not touched by
+     * a rewrite on this domain at all.
+     */
+    const config = JSON.parse(
+      readFileSync(fileURLToPath(new URL('../../vercel.json', import.meta.url)), 'utf8'),
+    ) as { rewrites?: { source: string; destination: string }[] };
+
+    const fallback = config.rewrites?.find((r) => r.destination === '/index.html');
+
+    expect(fallback, 'the SPA fallback is gone — every inner route 404s on refresh').toBeDefined();
+    // A catch-all, not one path at a time: `/service/shopping`, `/scan/invoice`
+    // and everything added next year all depend on it.
+    expect(fallback?.source, 'the fallback no longer catches everything').toMatch(
+      /^\/\(\.\*\)$|^\/:path\*$/,
+    );
+  });
+
+  it('answers a typo with the app’s own screen, not an empty column', () => {
+    /*
+     * `vercel.json` rewrites everything it cannot serve as a file to
+     * `/index.html`, which is what makes refreshing an inner route work — and
+     * the same rewrite hands a mistyped path to the app with a 200. Before the
+     * catch-all, `<Routes>` matched nothing and rendered nothing: header, tabs,
+     * and an empty column between them.
+     */
+    const catchAll = ALL_ROUTES.find((r) => r.path === '*');
+
+    expect(catchAll, 'a mistyped path renders an empty column again').toBeDefined();
+    expect(catchAll?.redirectOnly, 'the catch-all redirects rather than explaining').toBe(false);
+    expect(app).toContain('<Route path="*" element={<NotFound />} />');
   });
 
   it('reads a route table that is actually there', () => {
@@ -304,6 +362,29 @@ describe('a draft placed on the live route reaches the editor', () => {
     expect(html).toContain('Remove this component');
     expect(html).toContain('value="head of garlic"');
     expect(html).toContain('Imported from https://example.test/roast-chicken');
+  });
+
+  it('the not-found screen says WHICH address, so a typo is visible', async () => {
+    /*
+     * The whole value of it over a blank column is that it reads the path back
+     * to him: `/sevice/shopping` is its own diagnosis the moment he sees it.
+     * Rendered rather than read, because the path comes off `useLocation` and a
+     * screen that ignored it would look perfectly fine in the source.
+     */
+    const { NotFound } = await import('../../src/features/NotFound');
+
+    const html = renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        { initialEntries: ['/sevice/shopping'] },
+        createElement(NotFound),
+      ),
+    );
+
+    expect(html, 'the not-found screen does not say what was asked for').toContain(
+      '<strong>/sevice/shopping</strong>',
+    );
+    expect(html, 'no way back').toContain('Go to Jobs');
   });
 
   it('and WITHOUT the state renders the list, so the state is what decides', async () => {

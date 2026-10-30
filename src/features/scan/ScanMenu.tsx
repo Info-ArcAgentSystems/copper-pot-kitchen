@@ -183,7 +183,9 @@ export function ScanMenu(): ReactNode {
                   refused={state.refused}
                   pickLabel="Open in editor"
                   onPick={(candidate) =>
-                    navigate('/recipes', { state: { draft: draftFromWebReview(candidate) } })
+                    // `/library/recipes`, not `/recipes`: the latter is a
+                    // bookmark redirect and a redirect strips the draft.
+                    navigate('/library/recipes', { state: { draft: draftFromWebReview(candidate) } })
                   }
                 />
 

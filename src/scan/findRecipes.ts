@@ -32,7 +32,29 @@ export interface FindOptions {
   readonly token: string;
   /** Injected so this is testable without a network. */
   readonly send?: typeof fetch;
+  /** Overridden in tests so a timeout can be proved in milliseconds. */
+  readonly timeoutMs?: number;
 }
+
+/**
+ * HOW LONG THE OWNER IS ASKED TO WAIT.
+ *
+ * Measured, not picked: two live calls against the deployed function returned
+ * in 21.7s and 22.6s, because it runs a hosted web search and then reads the
+ * pages it finds. So this is not a latency budget — it is the point past which
+ * something has gone wrong and waiting longer will not fix it.
+ *
+ * 60s is roughly two and a half times the observed time. Lower would cancel
+ * searches that were about to succeed, which is worse than slow: he would
+ * retry, wait again, and the retry would be no more likely to land.
+ */
+export const FIND_TIMEOUT_MS = 60_000;
+
+/** "60 seconds", "1 second" — never "0 seconds", which a short test timeout gives. */
+const seconds = (ms: number): string => {
+  const whole = Math.max(1, Math.round(ms / 1000));
+  return `${whole} second${whole === 1 ? '' : 's'}`;
+};
 
 const text = (value: unknown): string | null =>
   typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
@@ -113,6 +135,23 @@ export async function findRecipes(
   options: FindOptions,
 ): Promise<FindReply> {
   const send = options.send ?? fetch;
+  const timeoutMs = options.timeoutMs ?? FIND_TIMEOUT_MS;
+
+  /*
+   * A REQUEST THAT CAN NEVER FINISH IS A SCREEN THAT NEVER CHANGES.
+   *
+   * `fetch` has no timeout of its own. Without this, a function that hangs —
+   * an upstream that never answers, a connection that drops without an error —
+   * leaves the button reading "Searching…" for as long as the tab is open, with
+   * no way back but a reload. The owner cannot tell that from slow.
+   *
+   * It ABORTS as well as stops waiting. Racing a timer against the promise
+   * would free the screen while the request carried on, and a reply landing
+   * after he had given up and retried would set candidates from the attempt he
+   * had already abandoned.
+   */
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), timeoutMs);
 
   let response: Response;
   try {
@@ -123,9 +162,20 @@ export async function findRecipes(
         authorization: `Bearer ${options.token}`,
       },
       body: JSON.stringify({ dish, exclude }),
+      signal: abort.signal,
     });
   } catch {
-    return { kind: 'unresolved', reason: 'Could not reach the recipe search.' };
+    // Said as itself. "Could not reach" is wrong for a search that was reached,
+    // answered slowly and then gave up — and the two want different responses
+    // from him: check the connection, or try a simpler name.
+    return abort.signal.aborted
+      ? {
+          kind: 'unresolved',
+          reason: `The recipe search did not answer within ${seconds(timeoutMs)}, so it was stopped. It usually takes around twenty seconds. Try again, or add the components yourself.`,
+        }
+      : { kind: 'unresolved', reason: 'Could not reach the recipe search.' };
+  } finally {
+    clearTimeout(timer);
   }
 
   if (response.status === 404) {

@@ -1,0 +1,41 @@
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.render.tsbuildinfo",
+    "target": "es2023",
+
+    /* DOM AND vite/client, AND ONLY HERE.
+     *
+     * A test in this project imports a SCREEN and renders it through
+     * `renderToStaticMarkup`. The screen is browser code: it types a change
+     * handler as `EventTarget & HTMLInputElement` and reads `import.meta.env`.
+     * Type-checking a test that imports it means type-checking it, so these two
+     * have to be present or the test cannot exist.
+     *
+     * THIS DOES NOT WIDEN `tsconfig.test.json`, which still has no DOM and no
+     * vite types, and still covers every other test including every engine one.
+     * The split is by filename — `*.render.test.ts` — so a test lands in this
+     * project only by being named as one, and `navigation.render.test.ts`
+     * asserts that the other project's `lib` line has not moved.
+     *
+     * Nothing here needs DOM at RUNTIME. `renderToStaticMarkup` runs no effects
+     * and touches no browser global; vitest still runs these under plain Node.
+     */
+    "lib": ["ES2023", "DOM"],
+    "jsx": "react-jsx",
+    "types": ["node", "vite/client"],
+    "skipLibCheck": true,
+
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["tests/**/*.render.test.ts"]
+}

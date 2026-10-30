@@ -3,7 +3,11 @@
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.test.tsbuildinfo",
     "target": "es2023",
     /* No DOM. The engine and its tests must run under plain Node — if a test ever
-       needs a browser global, that is a signal the engine has stopped being pure. */
+       needs a browser global, that is a signal the engine has stopped being pure.
+
+       A test that IMPORTS A SCREEN needs DOM types, because the screen has them
+       in its own signatures. Those live in `tsconfig.render.json` and are named
+       `*.render.test.ts`, excluded below. This line does not move for them. */
     "lib": ["ES2023"],
 
     /* Lets a test typecheck an import of a .tsx module — `sourceNoticeRender`
@@ -27,5 +31,6 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["tests"]
+  "include": ["tests"],
+  "exclude": ["tests/**/*.render.test.ts"]
 }

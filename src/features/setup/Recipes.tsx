@@ -93,7 +93,8 @@ export function Recipes(): ReactNode {
   const navigate = useNavigate();
 
   /*
-   * A DRAFT ARRIVING FROM THE MENU SEARCH.
+   * A DRAFT ARRIVING FROM A WEB SEARCH — from the menu scanner, or from this
+   * screen's own "find it online".
    *
    * Carried in router state rather than saved anywhere: a web recipe is someone
    * else's portions, and it must not reach shopping, prep or cost before he has
@@ -102,6 +103,14 @@ export function Recipes(): ReactNode {
    *
    * The cost is honest: navigating away loses the draft. That is the same trade
    * the Ask Sous proposal makes, and for the same reason.
+   *
+   * THE DRAFT ARRIVES AT `/library/recipes`, NEVER AT `/recipes`. `/recipes` is
+   * a bookmark redirect now (271f179), and a redirect REPLACES the location:
+   * `<Navigate>` passes no state, so react-router calls `createLocation(…, to,
+   * undefined)` and the default `= null` takes over. The draft is destroyed in
+   * transit, this reads null, and the list renders instead of the editor — which
+   * is exactly what happened to every web import between 27 October and now.
+   * See `tests/ui/navigation.test.ts`.
    */
   const draft = (location.state as { draft?: Recipe } | null)?.draft ?? null;
 
@@ -109,7 +118,7 @@ export function Recipes(): ReactNode {
     return (
       <RecipeForm
         recipe={draft}
-        done={() => navigate('/recipes', { replace: true, state: null })}
+        done={() => navigate('/library/recipes', { replace: true, state: null })}
       />
     );
   }
@@ -358,6 +367,28 @@ function RecipeForm({ recipe, done }: { recipe: Recipe | null; done: () => void 
 
   /** Ask the same search `ScanMenu` uses, by this recipe's name. */
   const findOnline = async (): Promise<void> => {
+    /*
+     * RULE 8, AND THE REASON THIS GUARD IS FIRST.
+     *
+     * Everything below matches the page's ingredients against HIS, and a failed
+     * or still-loading read used to fall back to `[]`. Nothing errored: every
+     * ingredient simply failed to match and came back as unquantified, which is
+     * character-for-character what the screen shows when none of them are in his
+     * library. A broken read, rendered as a legitimate absence — the exact
+     * substitution Rule 8 forbids, and the one the rest of this app guards.
+     *
+     * It is checked here rather than by disabling the button because the button
+     * is where he would look for the reason, and a disabled control gives none.
+     */
+    if (ingredients.state.status !== 'ready') {
+      setFindError(
+        ingredients.state.status === 'error'
+          ? 'Your ingredients could not be loaded, and an import is matched against them. Everything would come back with no quantity, which looks exactly like none of them being in your library. Try again once that read works.'
+          : 'Still loading your ingredients. An import is matched against them, so give it a moment and try again.',
+      );
+      return;
+    }
+
     setFinding(true);
     setFindError(null);
 
@@ -370,7 +401,7 @@ function RecipeForm({ recipe, done }: { recipe: Recipe | null; done: () => void 
 
     if (reply.kind === 'unresolved') {
       // The function's own words, passed through. "The key is not set" must not
-      // become "no recipes found".
+      // become "no recipes found", and a timeout must not either.
       setFindError(reply.reason);
       return;
     }
@@ -384,13 +415,35 @@ function RecipeForm({ recipe, done }: { recipe: Recipe | null; done: () => void 
      * shown: there is nothing to judge it by, and provenance is the whole basis
      * on which he is being asked to trust any of this.
      */
-    const owner = { ingredients: ingredients.state.status === 'ready' ? ingredients.state.data : [] };
+    const owner = { ingredients: ingredients.state.data };
     const outcomes = reply.candidates.map((c) => reviewWebRecipe(c, owner));
     const kept = outcomes.flatMap((o) => (o.kind === 'reviewed' ? [o.review] : []));
 
     setCandidates(kept);
     setRefusedCount(outcomes.length - kept.length);
     setSeen((prior) => [...prior, ...kept.map((k) => k.sourceUrl)]);
+
+    /*
+     * A SEARCH THAT FOUND NOTHING SAYS SO.
+     *
+     * `setCandidates([])` renders nothing at all and the button goes back to
+     * reading "Find it online" — identical to never having pressed it. Twenty
+     * seconds of waiting, and then the screen looks like the tap missed.
+     *
+     * The three endings are different facts and are worded as three:
+     * nothing came back, things came back but none could be checked, or he has
+     * already been shown everything the search can find for this name.
+     */
+    if (kept.length === 0) {
+      const refused = outcomes.length - kept.length;
+      setFindError(
+        refused > 0
+          ? `Found ${refused} page${refused === 1 ? '' : 's'}, but ${refused === 1 ? 'it came' : 'they came'} back with no source link, so there is nothing to check ${refused === 1 ? 'it' : 'them'} against. Try again.`
+          : seen.length > 0
+            ? 'Nothing new this time — you have already seen what the search can find for this name. Try a different name.'
+            : 'Found nothing for that name. Try a different wording, or add the components yourself.',
+      );
+    }
   };
 
   const targetOptions = (kind: LineDraft['kind']) =>
@@ -583,13 +636,16 @@ function RecipeForm({ recipe, done }: { recipe: Recipe | null; done: () => void 
 
             {/* The same renderer `ScanMenu` uses. What picking MEANS differs:
                 there it opens a NEW recipe, here it fills THIS one — which is
-                why the draft carries this recipe's id. */}
+                why the draft carries this recipe's id.
+
+                The LIVE route, not `/recipes`: a redirect would strip the draft
+                off the location and drop us on the list. */}
             <WebCandidates
               candidates={candidates}
               refused={refusedCount}
               pickLabel="Fill this recipe"
               onPick={(candidate) =>
-                navigate('/recipes', { state: { draft: fillStub(stub, candidate) } })
+                navigate('/library/recipes', { state: { draft: fillStub(stub, candidate) } })
               }
             />
           </>

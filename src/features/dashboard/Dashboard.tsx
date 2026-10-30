@@ -262,7 +262,9 @@ export function Dashboard(): ReactNode {
           ------------------------------------------------------------------ */}
       <h2>At a glance</h2>
       <div className="tiles">
-        <Link className="tile" to="/shopping">
+        {/* `/service/shopping`, not `/shopping`: the short one is a bookmark
+            redirect, and arriving through it mounts Service twice. */}
+        <Link className="tile" to="/service/shopping">
           <h3>To buy</h3>
           <dl className="money-figures">
             <Figure label="Lines outstanding" value={String(view.shopping.outstanding)} />

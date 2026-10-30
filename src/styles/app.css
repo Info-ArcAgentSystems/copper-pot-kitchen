@@ -69,35 +69,32 @@ h1 {
 }
 
 /*
- * ONE BIG HEADING PER SCREEN, and this is not it.
- *
- * A section heading was Archivo 16/600 with a hairline under it — close enough
- * in weight to the page title that a screen read as a list of competing
- * headings rather than as one subject with parts. It is an overline now:
- * small, quiet, and clearly subordinate.
- *
- * THIS IS A DELIBERATE PARTIAL REVERSAL of the Steel pass, which removed small
- * uppercase labels from eight places because they were all the SAME treatment
- * and nothing had rank. That reasoning was about sameness, not about uppercase:
- * eight competing overlines are a monotone, but one overline under one big
- * title is a hierarchy. The other seven stay converted.
+ * The hairline is what makes a section a section. It was previously a heading
+ * floating above a list, which is why a long screen read as one undivided run.
  */
 h2 {
-  font-size: var(--size-micro);
+  font-family: var(--font-display);
+  font-size: var(--size-body);
   font-weight: var(--weight-semi);
   line-height: var(--leading-tight);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-muted);
+  letter-spacing: -0.005em;
   margin: 0 0 var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
 }
 
 /*
- * A heading INSIDE a tinted block names the block rather than dividing the
- * page, so it keeps its own colour — the warning's category label is amber,
- * and `\.unresolved-block h2` below is what sets that. The rule that used to
- * strip a hairline here is gone with the hairline.
+ * A heading INSIDE a tinted block is not dividing a page into sections — it is
+ * naming the block it sits in, and the block already has an edge. The rule
+ * there would be a second line a few pixels from the first.
  */
+.unresolved-block > h2,
+.warn > h2,
+.needs-fixing > h2,
+.card > h2 {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
 
 /* A heading that OPENS a card gets no top margin; one that starts a new section
    further down the page needs air above it, or the sections run together. Being

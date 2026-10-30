@@ -20,6 +20,7 @@ import { parseRecipeCard } from '../../scan/parseImage';
 import { reviewRecipeCard, type RecipeCardReview } from '../../scan/recipeCard';
 import { toScaledDataUrl } from './scaleImage';
 import { PhotoGate } from './PhotoGate';
+import { Screen } from '../../ui/Screen';
 import { useAsync } from '../../ui/useAsync';
 import type { DataSource } from '../../ui/sourceState';
 
@@ -108,8 +109,7 @@ export function ScanRecipeCard(): ReactNode {
   };
 
   return (
-    <section>
-      <h1>Scan a recipe card</h1>
+    <Screen title="Scan a recipe card">
       <p className="muted">
         Photograph the card. Nothing is saved until you have read it back and confirmed it.
       </p>
@@ -252,6 +252,6 @@ export function ScanRecipeCard(): ReactNode {
           </p>
         </>
       )}
-    </section>
+    </Screen>
   );
 }

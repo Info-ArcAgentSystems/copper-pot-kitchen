@@ -118,6 +118,8 @@ export function Recipes(): ReactNode {
     <>
     <RecordScreen<Recipe>
       title="Recipes"
+      /* Library draws the title and names the view. See `inShell`. */
+      inShell
       why="the menu is built from them, and prep quantities and shopping are scaled from them"
       addLabel="Add a recipe"
       emptyDescription="Recipes scale to the portions a job needs. Per-person recipes scale linearly; batch recipes round up to whole trays."

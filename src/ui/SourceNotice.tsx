@@ -29,6 +29,7 @@
  */
 
 import type { ReactNode } from 'react';
+import { Screen } from './Screen';
 import type { SourceState } from './sourceState';
 
 export function SourceNotice({
@@ -63,10 +64,5 @@ export function SourceNotice({
 
   if (title === undefined) return body;
 
-  return (
-    <div>
-      <h1>{title}</h1>
-      {body}
-    </div>
-  );
+  return <Screen title={title}>{body}</Screen>;
 }

@@ -36,6 +36,7 @@ import { commitProposal } from '../../sous/commit';
 import { runIntent, type Proposal, type SousData } from '../../sous/tools';
 import { Field } from '../../ui/Field';
 import { useAsync } from '../../ui/useAsync';
+import { Screen } from '../../ui/Screen';
 import { SourceNotice } from '../../ui/SourceNotice';
 import { sourceState, type DataSource } from '../../ui/sourceState';
 import { supabaseClient } from '../../data/client';
@@ -258,9 +259,10 @@ export function AskSous(): ReactNode {
   };
 
   return (
-    <div className="chat">
-      <h1>Ask Sous</h1>
-      <p className="page-sub">Ask about shopping, prep, packing, money or whether a job is ready.</p>
+    <Screen
+      title="Ask Sous"
+      description="Ask about shopping, prep, packing, money or whether a job is ready."
+    >
 
       {exchanges.length === 0 && (
         <p className="muted">
@@ -364,7 +366,7 @@ export function AskSous(): ReactNode {
           {asking ? 'Asking…' : 'Ask'}
         </button>
       </div>
-    </div>
+    </Screen>
   );
 }
 

@@ -26,6 +26,7 @@ import { useNavigate, useParams, Navigate } from 'react-router-dom';
 import { Shopping } from '../shopping/Shopping';
 import { Prep } from '../prep/Prep';
 import { Packing } from '../packing/Packing';
+import { Screen } from '../../ui/Screen';
 import { Segmented, SegmentPanel, type Segment } from '../../ui/Segmented';
 import { Field } from '../../ui/Field';
 import { RANGE_CAPTION, useDateRange } from '../../ui/dateRange';
@@ -60,10 +61,10 @@ function ServiceView({ view, onView }: { view: View; onView: (v: View) => void }
   const range = useDateRange();
 
   return (
-    <section>
-      <h1>Service</h1>
-      <p className="page-sub">Shopping, prep and packing for the jobs in these dates.</p>
-
+    <Screen
+      title="Service"
+      description="Shopping, prep and packing for the jobs in these dates."
+    >
       <Segmented label="Service view" segments={SEGMENTS} active={view} onChange={onView} />
 
       <fieldset className="units">
@@ -82,6 +83,6 @@ function ServiceView({ view, onView }: { view: View; onView: (v: View) => void }
         {view === 'prep' && <Prep range={range} />}
         {view === 'packing' && <Packing range={range} />}
       </SegmentPanel>
-    </section>
+    </Screen>
   );
 }

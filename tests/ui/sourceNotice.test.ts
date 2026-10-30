@@ -52,18 +52,28 @@ const code = (path: string): string => strip(src(path));
  * in the file, so a read added to the screen and forgotten in the gate fails
  * here rather than in a supermarket.
  *
- * `title` is the heading the notice carries when it REPLACES the screen.
- * `inline` means the notice sits inside a screen that still has something worth
- * showing — the scanners keep their instructions and Ask Sous keeps its
- * transcript.
+ * `title` is the heading the notice carries when it REPLACES the screen, and
+ * `whole` is whether it replaces the screen at all. The two come apart on the
+ * three views inside the Service shell: they replace their whole panel, so the
+ * shape of the return is still worth pinning, but they pass NO title, because
+ * `Service` has already drawn one and a second would be the same word twice.
+ *
+ * `whole: false` means the notice sits inside a screen that still has something
+ * worth showing — the scanners keep their instructions, Ask Sous keeps its
+ * transcript, and the two forms keep the form.
  */
 const GATED = [
-  { file: 'features/dashboard/Dashboard.tsx', reads: 6, title: 'Today', gate: 'self' },
-  { file: 'features/shopping/Shopping.tsx', reads: 6, title: 'Shopping', gate: 'self' },
-  { file: 'features/prep/Prep.tsx', reads: 5, title: 'Prep', gate: 'self' },
-  { file: 'features/packing/Packing.tsx', reads: 6, title: 'Packing', gate: 'self' },
-  { file: 'features/money/Money.tsx', reads: 5, title: 'Money', gate: 'self' },
-  { file: 'features/sous/AskSous.tsx', reads: 7, title: null, gate: 'self' },
+  { file: 'features/dashboard/Dashboard.tsx', reads: 6, title: 'Today', whole: true, gate: 'self' },
+  /*
+   * The three views inside the Service shell. Titleless on purpose — see
+   * `whole` above and `tests/ui/screen.test.ts`, which is what stops the
+   * title coming back.
+   */
+  { file: 'features/shopping/Shopping.tsx', reads: 6, title: null, whole: true, gate: 'self' },
+  { file: 'features/prep/Prep.tsx', reads: 5, title: null, whole: true, gate: 'self' },
+  { file: 'features/packing/Packing.tsx', reads: 6, title: null, whole: true, gate: 'self' },
+  { file: 'features/money/Money.tsx', reads: 5, title: 'Money', whole: true, gate: 'self' },
+  { file: 'features/sous/AskSous.tsx', reads: 7, title: null, whole: false, gate: 'self' },
   /*
    * The job form is the eleventh, and the one with the most to lose. Its six
    * reads fed a three-read `ready` boolean, so a failed read took the §4 impact
@@ -80,7 +90,7 @@ const GATED = [
    * `title` is null: this notice sits INSIDE the form, under the heading
    * `RecordScreen` has already rendered.
    */
-  { file: 'features/jobs/Jobs.tsx', reads: 6, title: null, gate: 'self' },
+  { file: 'features/jobs/Jobs.tsx', reads: 6, title: null, whole: false, gate: 'self' },
   /*
    * The recipe form, where a failed read does not stop at silence. Both of its
    * reads fall back to `[]`, so a broken ingredients read renders "Choose an
@@ -89,7 +99,7 @@ const GATED = [
    * production bucket with no gap beside it. The failed read ends up as a tray
    * of something with no ingredients in it, two screens away.
    */
-  { file: 'features/setup/Recipes.tsx', reads: 2, title: null, gate: 'self' },
+  { file: 'features/setup/Recipes.tsx', reads: 2, title: null, whole: false, gate: 'self' },
   /*
    * Ingredients is the one where a failed read does not go quiet — it says
    * something FALSE. `onHandFor` returns undefined both when he has never
@@ -104,17 +114,17 @@ const GATED = [
    * `existingStock !== undefined` in the save path — which protects the row by
    * accident, not by design.
    */
-  { file: 'features/setup/Ingredients.tsx', reads: 3, title: null, gate: 'self' },
+  { file: 'features/setup/Ingredients.tsx', reads: 3, title: null, whole: false, gate: 'self' },
   /*
    * The scanners hand their reads to `PhotoGate`, which owns the photo control
    * and renders the notice for them — so THEY must not decide anything, and the
    * assertions below check the handover instead of the decision.
    * `tests/scan/photoGate.test.ts` covers the gate itself.
    */
-  { file: 'features/scan/ScanJobSheet.tsx', reads: 3, title: null, gate: 'PhotoGate' },
-  { file: 'features/scan/ScanRecipeCard.tsx', reads: 1, title: null, gate: 'PhotoGate' },
-  { file: 'features/scan/ScanMenu.tsx', reads: 1, title: null, gate: 'PhotoGate' },
-  { file: 'features/scan/ScanInvoice.tsx', reads: 2, title: null, gate: 'PhotoGate' },
+  { file: 'features/scan/ScanJobSheet.tsx', reads: 3, title: null, whole: false, gate: 'PhotoGate' },
+  { file: 'features/scan/ScanRecipeCard.tsx', reads: 1, title: null, whole: false, gate: 'PhotoGate' },
+  { file: 'features/scan/ScanMenu.tsx', reads: 1, title: null, whole: false, gate: 'PhotoGate' },
+  { file: 'features/scan/ScanInvoice.tsx', reads: 2, title: null, whole: false, gate: 'PhotoGate' },
 ] as const;
 
 const NOTICE = 'ui/SourceNotice.tsx';
@@ -133,7 +143,7 @@ const before = (source: string, needle: string): string => {
   return at === -1 ? '' : source.slice(Math.max(0, at - 40), at);
 };
 
-describe.each(GATED)('$file', ({ file, reads, title, gate }) => {
+describe.each(GATED)('$file', ({ file, reads, title, whole, gate }) => {
   it('declares every read it waits on, in the owner’s words', () => {
     const source = code(file);
 
@@ -196,15 +206,26 @@ describe.each(GATED)('$file', ({ file, reads, title, gate }) => {
       );
     }
 
-    if (title !== null) {
+    if (whole) {
       /*
        * The whole-screen shape, pinned as one line. A looser check lets the
        * RETURN be gated instead of the element — `if (false && !ready) return
        * <SourceNotice …>` — which is the same defect moved left by one
        * operator.
+       *
+       * Pinned with the title when it carries one and WITHOUT it when it does
+       * not, because "no title" is a decision here rather than an omission: a
+       * `title="Shopping"` added back inside the Service shell is the duplicate
+       * heading returning, and it would pass a check that only looked for a
+       * gated return.
        */
+      const shape =
+        title === null
+          ? 'if \\(!ready\\) return <SourceNotice state=\\{loaded\\} />;'
+          : `if \\(!ready\\) return <SourceNotice state=\\{loaded\\} title="${title}" />;`;
+
       expect(source, 'the whole-screen notice has drifted off its one shape').toMatch(
-        new RegExp(`if \\(!ready\\) return <SourceNotice state=\\{loaded\\} title="${title}" />;`),
+        new RegExp(shape),
       );
     }
 
@@ -276,7 +297,7 @@ describe('the shared record screen — eight screens, one gate', () => {
     // The whole-screen shape, pinned as one line: gating the RETURN instead of
     // the element is the same defect moved left by one operator.
     expect(source).toMatch(
-      /if \(state\.status !== 'ready'\) return <SourceNotice state=\{loaded\} title=\{title\} \/>;/,
+      /if \(state\.status !== 'ready'\)\s+return <SourceNotice state=\{loaded\} title=\{inShell \? undefined : title\} \/>;/,
     );
     expect(before(source, '<SourceNotice'), 'the notice is rendered behind a condition').not.toMatch(
       /(&&|\|\||\?)\s*$/,
@@ -305,7 +326,9 @@ describe('the shared record screen — eight screens, one gate', () => {
     // Position, not presence: a slot rendered BELOW the list would be a notice
     // he reaches after the column it is about. (Compared by index because
     // `strip` leaves the braces of the JSX comment between the two.)
-    const heading = source.indexOf('<h1>{title}</h1>');
+    // The heading is `Screen`'s now, so the thing to compare against is the
+    // element that draws it rather than the `<h1>` that used to be here.
+    const heading = source.indexOf('<Screen title={inShell ? undefined : title}>');
     const slot = source.indexOf('{notice}');
     const list = source.indexOf('state.data.length === 0');
 

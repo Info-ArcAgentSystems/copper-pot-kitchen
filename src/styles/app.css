@@ -37,26 +37,30 @@
    --------------------------------------------------------------------------- */
 
 /*
- * THE ONE-LINE PAGE DESCRIPTION, under every title.
+ * THE TITLE AND ITS ONE-LINE DESCRIPTION — one block, drawn in one place.
  *
  * Step 1.5 of the four: it says what the screen is FOR, in his terms, and it
  * does not restate the title. "Service" is a tab name; "Shopping, prep and
  * packing for the jobs in these dates" is an answer to what he is looking at.
  *
- * Muted and sized between the title and the body, so it reads as a subtitle
- * rather than as the screen's first sentence of content.
+ * `.page-head` is what makes the two a PAIR rather than two items in the
+ * container's rhythm below — 24px between a title and the line explaining it
+ * reads as two separate statements, where 4px reads as one.
+ *
+ * It replaces a sideways selector. `h1:has(+ .page-sub)` reached for its own
+ * sibling to decide its bottom margin, which is a selector compensating for
+ * structure that was not there. `Screen` puts the structure there, so the rule
+ * can simply say what it means.
  */
+.page-head > h1 {
+  margin: 0;
+}
+
 .page-sub {
-  margin: 0 0 var(--space-5);
+  margin: var(--space-1) 0 0;
   color: var(--text-muted);
   font-size: var(--size-small);
   line-height: var(--leading-body);
-}
-
-/* The title loses its bottom gap when a description follows — they are one
-   block, and 16px between them reads as two. */
-h1:has(+ .page-sub) {
-  margin-bottom: var(--space-1);
 }
 
 h1 {
@@ -68,32 +72,102 @@ h1 {
   margin: 0 0 var(--space-4);
 }
 
-/*
- * The hairline is what makes a section a section. It was previously a heading
- * floating above a list, which is why a long screen read as one undivided run.
- */
-h2 {
-  font-family: var(--font-display);
-  font-size: var(--size-body);
-  font-weight: var(--weight-semi);
-  line-height: var(--leading-tight);
-  letter-spacing: -0.005em;
-  margin: 0 0 var(--space-3);
-  padding-bottom: var(--space-2);
-  border-bottom: 1px solid var(--border);
+/* ---------------------------------------------------------------------------
+   ONE SPACING RHYTHM, AND THE CONTAINER OWNS IT.
+
+   Thirty-one rules in this file each gave some block its own bottom margin:
+   `.supplier-group` 24px, `.needs-fixing` 16px, `.money-row` 12px, `.tiles`
+   16px. So the gap between two blocks depended on WHICH TWO they were, a screen
+   that put them in a different order spaced differently, and a block added
+   later got whatever its neighbour happened to declare — or nothing at all.
+
+   The gap is not a property of a supplier group. It is a property of the column
+   things are stacked in, and that is `.screen` (see `src/ui/Screen.tsx`).
+   Spacing a new block is now nobody's job, which is the point.
+
+   `.content` is here for ONE route: Jobs renders the dashboard and the job list
+   as two roots in a fragment, so its blocks are children of the column itself.
+   Every other screen has a single root and this rule matches nothing.
+
+   Adjacent vertical margins collapse, so a block that still declares a LARGER
+   gap of its own keeps it — `.danger-zone` is 32px and stays 32px. This sets
+   the floor, not a ceiling.
+   --------------------------------------------------------------------------- */
+.content > * + *,
+.screen > * + * {
+  margin-top: var(--space-5);
 }
 
 /*
- * A heading INSIDE a tinted block is not dividing a page into sections — it is
- * naming the block it sits in, and the block already has an edge. The rule
- * there would be a second line a few pixels from the first.
+ * A SECTION LABEL — one subject with parts, not a page of rival titles.
+ *
+ * A section heading was Archivo 16/600 with a hairline under it, close enough
+ * in weight to the page title that a screen read as a list of competing
+ * headings. It is an overline now: small, quiet, clearly subordinate.
+ *
+ * A DELIBERATE PARTIAL REVERSAL of the Steel pass, which removed small
+ * uppercase labels from eight places because they were all the SAME treatment
+ * and nothing had rank. That reasoning was about sameness, not about uppercase:
+ * eight competing overlines are a monotone, but one overline under one big
+ * title is a hierarchy.
+ *
+ * THE SCOPING BELOW IS THE PART THAT WAS WRONG THE FIRST TIME. Shipping this
+ * rule alone restyled every h2 in the app, so the warning block's amber
+ * category label, the empty state's title, the impact preview's heading and
+ * every form section heading shrank to 12px uppercase with it. That commit was
+ * reverted and is back here with the other half: a heading that names a block
+ * which already has an EDGE of its own is not dividing the page into sections,
+ * it is the title of the thing it sits in, and it keeps its weight.
  */
-.unresolved-block > h2,
-.warn > h2,
+h2 {
+  font-size: var(--size-micro);
+  font-weight: var(--weight-semi);
+  line-height: var(--leading-tight);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0 0 var(--space-3);
+}
+
+/*
+ * A HEADING THAT NAMES ITS OWN BLOCK keeps the weight it had.
+ *
+ * Every container listed here draws its own edge — a card, a bordered
+ * fieldset, a tinted warning, an empty state, the impact preview. The block is
+ * already separated from the page by that edge, so its heading is a title and
+ * not a divider, and shrinking it to a 12px overline leaves the block looking
+ * headless.
+ *
+ * `text-transform: none` is the load-bearing declaration: the others restore a
+ * size and a weight that are easy to see, while a missing `none` leaves an
+ * owner's own words shouting in capitals.
+ *
+ * The amber warning labels are NOT here. They have their own rule further down
+ * which already sets a size, a weight and the warn colour, and they take
+ * `text-transform: none` there.
+ *
+ * `section.units` is NOT here either, and the difference is worth stating since
+ * the two share a class name. The bordered one is a `<fieldset>` with a
+ * `<legend>`; the plain one is a `<section>` with an `h2`, it draws no box, and
+ * its heading — "Who and where", "Save a backup" — sits on the page surface
+ * over a group of fields. That is a section label, so it takes the overline.
+ * The `fieldset.units > h2` line below is for the bordered one, which uses a
+ * legend today and would want the weight if it ever used a heading.
+ */
+.card > h2,
+fieldset.units > h2,
+.empty > h2,
+.impact > h2,
 .needs-fixing > h2,
-.card > h2 {
-  border-bottom: 0;
-  padding-bottom: 0;
+.money-summary > h2,
+.money-row > h2,
+.pack-job > h2 {
+  font-family: var(--font-display);
+  font-size: var(--size-body);
+  font-weight: var(--weight-semi);
+  letter-spacing: -0.005em;
+  text-transform: none;
+  color: var(--text);
 }
 
 /* A heading that OPENS a card gets no top margin; one that starts a new section
@@ -458,7 +532,12 @@ button:disabled {
 
 .records {
   list-style: none;
-  margin: 0 0 var(--space-4);
+  /* `margin-bottom`, never the shorthand: `margin: 0 0 x` also declares a TOP
+     margin of zero, and at screen level that silently beats the container's
+     rhythm — the list ended up flush against the title above it. Nobody chose
+     that zero; it came free with the shorthand. Same below for the bordered
+     fieldset and the impact preview. */
+  margin-bottom: var(--space-4);
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -654,7 +733,7 @@ fieldset.units {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: var(--space-3);
-  margin: 0 0 var(--space-4);
+  margin-bottom: var(--space-4);
   background: var(--card);
 }
 
@@ -736,7 +815,7 @@ button.link {
   border: 1px solid var(--accent);
   border-radius: var(--radius);
   padding: var(--space-3);
-  margin: 0 0 var(--space-4);
+  margin-bottom: var(--space-4);
   background: var(--accent-subtle);
 }
 
@@ -791,9 +870,12 @@ button.link {
    amber, which is what made it vibrate. Colour now marks the EDGE and names the
    CATEGORY; the content reads like content.
    --------------------------------------------------------------------------- */
+/* No `margin-top`. It used to carry 12px of its own, which is half a rhythm
+   step and won on source order wherever the block sat on a screen — the one
+   thing on the page asking to be looked at, set CLOSER to its neighbour than
+   anything else was. The container spaces it now, like everything else. */
 .unresolved-block,
 .warn {
-  margin-top: var(--space-3);
   padding: var(--space-3);
   border: 1px solid var(--border);
   border-left: 3px solid var(--warn-border);
@@ -802,13 +884,16 @@ button.link {
   color: var(--text);
 }
 
-/* The category label, and the only coloured text in the block. */
+/* The category label, and the only coloured text in the block. `none` because
+   the base `h2` rule uppercases a section label and this is not one — it is the
+   block's own name, and the amber is what carries it. */
 .unresolved-block > h2,
 .warn > h2,
 .warn-label {
   font-size: var(--size-micro);
   font-weight: var(--weight-semi);
   color: var(--warn);
+  text-transform: none;
   margin: 0 0 var(--space-2);
 }
 
@@ -816,6 +901,7 @@ button.link {
   font-size: var(--size-micro);
   font-weight: var(--weight-bold);
   color: var(--warn);
+  text-transform: none;
 }
 
 .unresolved-block ul {
@@ -832,17 +918,13 @@ button.link {
    the number.
    --------------------------------------------------------------------------- */
 
-.supplier-group {
-  margin-bottom: var(--space-5);
-}
-
-/* A supplier and a prep day are the same kind of heading, and now say so once.
-   Same treatment as `.eyebrow`; this adds only the rule beneath it. */
+/* A supplier and a prep day are the TRUE section labels — a name over a run of
+   rows, on the page surface, with no edge of their own. So they take the base
+   `h2` overline as it is, and this adds only the rule beneath it and the
+   tighter gap. The size, weight and colour it used to restate are the base
+   rule's now; stating them twice is how two treatments drift apart. */
 .supplier-group h2,
 .prep-day h2 {
-  font-size: var(--size-micro);
-  font-weight: var(--weight-medium);
-  color: var(--text-muted);
   border-bottom: 1px solid var(--border-strong);
   padding-bottom: var(--space-2);
   margin-bottom: var(--space-2);
@@ -893,7 +975,6 @@ button.link {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: var(--space-3);
-  margin-bottom: var(--space-4);
   background: var(--card);
   box-shadow: var(--shadow-card);
 }
@@ -916,10 +997,6 @@ button.link {
    So the line leads with the thing being made — "5 trays" — and the per-job split
    sits underneath, indented, because that is the second question not the first.
    --------------------------------------------------------------------------- */
-
-.prep-day {
-  margin-bottom: var(--space-5);
-}
 
 .prep-day .today {
   color: var(--accent);
@@ -1003,7 +1080,6 @@ button.link {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: var(--space-3);
-  margin-bottom: var(--space-4);
   background: var(--card);
   box-shadow: var(--shadow-card);
 }
@@ -1076,7 +1152,6 @@ button.link {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: var(--space-3);
-  margin-bottom: var(--space-4);
   background: var(--card);
 }
 
@@ -1093,11 +1168,15 @@ button.link {
    rendered as a dash with no words would be the other failure.
    --------------------------------------------------------------------------- */
 
+/* `align-items: start` so a tile is as tall as what it has to say. Grid rows
+   stretch by default, so the tile with one figure in it was drawn to the height
+   of the tile with four — a tall box of empty card, which reads as something
+   missing rather than as something short. */
 .tiles {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  align-items: start;
   gap: var(--space-3);
-  margin-bottom: var(--space-4);
 }
 
 @media (max-width: 520px) {
@@ -1151,7 +1230,6 @@ button.link {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: var(--space-3);
-  margin-bottom: var(--space-3);
   background: var(--card);
   box-shadow: var(--shadow-card);
 }
@@ -1305,7 +1383,6 @@ section.danger-zone h2 {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  margin-bottom: var(--space-5);
 }
 
 .chat-turn {
@@ -1577,7 +1654,6 @@ section.danger-zone h2 {
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   overflow: hidden;
-  margin-bottom: var(--space-4);
 }
 
 .segmented button {
@@ -1662,7 +1738,6 @@ section.danger-zone h2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-3);
-  margin-top: var(--space-4);
 }
 
 @media (min-width: 620px) {

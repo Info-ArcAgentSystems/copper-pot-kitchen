@@ -85,6 +85,8 @@ export function Ingredients(): ReactNode {
   return (
     <RecordScreen<Ingredient>
       title="Ingredients"
+      /* Library draws the title and names the view. See `inShell`. */
+      inShell
       why="everything bought, priced and consumed is one of them"
       /* The SECOND read. It is its own notice because its failure costs
          something different: the on-hand column, which used to render a broken

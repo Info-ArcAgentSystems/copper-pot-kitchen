@@ -34,6 +34,7 @@ import {
   type Backup,
 } from '../../ui/backup';
 import { Field } from '../../ui/Field';
+import { Screen } from '../../ui/Screen';
 import { useAsync } from '../../ui/useAsync';
 import { useKitchen } from '../../auth/kitchenState';
 
@@ -200,18 +201,16 @@ export function BackupScreen(): ReactNode {
 
   if (data.state.status === 'error') {
     return (
-      <div>
-        <h1>Backup</h1>
+      <Screen title="Backup">
         <p className="error" role="alert">
           Could not read your data, so a backup would be incomplete: {data.state.error.message}
         </p>
-      </div>
+      </Screen>
     );
   }
 
   return (
-    <div>
-      <h1>Backup</h1>
+    <Screen title="Backup">
 
       {status !== null && (
         <p className={status.state === 'current' ? 'muted' : 'unresolved'}>{status.message}</p>
@@ -384,6 +383,6 @@ export function BackupScreen(): ReactNode {
           </>
         )}
       </section>
-    </div>
+    </Screen>
   );
 }

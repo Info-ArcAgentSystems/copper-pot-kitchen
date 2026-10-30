@@ -6,6 +6,7 @@
  */
 
 import { Link } from 'react-router-dom';
+import { Screen } from '../../ui/Screen';
 import type { ReactNode } from 'react';
 
 const SECTIONS = [
@@ -21,9 +22,10 @@ const SECTIONS = [
 
 export function Setup(): ReactNode {
   return (
-    <div>
-      <h1>Setup</h1>
-      <p className="page-sub">Customers, properties, suppliers, rates and backups.</p>
+    <Screen
+      title="Setup"
+      description="Customers, properties, suppliers, rates and backups."
+    >
       <ul className="records">
         {SECTIONS.map((s) => (
           <li key={s.to}>
@@ -34,6 +36,6 @@ export function Setup(): ReactNode {
           </li>
         ))}
       </ul>
-    </div>
+    </Screen>
   );
 }

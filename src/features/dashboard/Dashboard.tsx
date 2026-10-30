@@ -28,8 +28,10 @@ import {
 } from '../../data/repositories';
 import { buildDashboardView } from '../../ui/dashboardView';
 import { BACKUP_STORAGE_KEY } from '../../ui/backup';
+import { Field } from '../../ui/Field';
 import { formatMoney } from '../../ui/form';
 import { useAsync } from '../../ui/useAsync';
+import { Screen } from '../../ui/Screen';
 import { SourceNotice } from '../../ui/SourceNotice';
 import { sourceState, type DataSource } from '../../ui/sourceState';
 import type { Cents } from '../../engine/types';
@@ -172,31 +174,33 @@ export function Dashboard(): ReactNode {
    */
   if (view === null) {
     return (
-      <div>
-        <h1>Today</h1>
+      <Screen title="Today">
         <p className="error" role="alert">
           Today’s figures could not be worked out. Your data is fine — this is a fault in the
           app.
         </p>
-      </div>
+      </Screen>
     );
   }
 
   const money = view.money;
 
   return (
-    <section>
-      <h1>Today</h1>
-      <p className="page-sub">What's coming up in your chosen dates, and where the gaps are.</p>
-
-      <div className="field">
-        <label htmlFor="dash-from">From</label>
-        <input id="dash-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-      </div>
-      <div className="field">
-        <label htmlFor="dash-to">To</label>
-        <input id="dash-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-      </div>
+    <Screen
+      title="Today"
+      description="What's coming up in your chosen dates, and where the gaps are."
+    >
+      {/* The SAME date control as Service and Money. It was two loose `.field`
+          divs, which read as two unrelated blocks once the container owns the
+          rhythm — and it was the only one of the three date-ranged screens that
+          did not box its pair. */}
+      <fieldset className="units">
+        <legend>Which dates</legend>
+        <div className="date-pair">
+          <Field label="From" value={from} onChange={setFrom} type="date" />
+          <Field label="To" value={to} onChange={setTo} type="date" />
+        </div>
+      </fieldset>
 
       {/* ------------------------------------------------------------------ */}
       <h2>Next jobs</h2>
@@ -360,6 +364,6 @@ export function Dashboard(): ReactNode {
           <Link className="qlink" to="/setup/backup">Open backup</Link>
         </p>
       </section>
-    </section>
+    </Screen>
   );
 }

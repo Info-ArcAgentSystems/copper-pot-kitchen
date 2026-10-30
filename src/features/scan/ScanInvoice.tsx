@@ -21,6 +21,7 @@ import { toScaledDataUrl } from './scaleImage';
 import { PhotoGate } from './PhotoGate';
 import { formatMoney } from '../../ui/form';
 import { lineNote } from '../../ui/invoiceView';
+import { Screen } from '../../ui/Screen';
 import { useAsync } from '../../ui/useAsync';
 import type { DataSource } from '../../ui/sourceState';
 import type { Cents } from '../../engine/types';
@@ -106,8 +107,7 @@ export function ScanInvoice(): ReactNode {
   };
 
   return (
-    <section>
-      <h1>Scan an invoice</h1>
+    <Screen title="Scan an invoice">
       <p className="muted">
         Photograph the invoice. Prices are worked out from the quantity and the line total —
         nothing is saved until you have checked them.
@@ -231,6 +231,6 @@ export function ScanInvoice(): ReactNode {
           </p>
         </>
       )}
-    </section>
+    </Screen>
   );
 }

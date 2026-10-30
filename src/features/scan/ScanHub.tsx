@@ -18,6 +18,7 @@
 
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { Screen } from '../../ui/Screen';
 
 /*
  * PLACEHOLDER ICONS.
@@ -62,9 +63,10 @@ const MODES = [
 
 export function ScanHub(): ReactNode {
   return (
-    <section>
-      <h1>Scan</h1>
-      <p className="page-sub">Photograph a page and it becomes a draft you check before anything is saved.</p>
+    <Screen
+      title="Scan"
+      description="Photograph a page and it becomes a draft you check before anything is saved."
+    >
       <div className="scan-grid">
         {MODES.map((mode) => (
           <Link key={mode.to} to={mode.to} className="scan-card">
@@ -74,6 +76,6 @@ export function ScanHub(): ReactNode {
           </Link>
         ))}
       </div>
-    </section>
+    </Screen>
   );
 }

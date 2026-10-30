@@ -12,6 +12,7 @@
 
 import { useState, type ReactNode } from 'react';
 import { EmptyState } from './EmptyState';
+import { Screen } from './Screen';
 import { SourceNotice } from './SourceNotice';
 import { sourceState, type DataSource } from './sourceState';
 import { useAsync } from './useAsync';
@@ -49,6 +50,21 @@ export interface RecordScreenProps<T> {
    * belonged to.
    */
   readonly notice?: ReactNode;
+  /**
+   * True when a SHELL above this one has already drawn the page title.
+   *
+   * Recipes and Ingredients are rendered inside `Library`, which renders
+   * `<h1>Library</h1>` and a segmented control reading Recipes / Ingredients.
+   * This component then rendered `<h1>Recipes</h1>` under both of them, so the
+   * screen opened with two titles, the second one naming the tab the owner had
+   * just tapped. Suppressing it here rather than at the shell because this is
+   * the component that draws it, and `Screen` enforces one title per screen.
+   *
+   * The ADD label survives suppression as a section heading: "Add a recipe" is
+   * new information — he is creating, not browsing — where "Recipes" over a
+   * filled-in form is the tab name a third time.
+   */
+  readonly inShell?: boolean;
 }
 
 export function RecordScreen<T>({
@@ -61,6 +77,7 @@ export function RecordScreen<T>({
   renderRow,
   renderForm,
   notice,
+  inShell = false,
 }: RecordScreenProps<T>): ReactNode {
   const { state, reload } = useAsync(load, []);
   // `undefined` = not editing. `null` = adding. A value = editing that record.
@@ -92,20 +109,22 @@ export function RecordScreen<T>({
    * The multi-read screens keep a `ready` boolean beside `loaded` because they
    * have several states to narrow; here there is nothing to fold together.
    */
-  if (state.status !== 'ready') return <SourceNotice state={loaded} title={title} />;
+  if (state.status !== 'ready')
+    return <SourceNotice state={loaded} title={inShell ? undefined : title} />;
 
   if (editing !== undefined) {
+    const heading = editing === null ? addLabel : title;
+
     return (
-      <div>
-        <h1>{editing === null ? addLabel : title}</h1>
+      <Screen title={inShell ? undefined : heading}>
+        {inShell && editing === null && <h2>{heading}</h2>}
         {renderForm(editing, done)}
-      </div>
+      </Screen>
     );
   }
 
   return (
-    <div>
-      <h1>{title}</h1>
+    <Screen title={inShell ? undefined : title}>
 
       {/* Under the heading, above the list: a second read of the screen's own
           has somewhere to speak without arriving before its own screen. */}
@@ -137,7 +156,7 @@ export function RecordScreen<T>({
           </button>
         </>
       )}
-    </div>
+    </Screen>
   );
 }
 

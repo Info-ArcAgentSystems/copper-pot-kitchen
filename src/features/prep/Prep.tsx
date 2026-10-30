@@ -23,6 +23,7 @@ import { requirementsForRange } from '../../engine/shopping';
 import { buildPrepView } from '../../ui/prepView';
 import { EmptyState } from '../../ui/EmptyState';
 import { useAsync } from '../../ui/useAsync';
+import { Screen } from '../../ui/Screen';
 import { SourceNotice } from '../../ui/SourceNotice';
 import { sourceState, type DataSource } from '../../ui/sourceState';
 import { useDateRange, type DateRange } from '../../ui/dateRange';
@@ -156,15 +157,16 @@ export function Prep({ range }: { range?: DateRange }): ReactNode {
     }
   };
 
-  if (!ready) return <SourceNotice state={loaded} title="Prep" />;
+  if (!ready) return <SourceNotice state={loaded} />;
 
   const nothing = view === null || view.days.length === 0;
 
   return (
-    <div>
-      <h1>Prep</h1>
-      <p className="page-sub">What to make on each day, consolidated across every job.</p>
-
+    <Screen>
+      {/* NO TITLE AND NO DESCRIPTION. `Service` above this renders both, and
+          the segmented control names this view — three statements of the same
+          word before any content. The dates caption says what the window means
+          here, which is the only part this view has of its own. */}
 
       {error !== null && (
         <p className="error" role="alert">
@@ -280,6 +282,6 @@ export function Prep({ range }: { range?: DateRange }): ReactNode {
           </ul>
         </section>
       )}
-    </div>
+    </Screen>
   );
 }

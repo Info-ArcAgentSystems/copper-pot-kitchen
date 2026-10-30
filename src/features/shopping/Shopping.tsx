@@ -27,6 +27,7 @@ import { requirementsForRange, outstandingShopping } from '../../engine/shopping
 import { buildShoppingView, shoppingText } from '../../ui/shoppingView';
 import { EmptyState } from '../../ui/EmptyState';
 import { useAsync } from '../../ui/useAsync';
+import { Screen } from '../../ui/Screen';
 import { SourceNotice } from '../../ui/SourceNotice';
 import { sourceState, type DataSource } from '../../ui/sourceState';
 import { useDateRange, type DateRange } from '../../ui/dateRange';
@@ -208,16 +209,17 @@ export function Shopping({ range }: { range?: DateRange }): ReactNode {
     }
   };
 
-  if (!ready) return <SourceNotice state={loaded} title="Shopping" />;
+  if (!ready) return <SourceNotice state={loaded} />;
 
   const tickFor = (ingredientId: IngredientId) =>
     view?.ticks.find((t) => t.ingredientId === ingredientId);
 
   return (
-    <div>
-      <h1>Shopping</h1>
-      <p className="page-sub">What to buy for these dates, grouped by supplier.</p>
-
+    <Screen>
+      {/* NO TITLE AND NO DESCRIPTION. `Service` above this renders both, and
+          the segmented control names this view — three statements of the same
+          word before any content. The dates caption says what the window means
+          here, which is the only part this view has of its own. */}
 
       {/* The filter, stated. Rule 15 keeps cancelled and completed jobs; it does
           not mean buying for them. */}
@@ -339,6 +341,6 @@ export function Shopping({ range }: { range?: DateRange }): ReactNode {
           Copy for WhatsApp
         </button>
       )}
-    </div>
+    </Screen>
   );
 }

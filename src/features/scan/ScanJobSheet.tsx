@@ -59,6 +59,7 @@ import { toScaledDataUrl } from './scaleImage';
 import { PhotoGate } from './PhotoGate';
 import { ChoiceField, Field } from '../../ui/Field';
 import { EmptyState } from '../../ui/EmptyState';
+import { Screen } from '../../ui/Screen';
 import { useAsync } from '../../ui/useAsync';
 import { useKitchen } from '../../auth/kitchenState';
 import type { DataSource } from '../../ui/sourceState';
@@ -319,8 +320,7 @@ export function ScanJobSheet(): ReactNode {
   );
 
   return (
-    <section>
-      <h1>Scan a job sheet</h1>
+    <Screen title="Scan a job sheet">
       <p className="muted">
         Photograph the sheet, fix anything wrong here, then save. Nothing is written until you
         tap save.
@@ -579,6 +579,6 @@ export function ScanJobSheet(): ReactNode {
           )}
         </>
       )}
-    </section>
+    </Screen>
   );
 }

@@ -26,6 +26,7 @@ import { draftFromWebReview, reviewWebRecipe, type WebRecipeReview } from '../..
 import { WebCandidates } from './WebCandidates';
 import { toScaledDataUrl } from './scaleImage';
 import { PhotoGate } from './PhotoGate';
+import { Screen } from '../../ui/Screen';
 import { useAsync } from '../../ui/useAsync';
 import type { DataSource } from '../../ui/sourceState';
 import type { Ingredient } from '../../engine/types';
@@ -145,8 +146,7 @@ export function ScanMenu(): ReactNode {
   };
 
   return (
-    <section>
-      <h1>Find recipes from a menu</h1>
+    <Screen title="Find recipes from a menu">
       <p className="muted">
         Photograph a menu and Sous will look for recipes for each dish. Nothing is saved — each
         one opens in the recipe editor for you to check and adjust to your own portions first.
@@ -205,6 +205,6 @@ export function ScanMenu(): ReactNode {
         someone else's ingredients — it only counts once you have checked it and saved it
         yourself.
       </p>
-    </section>
+    </Screen>
   );
 }

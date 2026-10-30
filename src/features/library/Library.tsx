@@ -12,6 +12,7 @@ import type { ReactNode } from 'react';
 import { useNavigate, useParams, Navigate } from 'react-router-dom';
 import { Recipes } from '../setup/Recipes';
 import { Ingredients } from '../setup/Ingredients';
+import { Screen } from '../../ui/Screen';
 import { Segmented, SegmentPanel, type Segment } from '../../ui/Segmented';
 
 type View = 'recipes' | 'ingredients';
@@ -31,10 +32,10 @@ export function Library(): ReactNode {
   if (!isView(view)) return <Navigate to="/library/recipes" replace />;
 
   return (
-    <section>
-      <h1>Library</h1>
-      <p className="page-sub">Your recipes and the ingredients they are built from.</p>
-
+    <Screen
+      title="Library"
+      description="Your recipes and the ingredients they are built from."
+    >
       <Segmented
         label="Library view"
         segments={SEGMENTS}
@@ -46,6 +47,6 @@ export function Library(): ReactNode {
         {view === 'recipes' && <Recipes />}
         {view === 'ingredients' && <Ingredients />}
       </SegmentPanel>
-    </section>
+    </Screen>
   );
 }

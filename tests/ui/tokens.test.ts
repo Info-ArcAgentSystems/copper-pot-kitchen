@@ -740,6 +740,13 @@ describe('blue is reserved for acting', () => {
  * So every page carries one line under its title. The guard is that they EXIST
  * and that none of them is filler: a description that restates its own title
  * has cost a line of screen and said nothing.
+ *
+ * SEVEN, not ten. Shopping, Prep and Packing had one each and have none now:
+ * they are the three views inside the Service shell, which carries the title
+ * and the description for all three, and the dates caption says what the window
+ * means on the view you are looking at. A description of their own was the
+ * second one on the screen. `tests/ui/screen.test.ts` is what holds them to it;
+ * a list that still demanded one here would demand the defect back.
  */
 describe('every screen says what it is for', () => {
   const SCREENS = [
@@ -749,9 +756,6 @@ describe('every screen says what it is for', () => {
     ['features/library/Library.tsx', 'Library'],
     ['features/scan/ScanHub.tsx', 'Scan'],
     ['features/setup/Setup.tsx', 'Setup'],
-    ['features/shopping/Shopping.tsx', 'Shopping'],
-    ['features/prep/Prep.tsx', 'Prep'],
-    ['features/packing/Packing.tsx', 'Packing'],
     ['features/sous/AskSous.tsx', 'Ask Sous'],
   ] as const;
 
@@ -760,7 +764,7 @@ describe('every screen says what it is for', () => {
 
   it.each(SCREENS)('%s carries a description that is not its own title', (file, title) => {
     const source = sourceOf(file);
-    const description = /<p className="page-sub">([^<]+)<\/p>/.exec(source)?.[1] ?? '';
+    const description = /description="([^"]+)"/.exec(source)?.[1] ?? '';
 
     expect(description, `${file} has no page description`).not.toBe('');
     // Long enough to carry a thought. "Your jobs." is not a description.
@@ -777,9 +781,7 @@ describe('every screen says what it is for', () => {
      * ten, and it would pass every assertion above. Ten identical descriptions
      * is one description and nine screens that lie about what they do.
      */
-    const all = SCREENS.map(
-      ([file]) => /<p className="page-sub">([^<]+)<\/p>/.exec(sourceOf(file))?.[1] ?? '',
-    );
+    const all = SCREENS.map(([file]) => /description="([^"]+)"/.exec(sourceOf(file))?.[1] ?? '');
 
     expect(new Set(all).size, 'two screens share a description').toBe(all.length);
   });

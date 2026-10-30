@@ -23,6 +23,7 @@ import { requirementsForRange } from '../../engine/shopping';
 import { buildPackingView } from '../../ui/packingView';
 import { EmptyState } from '../../ui/EmptyState';
 import { useAsync } from '../../ui/useAsync';
+import { Screen } from '../../ui/Screen';
 import { SourceNotice } from '../../ui/SourceNotice';
 import { sourceState, type DataSource } from '../../ui/sourceState';
 import { useDateRange, type DateRange } from '../../ui/dateRange';
@@ -181,13 +182,14 @@ export function Packing({ range }: { range?: DateRange }): ReactNode {
     }
   };
 
-  if (!ready) return <SourceNotice state={loaded} title="Packing" />;
+  if (!ready) return <SourceNotice state={loaded} />;
 
   return (
-    <div>
-      <h1>Packing</h1>
-      <p className="page-sub">What goes in the van for each job.</p>
-
+    <Screen>
+      {/* NO TITLE AND NO DESCRIPTION. `Service` above this renders both, and
+          the segmented control names this view — three statements of the same
+          word before any content. The dates caption says what the window means
+          here, which is the only part this view has of its own. */}
 
       <p className="muted">
         {packable.length === 0
@@ -289,6 +291,6 @@ export function Packing({ range }: { range?: DateRange }): ReactNode {
           </ul>
         </section>
       )}
-    </div>
+    </Screen>
   );
 }

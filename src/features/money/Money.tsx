@@ -29,6 +29,7 @@ import { buildMoneyView } from '../../ui/moneyView';
 import { EmptyState } from '../../ui/EmptyState';
 import { Field } from '../../ui/Field';
 import { useAsync } from '../../ui/useAsync';
+import { Screen } from '../../ui/Screen';
 import { SourceNotice } from '../../ui/SourceNotice';
 import { sourceState, type DataSource } from '../../ui/sourceState';
 
@@ -124,9 +125,10 @@ export function Money(): ReactNode {
   if (!ready) return <SourceNotice state={loaded} title="Money" />;
 
   return (
-    <div>
-      <h1>Money</h1>
-      <p className="page-sub">Revenue, food cost and margin for jobs serving in these dates.</p>
+    <Screen
+      title="Money"
+      description="Revenue, food cost and margin for jobs serving in these dates."
+    >
 
       <fieldset className="units">
         <legend>Which dates</legend>
@@ -237,6 +239,6 @@ export function Money(): ReactNode {
           </ul>
         </section>
       )}
-    </div>
+    </Screen>
   );
 }

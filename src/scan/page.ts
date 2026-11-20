@@ -33,6 +33,7 @@
 
 import { reviewJobSheet, type Gap, type JobSheetRead, type OwnerData } from './jobSheet';
 import {
+  createdName,
   draftFromReview,
   draftGaps,
   type CreatedRecords,
@@ -507,17 +508,17 @@ export function settleAcrossPage(
   saved: JobSheetDraft,
   ids: CreatedRecords,
 ): PageDraft {
-  const createdName = (name: NameDraft): string | null =>
-    name.choice.kind === 'create' ? name.choice.name : null;
+  const createdAs = (name: NameDraft): string | null =>
+    name.choice.kind === 'create' ? createdName(name.choice.name) : null;
 
-  const customerName = createdName(saved.customer);
-  const propertyName = createdName(saved.property);
+  const customerName = createdAs(saved.customer);
+  const propertyName = createdAs(saved.property);
 
   const settle = <T extends NameDraft>(name: T, wanted: string | null, id: string | null): T =>
     wanted !== null &&
     id !== null &&
     name.choice.kind === 'create' &&
-    name.choice.name === wanted
+    createdName(name.choice.name) === wanted
       ? { ...name, choice: { kind: 'existing', id, name: wanted } }
       : name;
 
@@ -531,7 +532,11 @@ export function settleAcrossPage(
         property: settle(job.draft.property, propertyName, ids.propertyId),
         dishes: job.draft.dishes.map((dish) =>
           dish.choice.kind === 'create'
-            ? settle(dish, dish.choice.name, ids.recipeIds.get(dish.choice.name) ?? null)
+            ? settle(
+                dish,
+                createdName(dish.choice.name),
+                ids.recipeIds.get(createdName(dish.choice.name)) ?? null,
+              )
             : dish,
         ),
       },

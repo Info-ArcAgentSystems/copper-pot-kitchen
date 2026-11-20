@@ -52,6 +52,7 @@ import {
 } from '../../data/repositories';
 import { commitScannedDraft } from '../../scan/commit';
 import {
+  createdName,
   creationsFromDraft,
   originOf,
   type DietaryDraft,
@@ -75,6 +76,7 @@ import {
   type PageJob,
 } from '../../scan/page';
 import { parseJobSheet } from '../../scan/parseImage';
+import { matchByName } from '../../engine/nameMatch';
 import { toScaledDataUrl } from './scaleImage';
 import { PhotoGate } from './PhotoGate';
 import { ChoiceField, Field } from '../../ui/Field';
@@ -331,12 +333,24 @@ export function ScanJobSheet(): ReactNode {
     return { page: settled, ok: false };
   };
 
+  /*
+   * After any save, his lists are re-read, so a recipe this save created shows
+   * in the next job's "Add a dish" — not only after he leaves and comes back.
+   * Re-read even on a failed save: a partial write still created records.
+   */
+  const reloadLists = (): void => {
+    customers.reload();
+    properties.reload();
+    recipes.reload();
+  };
+
   const saveJob = async (at: number): Promise<void> => {
     if (page === null) return;
     setBusy(true);
     setRefusal(null);
     const { page: next } = await commitOne(page, at);
     setPage(next);
+    reloadLists();
     setBusy(false);
   };
 
@@ -355,6 +369,7 @@ export function ScanJobSheet(): ReactNode {
     }
 
     setPage(current);
+    reloadLists();
     setBusy(false);
   };
 
@@ -391,11 +406,22 @@ export function ScanJobSheet(): ReactNode {
   const headerDated = page === null ? [] : jobs.filter((j) => needsDateConfirm(page, j));
   const blocks = [...new Set(jobs.map((j) => j.meta.block))];
 
+  /** Warns, never switches: a typed name he already has is his call to pick. */
+  const typedDishHint = (choice: NameChoice): string => {
+    if (choice.kind !== 'create') return 'Saved as a new recipe with just its name — add the rest later.';
+    const same = matchByName(recipeList, createdName(choice.name));
+    return same.length > 0
+      ? `You already have ${same.map((r) => `“${r.name}”`).join(' and ')} — pick it from the list instead.`
+      : 'Saved as a new recipe with just its name — add the rest later.';
+  };
+
   /** The heading line: "Both under Pandoras Cottage · Aoife". */
   const underLine = (): string | null => {
     if (blocks.length !== 1 || jobs.length < 2) return null;
     const first = jobs[0]?.draft;
-    const names = [first?.property.read, first?.customer.read].filter(
+    const shown = (n: NameDraft | undefined): string | null | undefined =>
+      n === undefined ? undefined : n.choice.kind === 'none' ? n.read : n.choice.name;
+    const names = [shown(first?.property), shown(first?.customer)].filter(
       (n): n is string => typeof n === 'string' && n !== '',
     );
     return names.length === 0 ? null : `${jobs.length === 2 ? 'Both' : 'All'} under ${names.join(' · ')}`;
@@ -623,10 +649,38 @@ export function ScanJobSheet(): ReactNode {
                   dish.matches.length > 0
                     ? `“${dish.read ?? ''}” matches ${dish.matches.join(' and ')} — pick one.`
                     : dish.read === null
-                      ? 'Added by you — pick the recipe.'
+                      ? 'Pick one of your recipes, or type a new dish below.'
                       : `Read “${dish.read}”${dish.portions !== null ? ` · ${dish.portions} portions` : ''}.`
                 }
               />
+              {/*
+               * A name to CREATE — only where nothing was matched. A dish that
+               * matched two recipes never gets this box: making a third is the
+               * worst of the wrong answers, so he picks one of the two.
+               */}
+              {dish.matches.length === 0 &&
+                (dish.choice.kind === 'create' || dish.choice.kind === 'none') && (
+                  <Field
+                    label={dish.read === null ? 'Or type a new dish' : 'Name it will be created as'}
+                    value={dish.choice.kind === 'create' ? dish.choice.name : ''}
+                    onChange={(v) =>
+                      patchJob(at, {
+                        dishes: d.dishes.map((x, j) =>
+                          j === i
+                            ? {
+                                ...x,
+                                choice:
+                                  v.trim() === ''
+                                    ? { kind: 'none' }
+                                    : { kind: 'create', name: v.replace(/^\s+/, '') },
+                              }
+                            : x,
+                        ),
+                      })
+                    }
+                    hint={typedDishHint(dish.choice)}
+                  />
+                )}
               <button
                 className="sm"
                 type="button"

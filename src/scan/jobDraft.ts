@@ -150,6 +150,48 @@ export function originOf(read: string | null, now: string): FieldOrigin {
   return 'edited';
 }
 
+/**
+ * Words that stay lower case inside a tidied name, unless they come first.
+ * Formatting only: no word is added, dropped, reordered or corrected.
+ */
+const SMALL_WORDS = new Set(['of', 'the', 'and', 'a', 'an', 'in', 'on', 'with', 'de', 'au', 'or']);
+
+/**
+ * The name a record will be CREATED under, when the sheet was written in
+ * capitals. Notebook sheets are often all block capitals, and saving them
+ * as read filled his library with "FULL IRISH" and "PANCAKES".
+ *
+ * Only an all-capitals read is touched — any lower-case letter means he wrote
+ * the case himself, and it is kept exactly. Words with a dot, a digit or an
+ * ampersand ("B.B.Q", "2KG", "M&S") are kept as written, since title-casing
+ * them would change what they say. The sheet's own words stay verbatim in
+ * `read`, shown beside the box as the evidence.
+ */
+export function tidyName(read: string): string {
+  if (!/\p{L}/u.test(read) || /\p{Ll}/u.test(read)) return read;
+
+  let first = true;
+  return read.replace(/[^\s]+/g, (token) => {
+    const isFirst = first;
+    first = false;
+    if (/[.\d&]/.test(token)) return token;
+
+    const lower = token.toLowerCase();
+    const core = lower.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, '');
+    if (!isFirst && SMALL_WORDS.has(core)) return lower;
+
+    // Capitalise the first letter of each hyphen- or apostrophe-free part.
+    return lower.replace(/(^|[-(\/"“])(\p{L})/gu, (_m, lead: string, ch: string) => lead + ch.toUpperCase());
+  });
+}
+
+/**
+ * The exact name a typed or tidied creation is saved, matched and settled
+ * under. The box keeps his keystrokes (so a space can be typed); everything
+ * downstream agrees on this one form.
+ */
+export const createdName = (name: string): string => name.trim().replace(/\s+/g, ' ');
+
 /** A resolved name as a choice. Matched becomes picked; new becomes creatable. */
 function choiceOf<T extends { id: string; name: string }>(resolved: Resolved<T>): NameChoice {
   switch (resolved.kind) {
@@ -158,7 +200,7 @@ function choiceOf<T extends { id: string; name: string }>(resolved: Resolved<T>)
     case 'new':
       // Read cleanly, simply not in his data. The ONE case where creating on
       // save is honest, because nothing was guessed to get here.
-      return { kind: 'create', name: resolved.read };
+      return { kind: 'create', name: tidyName(resolved.read) };
     default:
       /*
        * `ambiguous` and `missing` both land here, and neither may be turned
@@ -331,7 +373,7 @@ const creations = (names: readonly string[]): readonly string[] => [...new Set(n
 
 export function creationsFromDraft(draft: JobSheetDraft): Creations {
   const toCreate = (name: NameDraft): readonly string[] =>
-    name.choice.kind === 'create' ? [name.choice.name] : [];
+    name.choice.kind === 'create' ? [createdName(name.choice.name)] : [];
 
   return {
     customers: creations(toCreate(draft.customer)),
@@ -394,7 +436,9 @@ export function draftToJob(
   draft.dishes.forEach((dish, position) => {
     const recipeId = idOf(
       dish.choice,
-      dish.choice.kind === 'create' ? (created.recipeIds.get(dish.choice.name) ?? null) : null,
+      dish.choice.kind === 'create'
+        ? (created.recipeIds.get(createdName(dish.choice.name)) ?? null)
+        : null,
     );
 
     if (recipeId === null) {

@@ -31,6 +31,7 @@ import {
   type SittingRead,
 } from '../../src/scan/page';
 import { validatePage } from '../../src/scan/parseImage';
+import { creationsFromDraft } from '../../src/scan/jobDraft';
 import type {
   Customer,
   CustomerId,
@@ -367,6 +368,67 @@ describe('saving one job does not make the next one create the same things again
     expect(sunday.dishes[0]?.choice).toEqual({ kind: 'existing', id: 'r-new', name: 'Full Irish' });
     // A recipe that was not created stays a creation.
     expect(sunday.dishes[1]?.choice).toEqual({ kind: 'create', name: 'Pancakes' });
+  });
+});
+
+describe('a page written in block capitals', () => {
+  const CAPS: PageRead = {
+    ...PANDORAS,
+    blocks: [
+      {
+        customer: 'AOIFE',
+        property: 'PANDORAS COTTAGE',
+        sittings: [
+          sitting({
+            dayWritten: 'SUN. 22ND', timeWording: '10AM', guestsWording: '16PPL',
+            dishes: ['10 x FULL IRISH', '3 X PANCAKES'],
+          }),
+        ],
+      },
+    ],
+  };
+
+  it('creates tidy names, and keeps the sheet’s capitals as the evidence', () => {
+    const d = draftPage(CAPS, empty, ids).jobs[0]!.draft;
+
+    expect(d.customer.read).toBe('AOIFE');
+    expect(d.customer.choice).toEqual({ kind: 'create', name: 'Aoife' });
+    expect(d.property.choice).toEqual({ kind: 'create', name: 'Pandoras Cottage' });
+    expect(d.dishes.map((x) => x.read)).toEqual(['FULL IRISH', 'PANCAKES']);
+    expect(d.dishes.map((x) => x.choice)).toEqual([
+      { kind: 'create', name: 'Full Irish' },
+      { kind: 'create', name: 'Pancakes' },
+    ]);
+  });
+
+  it('still matches a capitals read to a recipe he already has', () => {
+    const owner = { ...empty, recipes: [recipe('r1', 'Full Irish')] };
+    const d = draftPage(CAPS, owner, ids).jobs[0]!.draft;
+
+    expect(d.dishes[0]?.choice).toEqual({ kind: 'existing', id: 'r1', name: 'Full Irish' });
+  });
+});
+
+describe('a dish he typed himself', () => {
+  it('is created and settled under its trimmed name, not his stray spaces', () => {
+    const page = draftPage(PANDORAS, empty, ids);
+    const typed = withJob(page, 1, (d) => ({
+      ...d,
+      dishes: [...d.dishes, { read: null, matches: [], choice: { kind: 'create', name: 'Beef  stew ' }, portions: null }],
+    }));
+    const sunday = typed.jobs[1]!.draft;
+
+    expect(creationsFromDraft(sunday).recipes).toContain('Beef stew');
+
+    const settled = settleAcrossPage(typed, sunday, {
+      customerId: null,
+      propertyId: null,
+      recipeIds: new Map([['Beef stew', 'r-stew' as RecipeId]]),
+    });
+
+    expect(settled.jobs[1]!.draft.dishes.at(-1)?.choice).toEqual({
+      kind: 'existing', id: 'r-stew', name: 'Beef stew',
+    });
   });
 });
 

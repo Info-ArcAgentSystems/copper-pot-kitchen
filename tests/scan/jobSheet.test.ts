@@ -99,7 +99,7 @@ describe('a clean sheet reads straight through', () => {
 
     expect(review.customer.kind).toBe('matched');
     expect(review.property.kind).toBe('matched');
-    expect(review.dishes[0]?.kind).toBe('matched');
+    expect(review.dishes[0]?.resolved.kind).toBe('matched');
     expect(review.guests).toBe(24);
     expect(review.serviceDate).toBe('2026-08-22');
     expect(review.gaps).toEqual([]);
@@ -116,7 +116,7 @@ describe('a clean sheet reads straight through', () => {
 
     expect(review.customer.kind).toBe('matched');
     expect(review.property.kind).toBe('matched');
-    expect(review.dishes[0]?.kind).toBe('matched');
+    expect(review.dishes[0]?.resolved.kind).toBe('matched');
   });
 });
 
@@ -186,8 +186,8 @@ describe('anything not already in the owner’s data is flagged NEW, never creat
   it('flags an unknown dish as new, and keeps the known one matched', () => {
     const review = reviewJobSheet(read({ dishes: ['Chicken curry', 'Pavlova'] }), owner);
 
-    expect(review.dishes[0]?.kind).toBe('matched');
-    expect(review.dishes[1]?.kind).toBe('new');
+    expect(review.dishes[0]?.resolved.kind).toBe('matched');
+    expect(review.dishes[1]?.resolved.kind).toBe('new');
     expect(review.newThings).toContainEqual({ what: 'dish', read: 'Pavlova' });
   });
 

@@ -168,6 +168,24 @@ describe('draftToJob — the rows he is confirming', () => {
     expect(result.ok && result.job.guestsConfirmed).toBe(false);
   });
 
+  it('carries a stated per-dish count onto the dish as its portions', () => {
+    // "10 x Chicken curry" → the dish he already has, with 10 portions read off
+    // the sheet rather than left for the buffet split to divide evenly.
+    const result = draftToJob(draftOf({ dishes: ['10 x Chicken curry'] }), noCreations);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.job.dishes.map((d) => d.portions)).toEqual([10]);
+  });
+
+  it('leaves a dish with no stated count null, for the split to derive', () => {
+    const result = draftToJob(draftOf(), noCreations);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.job.dishes.map((d) => d.portions)).toEqual([null]);
+  });
+
   it('wires each created record to the thing that referenced it', () => {
     const draft = draftOf({
       customer: 'Laura',

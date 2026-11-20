@@ -71,6 +71,15 @@ export interface NameDraft {
 }
 
 /**
+ * A dish draft is a name draft plus the per-dish count read off the sheet
+ * ("10 x Full Irish" → 10). Null when the sheet stated none, which leaves the
+ * buffet split to derive it — the count is read here, never invented.
+ */
+export interface DishDraft extends NameDraft {
+  readonly portions: number | null;
+}
+
+/**
  * One dietary requirement off the sheet.
  *
  * Three of these four fields CANNOT come off a photograph, and the scanner does
@@ -106,7 +115,7 @@ export interface JobSheetDraft {
   readonly guests: string;
   /** Rule 12 — his words for a vague count, kept whatever he types in the box. */
   readonly guestsWording: string | null;
-  readonly dishes: readonly NameDraft[];
+  readonly dishes: readonly DishDraft[];
   readonly dietaries: readonly DietaryDraft[];
   readonly notes: string;
 }
@@ -178,7 +187,7 @@ export function draftFromReview(review: JobSheetReview): JobSheetDraft {
      * said "a few" and 18 was his answer to it.
      */
     guestsWording: review.gaps.find((g) => g.field === 'guests')?.saw ?? null,
-    dishes: review.dishes.map(nameDraft),
+    dishes: review.dishes.map((d) => ({ ...nameDraft(d.resolved), portions: d.portions })),
     dietaries: review.dietaries.map((d) => ({
       wording: d.wording,
       dietType: '',
@@ -383,11 +392,12 @@ export function draftToJob(draft: JobSheetDraft, created: CreatedRecords): Draft
       jobId: '' as JobId,
       recipeId: recipeId as RecipeId,
       /*
-       * Null ASKS `applyBuffetSplit` to derive portions from the guest count.
-       * Unchanged from the old path, and still right: the scanner read a menu,
-       * not a portion count. Zero would be worse again — it means "make none".
+       * The count the sheet stated for THIS dish ("10 x Full Irish" → 10), read
+       * and carried here verbatim. Null when the sheet gave none, which ASKS
+       * `applyBuffetSplit` to derive portions from the guest count the way it
+       * always has. Zero is never produced — it would mean "make none".
        */
-      portions: null,
+      portions: dish.portions,
       note: null,
       position,
     });

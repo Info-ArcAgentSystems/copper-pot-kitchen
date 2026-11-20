@@ -266,7 +266,7 @@ export function ScanJobSheet(): ReactNode {
 
       const { customerId, propertyId, recipeIds } = result.ids;
 
-      const settle = (name: NameDraft, id: string | null): NameDraft =>
+      const settle = <T extends NameDraft>(name: T, id: string | null): T =>
         name.choice.kind === 'create' && id !== null
           ? { ...name, choice: { kind: 'existing', id, name: name.choice.name } }
           : name;
@@ -455,7 +455,7 @@ export function ScanJobSheet(): ReactNode {
                   hint={
                     dish.matches.length > 0
                       ? `“${dish.read ?? ''}” matches ${dish.matches.join(' and ')} — pick one.`
-                      : `Read “${dish.read ?? ''}”.`
+                      : `Read “${dish.read ?? ''}”${dish.portions !== null ? ` · ${dish.portions} portions` : ''}.`
                   }
                 />
                 <button

@@ -32,6 +32,7 @@
  */
 
 import { matchByName } from '../engine/nameMatch';
+import { parseDishQuantity } from './dishQuantity';
 import type { Customer, Property, Recipe } from '../engine/types';
 
 /**
@@ -93,6 +94,17 @@ export interface OwnerData {
   readonly recipes: readonly Recipe[];
 }
 
+/**
+ * A dish off the sheet: the recipe it resolved to, plus a per-dish portion count
+ * IF the sheet stated one ("10 x Full Irish" → 10). The count is read, never
+ * guessed — a dish with no number beside it keeps `portions: null`, and the
+ * buffet split derives it from the guest count the way it always has.
+ */
+export interface ReviewedDish {
+  readonly resolved: Resolved<Recipe>;
+  readonly portions: number | null;
+}
+
 export interface JobSheetReview {
   readonly customer: Resolved<Customer>;
   readonly property: Resolved<Property>;
@@ -100,7 +112,7 @@ export interface JobSheetReview {
   readonly serviceTime: string | null;
   readonly serviceType: string | null;
   readonly guests: number | null;
-  readonly dishes: readonly Resolved<Recipe>[];
+  readonly dishes: readonly ReviewedDish[];
   readonly dietaries: readonly { readonly wording: string }[];
   readonly notes: string | null;
   readonly gaps: readonly Gap[];
@@ -132,7 +144,15 @@ function resolve<T extends { id: string; name: string }>(
 export function reviewJobSheet(read: JobSheetRead, owner: OwnerData): JobSheetReview {
   const customer = resolve(owner.customers, read.customer);
   const property = resolve(owner.properties, read.property);
-  const dishes = read.dishes.map((d) => resolve(owner.recipes, d));
+  // Split any stated count ("10 x Full Irish") off the name BEFORE matching, so
+  // the recipe is matched and created as "Full Irish" — not "10 x Full Irish",
+  // which would never match the one he has and would fragment the library into a
+  // new recipe per headcount. The count is read, not invented, and rides along
+  // in `portions` to become the dish's own count on the job.
+  const dishes: ReviewedDish[] = read.dishes.map((d) => {
+    const { name, portions } = parseDishQuantity(d);
+    return { resolved: resolve(owner.recipes, name), portions };
+  });
 
   const gaps: Gap[] = [];
   const newThings: NewThing[] = [];
@@ -171,15 +191,19 @@ export function reviewJobSheet(read: JobSheetRead, owner: OwnerData): JobSheetRe
   nameGap('property', 'The property', property, 'property');
 
   dishes.forEach((d, at) => {
-    if (d.kind === 'new') {
-      newThings.push({ what: 'dish', read: d.read });
-      gaps.push({ field: `dish:${at}`, label: `"${d.read}" is not one of your recipes`, saw: d.read });
-    }
-    if (d.kind === 'ambiguous') {
+    if (d.resolved.kind === 'new') {
+      newThings.push({ what: 'dish', read: d.resolved.read });
       gaps.push({
         field: `dish:${at}`,
-        label: `"${d.read}" matches more than one recipe`,
-        saw: d.matches.join(', '),
+        label: `"${d.resolved.read}" is not one of your recipes`,
+        saw: d.resolved.read,
+      });
+    }
+    if (d.resolved.kind === 'ambiguous') {
+      gaps.push({
+        field: `dish:${at}`,
+        label: `"${d.resolved.read}" matches more than one recipe`,
+        saw: d.resolved.matches.join(', '),
       });
     }
   });

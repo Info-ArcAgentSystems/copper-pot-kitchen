@@ -353,6 +353,38 @@ describe('dishes become recipes he has, or stubs he will have', () => {
   });
 });
 
+describe('a stated per-dish count is split from the recipe name', () => {
+  /*
+   * THE BUG THIS BLOCK EXISTS FOR. A sheet reading "10 x Full Irish" created a
+   * recipe literally called "10 x Full Irish" — which could never match the
+   * "Full Irish" he already had, so every headcount spawned a new recipe, and
+   * the "10" was thrown away. The count comes off the name BEFORE matching, and
+   * rides to the dish as its portions (asserted in jobDraftCommit.test.ts).
+   */
+  it('strips a leading "N x" so it would create "Full Irish", not "10 x Full Irish"', () => {
+    expect(creationsFromDraft(draftOf({ dishes: ['10 x Full Irish'] })).recipes).toEqual([
+      'Full Irish',
+    ]);
+  });
+
+  it('strips a trailing "x N" too', () => {
+    expect(creationsFromDraft(draftOf({ dishes: ['Pavlova x 6'] })).recipes).toEqual(['Pavlova']);
+  });
+
+  it('reuses an existing recipe by its bare name instead of duplicating it', () => {
+    // "10 x Chicken curry" must point at the Chicken curry he already has, not
+    // create a second recipe whose name carries the headcount.
+    const draft = draftOf({ dishes: ['10 x Chicken curry'] });
+
+    expect(draft.dishes[0]?.choice).toEqual({ kind: 'existing', id: 'r1', name: 'Chicken curry' });
+    expect(creationsFromDraft(draft).recipes).toEqual([]);
+  });
+
+  it('leaves a dish with no stated count exactly as written', () => {
+    expect(creationsFromDraft(draftOf({ dishes: ['Cheesecake'] })).recipes).toEqual(['Cheesecake']);
+  });
+});
+
 describe('RULES 9, 12 and 16 — a scanned dietary is wording and nothing else', () => {
   const withAllergy = (): JobSheetDraft =>
     draftOf({ dietaries: [{ wording: 'severe nut allergy — Ciara' }] });

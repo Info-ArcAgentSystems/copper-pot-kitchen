@@ -63,86 +63,173 @@ const CORS: Record<string, string> = {
 };
 
 /**
- * The one tool. Every field nullable, `uncertain` required.
+ * ONE PAGE, SEVERAL BOOKINGS.
  *
- * Nullable is not laziness about types — it is the schema refusing to accept a
- * value the model is not sure of. A required `guests: number` would leave it
- * nothing to return but a guess.
+ * The owner's job sheet is a notebook page, and a page routinely carries more
+ * than one booking — a Friday BBQ and a Sunday breakfast under the same
+ * "Pandoras Cottage · Aoife" heading. The old schema had room for exactly one
+ * job, so the model had to collapse the page and it silently kept whichever
+ * booking it landed on. The same photo produced the Sunday job one morning and
+ * the Friday job that night, and the other booking simply vanished.
+ *
+ * So the shape now mirrors how he writes: `blocks` (a heading — venue and
+ * customer) each holding `sittings` (one booking line and everything under
+ * it). A heading applies to every sitting below it. A line the model cannot
+ * place goes in `unplaced` rather than being dropped.
+ *
+ * THE MODEL STILL INTERPRETS NOTHING. It copies "FRI. 20TH", the page title,
+ * "7 and 7.30pm written together" and "16ppl" verbatim. Combining a day with the
+ * page title into a date, or "16ppl" into 16, happens in the browser, in tested
+ * code (`src/scan/page.ts`), and the owner confirms the result. Every field is
+ * nullable and every sitting carries its own `uncertain` list.
  */
+const SITTING_SCHEMA = {
+  type: 'object',
+  properties: {
+    dayWritten: {
+      type: ['string', 'null'],
+      description:
+        'The day exactly as THIS booking line writes it — "FRI. 20TH", "Sat 21st". Copy it even when it is all the line says about the date.',
+    },
+    serviceDate: {
+      type: ['string', 'null'],
+      description:
+        'YYYY-MM-DD ONLY when this one line states a complete date with day, month and year. Do NOT build a date by combining the line with the page title or any other line — the app does that itself and asks the owner to confirm it. Otherwise null.',
+    },
+    serviceTime: {
+      type: ['string', 'null'],
+      description:
+        'HH:MM, 24-hour, ONLY when one plain time is written. Two times written together, a range, or anything unclear is null — copy the wording into timeWording.',
+    },
+    timeWording: {
+      type: ['string', 'null'],
+      description: 'The time exactly as written, whenever any time is written. Never interpreted.',
+    },
+    serviceType: {
+      type: ['string', 'null'],
+      description:
+        'The style of service as written — BBQ, B.B.Q, buffet, canapes. Words naming the style go here, never in dishes.',
+    },
+    guests: {
+      type: ['integer', 'null'],
+      description:
+        'ONLY when a bare number with nothing attached is written. "16ppl", "a few", "approx 20", "20-25" and anything smudged are null — copy the wording into guestsWording. NEVER estimate, round or pick the middle of a range.',
+    },
+    guestsWording: {
+      type: ['string', 'null'],
+      description: 'The guest count exactly as written, whenever one is written — "16ppl", "a few". Never interpreted.',
+    },
+    dishes: {
+      type: 'array',
+      items: { type: 'string' },
+      description:
+        'Each dish listed under THIS booking, as written, including any count beside it ("10 x Full Irish"). Do not add dishes or courses that are implied but not written.',
+    },
+    dietaries: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { wording: { type: 'string' } },
+        required: ['wording'],
+      },
+      description:
+        'Each dietary note under this booking, copied verbatim including any number in it. Never convert to a count — one guest can hold several requirements.',
+    },
+    notes: { type: ['string', 'null'], description: 'Any other legible note under this booking.' },
+    uncertain: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          field: { type: 'string', description: 'Which field of this booking.' },
+          saw: { type: ['string', 'null'], description: 'What is actually there, if anything.' },
+        },
+        required: ['field', 'saw'],
+      },
+      description:
+        'Every field of this booking you could not read confidently. A field that is null because it is illegible MUST appear here.',
+    },
+  },
+  required: [
+    'dayWritten', 'serviceDate', 'serviceTime', 'timeWording', 'serviceType', 'guests',
+    'guestsWording', 'dishes', 'dietaries', 'notes', 'uncertain',
+  ],
+};
+
 const JOB_SHEET_TOOL = [
   {
     type: 'function',
     function: {
       name: 'job_sheet',
       description:
-        'Report what is legible on a photographed catering job sheet. Report only what is written. Anything unreadable or absent is null, and named in `uncertain`.',
+        'Report EVERY booking legible on a photographed catering job sheet — a page often holds several. Report only what is written. Anything unreadable or absent is null, and named in `uncertain`.',
       parameters: {
         type: 'object',
         properties: {
-          customer: {
+          pageHeader: {
             type: ['string', 'null'],
-            description: 'The customer or client name, exactly as written. Do not correct spelling.',
+            description: 'The title line at the top of the page, verbatim. It often carries the month and year.',
           },
-          property: {
-            type: ['string', 'null'],
-            description: 'The venue, house or address, exactly as written.',
-          },
-          serviceDate: {
-            type: ['string', 'null'],
-            description:
-              'YYYY-MM-DD, ONLY if the sheet states an unambiguous date. A date with no year, or one you had to reason about, is null with an `uncertain` entry naming what you saw.',
-          },
-          serviceTime: { type: ['string', 'null'], description: 'HH:MM, 24-hour, if stated plainly.' },
-          serviceType: {
-            type: ['string', 'null'],
-            description: 'Buffet, BBQ, canapes, and so on — the owner\'s own wording.',
-          },
-          guests: {
-            type: ['integer', 'null'],
-            description:
-              'A guest count ONLY when a plain number is written. "a few", "approx 20", "20-25" and anything smudged are null — put the wording in guestsWording. NEVER estimate, round or pick the middle of a range.',
-          },
-          guestsWording: {
-            type: ['string', 'null'],
-            description: 'The vague or unclear guest wording, copied verbatim. Never interpreted.',
-          },
-          dishes: {
+          blocks: {
             type: 'array',
-            items: { type: 'string' },
-            description: 'Each dish named on the sheet, as written. Do not add courses that are implied but not written.',
-          },
-          dietaries: {
-            type: 'array',
+            description:
+              'One entry per heading on the page. A heading names the venue and the customer, and applies to every booking below it until the next heading.',
             items: {
               type: 'object',
-              properties: { wording: { type: 'string' } },
-              required: ['wording'],
+              properties: {
+                customer: {
+                  type: ['string', 'null'],
+                  description: 'The customer or client name in this heading, exactly as written, without any phone number. Do not correct spelling.',
+                },
+                property: {
+                  type: ['string', 'null'],
+                  description: 'The venue, house or address in this heading, exactly as written.',
+                },
+                sittings: {
+                  type: 'array',
+                  description: 'One entry per booking under this heading. Never merge two bookings, never drop one.',
+                  items: SITTING_SCHEMA,
+                },
+              },
+              required: ['customer', 'property', 'sittings'],
             },
-            description:
-              'Each dietary note, copied verbatim including any number in it. Never convert to a count — one guest can hold several requirements.',
           },
-          notes: { type: ['string', 'null'], description: 'Any other legible note.' },
+          unplaced: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Any line you could not put under a booking, verbatim. Nothing on the page is silently left out.',
+          },
           uncertain: {
             type: 'array',
             items: {
               type: 'object',
               properties: {
-                field: { type: 'string', description: 'Which field above.' },
-                saw: { type: ['string', 'null'], description: 'What is actually there, if anything.' },
+                field: { type: 'string' },
+                saw: { type: ['string', 'null'] },
               },
               required: ['field', 'saw'],
             },
-            description:
-              'Every field you could not read confidently. A field that is null because it is illegible MUST appear here.',
+            description: 'Anything about the page as a whole — its title, its headings — you could not read confidently.',
           },
         },
-        required: ['customer', 'property', 'serviceDate', 'serviceTime', 'serviceType', 'guests', 'guestsWording', 'dishes', 'dietaries', 'notes', 'uncertain'],
+        required: ['pageHeader', 'blocks', 'unplaced', 'uncertain'],
       },
     },
   },
 ];
 
 const JOB_SHEET_SYSTEM = `You read photographs of handwritten catering job sheets and report what is on them.
+
+A PAGE USUALLY HOLDS SEVERAL BOOKINGS. Report every one of them.
+- A HEADING names a venue or a customer, often underlined, often with a phone number. It
+  applies to every booking below it until the next heading. Each heading is one entry in
+  blocks.
+- A BOOKING starts at a line giving a day, a time or a guest count, such as "FRI. 20TH AT
+  7PM FOR 13PPL". The lines indented under it (dishes, the style of service, dietary notes)
+  belong to that booking. Each booking is one entry in its heading's sittings.
+- NEVER merge two bookings into one, and never drop one. Two lines with different days are
+  two bookings, even under the same heading. So are two times on the same day.
+- A line you cannot place under any booking goes in unplaced, verbatim.
 
 YOU REPORT, YOU DO NOT INTERPRET. Copy what is written. Do not correct spelling, do not
 expand abbreviations, do not tidy a name into the one you think was meant.
@@ -153,11 +240,18 @@ becomes food ordered for the wrong number of people, and once saved it is indist
 from something the owner wrote himself. A null costs him ten seconds; a guess costs a job.
 
 In particular:
-- A guest count is a number ONLY when a plain number is written. "a few", "approx 20",
-  "20-25", or anything you are reading through a smudge goes in guestsWording, verbatim,
-  and guests stays null. Never take the middle of a range.
-- A date is YYYY-MM-DD only when the sheet is unambiguous. If the year is missing, or you
-  worked it out from a day name, that is a guess — null, and say what you saw.
+- Copy the page's title line into pageHeader, verbatim — it often carries the month and year.
+- Copy each booking's day exactly as written into dayWritten. Give serviceDate only when
+  that one line states a complete date. Do NOT work a date out by combining a line with the
+  title or with another line; the app does that itself and asks the owner to confirm it.
+- A guest count is a bare number ONLY when nothing is attached to it. "16ppl", "a few",
+  "approx 20", "20-25", or anything you are reading through a smudge goes in guestsWording,
+  verbatim, and guests stays null. Never take the middle of a range.
+- A time is HH:MM only when one plain time is written. Two times written together (7 and
+  7.30pm with a slash between them) is not one time: serviceTime is null and the wording goes
+  in timeWording.
+- Words for the STYLE of service (BBQ, B.B.Q, buffet, canapes) are serviceType, not dishes.
+- Copy a dish exactly as written, including any count beside it ("10 x Full Irish").
 - Dietary notes are copied word for word, including any number in them. Do not turn "3
   vegetarians" into a count of anything: one guest can be vegetarian and coeliac at once, so
   these numbers do not add up and are not yours to add.

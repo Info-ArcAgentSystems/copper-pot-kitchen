@@ -1,38 +1,46 @@
 /**
- * Scan a job sheet: photograph → FIX IN PLACE → save once.
+ * Scan a job sheet: photograph → ONE CARD PER BOOKING → fix in place → save.
  *
- * WHAT THIS SCREEN USED TO BE, and why it had to change. It showed the review
- * and nothing else. Every value was read-only, so the only things he could do
- * with a sheet that was not perfect were leave the screen or throw it away —
- * and `reviewJobSheet` raises a gap for ANY dietary wording on the sheet, which
- * meant a sheet mentioning an allergy could not be saved at all, because there
- * was nowhere to clear it. His actual route was: photograph the sheet, read the
- * result, then type the whole job again on the Jobs screen.
+ * WHAT A JOB SHEET ACTUALLY IS. A notebook page, and a page usually carries
+ * more than one booking — a Friday BBQ and a Sunday breakfast written under one
+ * "Pandoras Cottage · Aoife" heading. This screen used to show exactly one job,
+ * so the scanner silently kept whichever booking it landed on and the other
+ * vanished. Now every booking on the page is its own card (`scan/page.ts`).
  *
- * So the values land in boxes. He corrects what is wrong, the outstanding list
- * recomputes from the boxes as he types, and one Save writes the records and
- * the job together.
+ * THE LAYOUT, and why:
  *
- * NONE OF RULE 8 IS RELAXED BY THAT. What changed is who may fill a gap:
+ *   "N jobs found on this page", and either a check that every line on the
+ *   page was placed in a job or the lines that were not. Nothing is dropped
+ *   without him seeing it.
  *
- *   NOTHING IS PREFILLED that the sheet did not say. An unread date is an empty
- *   box, not the coming Saturday. The chip beside each box says where its value
- *   came from — scanned, edited, or nothing on the sheet — and it is derived by
- *   comparing with the review rather than stored, so it cannot drift.
+ *   ONE "Needs you" list for the whole page, with the answer buttons inside
+ *   each item — not a "still to settle" list at the foot of every card.
  *
- *   THE SHEET'S WORDS STAY VISIBLE. "Sheet said SAT 24TH" sits under the date
- *   box after he corrects it, because the correction is the thing most worth
- *   checking twice.
+ *   The heading once: customer and property apply to every booking written
+ *   under it, because that is how he wrote them.
  *
- *   A NAME MATCHING SEVERAL RECORDS IS STILL NOT CHOSEN FOR HIM. The candidates
- *   are listed in the dropdown and nothing is selected.
+ *   Each job as a short summary he can scan; "Show details" opens the full
+ *   boxes. Each job saves on its own, so the breakfast that is ready does not
+ *   wait for a BBQ whose menu he has not decided.
  *
- *   NEW RECORDS ARE CREATED ON SAVE, NOT BEFORE, and he is shown the list by
- *   name first. Only a name the camera read cleanly and could not find is ever
- *   offered — never one that matched two records, never one it could not read.
+ * NONE OF RULE 8 IS RELAXED BY THAT:
  *
- * The engine is not involved. A scanned sheet is not a calculation; it becomes a
- * job, and every quantity follows from the job through the one cascade.
+ *   A date built from the page title is marked as such and must be confirmed
+ *   before anything saves. Two times written together ("7/7.30pm") become two
+ *   buttons, and neither is picked for him. A missing menu blocks the save until
+ *   he SAYS it is not decided yet.
+ *
+ *   THE SHEET'S WORDS STAY VISIBLE. "Sheet said …" sits under a box after he
+ *   corrects it, because the correction is the thing most worth checking twice.
+ *
+ *   A NAME MATCHING SEVERAL RECORDS IS STILL NOT CHOSEN FOR HIM.
+ *
+ *   NEW RECORDS ARE CREATED ON SAVE, NOT BEFORE, and he is told which by name.
+ *   Once one job on the page creates "Aoife", every other job on the page points
+ *   at that record instead of creating a second one.
+ *
+ * Colours come only from the theme tokens, so the UI refresh restyles this
+ * screen with every other one.
  */
 
 import { useState, type ReactNode } from 'react';
@@ -43,17 +51,29 @@ import {
   recipeRepository,
 } from '../../data/repositories';
 import { commitScannedDraft } from '../../scan/commit';
-import { reviewJobSheet } from '../../scan/jobSheet';
 import {
   creationsFromDraft,
-  draftFromReview,
-  draftGaps,
   originOf,
   type DietaryDraft,
   type JobSheetDraft,
   type NameChoice,
   type NameDraft,
 } from '../../scan/jobDraft';
+import {
+  HEADER_DATE_FIELD,
+  draftPage,
+  jobGaps,
+  markSaved,
+  needsDateConfirm,
+  saveable,
+  setHeading,
+  settleAcrossPage,
+  shortDate,
+  timeQuestion,
+  withJob,
+  type PageDraft,
+  type PageJob,
+} from '../../scan/page';
 import { parseJobSheet } from '../../scan/parseImage';
 import { toScaledDataUrl } from './scaleImage';
 import { PhotoGate } from './PhotoGate';
@@ -63,7 +83,14 @@ import { Screen } from '../../ui/Screen';
 import { useAsync } from '../../ui/useAsync';
 import { useKitchen } from '../../auth/kitchenState';
 import type { DataSource } from '../../ui/sourceState';
-import type { Customer, DietarySeverity, KitchenId, Property, Recipe } from '../../engine/types';
+import type {
+  Customer,
+  DietarySeverity,
+  JobGroupId,
+  KitchenId,
+  Property,
+  Recipe,
+} from '../../engine/types';
 
 /** The chip beside a box: where this value came from, in his words. */
 const CHIP: Record<ReturnType<typeof originOf>, string> = {
@@ -88,11 +115,7 @@ const SEVERITIES = [
 
 /**
  * The options for a name box: his records, plus the scanned name as something
- * to create.
- *
- * The scanned name only appears as an option when the review said `new` — read
- * cleanly and not found. An ambiguous read contributes nothing to create, only
- * its candidates to choose between, with NOTHING selected.
+ * to create — only when the review said `new` (read cleanly, not found).
  */
 function nameOptions<T extends { id: string; name: string }>(
   records: readonly T[],
@@ -110,14 +133,12 @@ function nameOptions<T extends { id: string; name: string }>(
   ];
 }
 
-/** The dropdown's current value, from the choice. */
 const choiceValue = (choice: NameChoice): string => {
   if (choice.kind === 'existing') return choice.id;
   if (choice.kind === 'create') return `new:${choice.name}`;
   return '';
 };
 
-/** And back again. `new:` is the only prefix, so a record id cannot collide. */
 function choiceFrom<T extends { id: string; name: string }>(
   records: readonly T[],
   value: string,
@@ -131,6 +152,38 @@ function choiceFrom<T extends { id: string; name: string }>(
     : { kind: 'existing', id: record.id, name: record.name };
 }
 
+const nameHint = (name: NameDraft): string =>
+  name.matches.length > 0
+    ? `The sheet said “${name.read ?? ''}”, which matches ${name.matches.join(' and ')}. Nothing has been chosen — pick the right one.`
+    : name.read === null
+      ? 'Nothing was read for this.'
+      : name.choice.kind === 'existing'
+        ? `Matched your “${name.choice.name}”.`
+        : `Read “${name.read}”.`;
+
+/** "19:30" → "7:30pm" for a button label. The stored value stays HH:MM. */
+const twelveHour = (hhmm: string): string => {
+  const [h, m] = hhmm.split(':').map(Number);
+  const hour = (h ?? 0) % 12 === 0 ? 12 : (h ?? 0) % 12;
+  return `${hour}:${String(m ?? 0).padStart(2, '0')}${(h ?? 0) >= 12 ? 'pm' : 'am'}`;
+};
+
+/** What a job is, in one line he can scan. Only what the draft holds. */
+function summaryOf(job: PageJob): string {
+  const d = job.draft;
+  const time =
+    d.serviceTime.trim() !== ''
+      ? d.serviceTime.trim()
+      : job.meta.timeOptions.length > 0
+        ? 'time to pick'
+        : 'no time';
+  const guests = d.guests.trim() !== '' ? `${d.guests.trim()} guests` : 'guests not set';
+  const menu =
+    d.dishes.length > 0 ? null : d.menuToBeDecided === true ? 'menu to be decided' : 'no menu yet';
+
+  return [d.serviceType.trim() || null, time, guests, menu].filter((p) => p !== null).join(' · ');
+}
+
 export function ScanJobSheet(): ReactNode {
   const db = supabaseDb();
   const { state: kitchen } = useKitchen();
@@ -141,8 +194,9 @@ export function ScanJobSheet(): ReactNode {
 
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
-  const [draft, setDraft] = useState<JobSheetDraft | null>(null);
-  const [saved, setSaved] = useState<string | null>(null);
+  const [page, setPage] = useState<PageDraft | null>(null);
+  /** Which job cards have their full boxes open. */
+  const [open, setOpen] = useState<ReadonlySet<number>>(new Set());
   /** What a failed save managed to create, so he is not told nothing happened. */
   const [partial, setPartial] = useState<readonly string[]>([]);
 
@@ -179,11 +233,14 @@ export function ScanJobSheet(): ReactNode {
     properties.state.status === 'ready' ? properties.state.data : [];
   const recipeList: readonly Recipe[] = recipes.state.status === 'ready' ? recipes.state.data : [];
 
+  const kitchenId =
+    kitchen.status === 'ready' ? (kitchen.membership.kitchenId as KitchenId) : ('' as KitchenId);
+
   const scan = async (file: File): Promise<void> => {
     setBusy(true);
     setRefusal(null);
-    setDraft(null);
-    setSaved(null);
+    setPage(null);
+    setOpen(new Set());
     setPartial([]);
 
     try {
@@ -203,14 +260,12 @@ export function ScanJobSheet(): ReactNode {
       }
 
       // The model resolved nothing. Names are matched HERE, against his own
-      // records, by the same matcher Ask Sous uses.
-      setDraft(
-        draftFromReview(
-          reviewJobSheet(reply.read, {
-            customers: customerList,
-            properties: propertyList,
-            recipes: recipeList,
-          }),
+      // records, by the same matcher Ask Sous uses — once per booking.
+      setPage(
+        draftPage(
+          reply.page,
+          { customers: customerList, properties: propertyList, recipes: recipeList },
+          () => crypto.randomUUID(),
         ),
       );
     } catch (cause) {
@@ -220,78 +275,88 @@ export function ScanJobSheet(): ReactNode {
     }
   };
 
-  const patch = (change: Partial<JobSheetDraft>): void =>
-    setDraft((current) => (current === null ? null : { ...current, ...change }));
+  const patchJob = (at: number, change: Partial<JobSheetDraft>): void =>
+    setPage((p) => (p === null ? null : withJob(p, at, (d) => ({ ...d, ...change }))));
 
-  const patchDietary = (at: number, change: Partial<DietaryDraft>): void =>
-    setDraft((current) =>
-      current === null
+  const patchDietary = (at: number, index: number, change: Partial<DietaryDraft>): void =>
+    setPage((p) =>
+      p === null
         ? null
-        : {
-            ...current,
-            dietaries: current.dietaries.map((d, i) => (i === at ? { ...d, ...change } : d)),
-          },
+        : withJob(p, at, (d) => ({
+            ...d,
+            dietaries: d.dietaries.map((x, i) => (i === index ? { ...x, ...change } : x)),
+          })),
     );
 
-  /** The ONLY thing on this screen that writes. Rule 7's separate call. */
-  const confirm = async (): Promise<void> => {
-    if (draft === null) return;
+  const openJob = (at: number): void => setOpen((s) => new Set([...s, at]));
+  const toggleJob = (at: number): void =>
+    setOpen((s) => {
+      const next = new Set(s);
+      if (next.has(at)) next.delete(at);
+      else next.add(at);
+      return next;
+    });
 
-    const kitchenId =
-      kitchen.status === 'ready' ? (kitchen.membership.kitchenId as KitchenId) : ('' as KitchenId);
+  /**
+   * Write ONE job. The only thing on this screen that writes — Rule 7's
+   * separate call, fired by his tap.
+   *
+   * Whatever the save created (even on a partial failure) is settled across the
+   * whole page, so the next job points at it instead of creating it again.
+   */
+  const commitOne = async (
+    current: PageDraft,
+    at: number,
+  ): Promise<{ page: PageDraft; ok: boolean }> => {
+    const job = current.jobs[at];
+    if (job === undefined || !saveable(current, at)) return { page: current, ok: false };
 
-    setBusy(true);
-    setRefusal(null);
-    const result = await commitScannedDraft(db, draft, kitchenId);
-    setBusy(false);
+    const result = await commitScannedDraft(
+      db,
+      job.draft,
+      kitchenId,
+      job.group as JobGroupId | null,
+    );
+    const settled = settleAcrossPage(current, job.draft, result.ids);
 
-    if (result.ok) {
-      setSaved(result.jobId);
-      setDraft(null);
-      return;
-    }
+    if (result.ok) return { page: markSaved(settled, at, result.jobId), ok: true };
 
     setRefusal(result.error);
     /*
      * What DID get written. supabase-js has no transaction, so a partial write
      * is real: telling him nothing was saved when two recipes exist is a lie he
      * would discover as duplicates on his next attempt.
-     *
-     * The created records are also turned into `existing` choices, so a retry
-     * points at them instead of making them twice.
      */
     setPartial(result.created.filter((c) => c.ok).map((c) => `${c.kind}: ${c.what}`));
-    setDraft((current) => {
-      if (current === null) return null;
-
-      const { customerId, propertyId, recipeIds } = result.ids;
-
-      const settle = <T extends NameDraft>(name: T, id: string | null): T =>
-        name.choice.kind === 'create' && id !== null
-          ? { ...name, choice: { kind: 'existing', id, name: name.choice.name } }
-          : name;
-
-      return {
-        ...current,
-        customer: settle(current.customer, customerId),
-        property: settle(current.property, propertyId),
-        dishes: current.dishes.map((dish) =>
-          settle(dish, dish.choice.kind === 'create' ? (recipeIds.get(dish.choice.name) ?? null) : null),
-        ),
-      };
-    });
+    return { page: settled, ok: false };
   };
 
-  const gaps = draft === null ? [] : draftGaps(draft);
-  const creations = draft === null ? null : creationsFromDraft(draft);
-  const willCreate =
-    creations === null
-      ? []
-      : [
-          ...creations.customers.map((n) => `a customer, ${n}`),
-          ...creations.properties.map((n) => `a property, ${n}`),
-          ...creations.recipes.map((n) => `a recipe, ${n}`),
-        ];
+  const saveJob = async (at: number): Promise<void> => {
+    if (page === null) return;
+    setBusy(true);
+    setRefusal(null);
+    const { page: next } = await commitOne(page, at);
+    setPage(next);
+    setBusy(false);
+  };
+
+  /** Every job that is ready, one after another, stopping at the first failure. */
+  const saveAllReady = async (): Promise<void> => {
+    if (page === null) return;
+    setBusy(true);
+    setRefusal(null);
+
+    let current = page;
+    for (let at = 0; at < current.jobs.length; at += 1) {
+      if (!saveable(current, at)) continue;
+      const step = await commitOne(current, at);
+      current = step.page;
+      if (!step.ok) break;
+    }
+
+    setPage(current);
+    setBusy(false);
+  };
 
   /** A box, with the chip and the sheet's own words under it. */
   const scannedField = (
@@ -311,24 +376,423 @@ export function ScanJobSheet(): ReactNode {
         numeric={extra.inputMode === 'numeric'}
         hint={extra.hint}
       />
-      {/* Kept under the box AFTER he edits it. A correction is the thing most
-          worth checking twice, and the sheet is the only way to check it. */}
-      {read !== null && read !== value && (
-        <p className="muted">Sheet said “{read}”.</p>
-      )}
+      {read !== null && read !== value && <p className="muted">Sheet said “{read}”.</p>}
     </div>
   );
+
+  // -------------------------------------------------------------------------
+  // Derived, never stored
+  // -------------------------------------------------------------------------
+
+  const jobs = page?.jobs ?? [];
+  const unsaved = jobs.filter((j) => j.savedJobId === null);
+  const readyCount = page === null ? 0 : jobs.filter((_, at) => saveable(page, at)).length;
+  const savedCount = jobs.length - unsaved.length;
+  const headerDated = page === null ? [] : jobs.filter((j) => needsDateConfirm(page, j));
+  const blocks = [...new Set(jobs.map((j) => j.meta.block))];
+
+  /** The heading line: "Both under Pandoras Cottage · Aoife". */
+  const underLine = (): string | null => {
+    if (blocks.length !== 1 || jobs.length < 2) return null;
+    const first = jobs[0]?.draft;
+    const names = [first?.property.read, first?.customer.read].filter(
+      (n): n is string => typeof n === 'string' && n !== '',
+    );
+    return names.length === 0 ? null : `${jobs.length === 2 ? 'Both' : 'All'} under ${names.join(' · ')}`;
+  };
+
+  // -------------------------------------------------------------------------
+  // The pieces
+  // -------------------------------------------------------------------------
+
+  const needsYou = (): ReactNode => {
+    if (page === null) return null;
+
+    const items: ReactNode[] = [];
+
+    if (headerDated.length > 0) {
+      items.push(
+        <li key="dates" className="scan-need">
+          <p className="scan-need-who">All jobs on this page · dates</p>
+          <p className="scan-need-what">These dates were built from the page title — check them</p>
+          <ul className="scan-need-detail">
+            {headerDated.map((job) => {
+              const hd = job.meta.headerDate;
+              const at = jobs.indexOf(job);
+              return (
+                <li key={at}>
+                  Job {at + 1}: {shortDate(job.draft.serviceDate) ?? job.draft.serviceDate}
+                  {job.meta.dayWritten !== null && <> — the line says “{job.meta.dayWritten}”</>}
+                  {hd?.weekdayMatches === true && <> · {hd.weekdayWritten} matches ✓</>}
+                  {hd?.weekdayMatches === false && (
+                    <strong> · {hd.weekdayWritten} does NOT match this date — check it</strong>
+                  )}
+                  {hd?.disagreesWithHeader === true && (
+                    <> · the title lists {hd.headerDays.join('/')}, not this day</>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          {page.header !== null && <p className="muted">Page title: “{page.header}”</p>}
+          <div className="scan-need-actions">
+            <button
+              type="button"
+              className="primary"
+              disabled={busy}
+              onClick={() => setPage((p) => (p === null ? null : { ...p, headerDatesConfirmed: true }))}
+            >
+              The dates are right
+            </button>
+          </div>
+        </li>,
+      );
+    }
+
+    jobs.forEach((job, at) => {
+      if (job.savedJobId !== null) return;
+      const who = `Job ${at + 1} · ${shortDate(job.draft.serviceDate) ?? 'no date yet'}`;
+
+      const times = timeQuestion(job);
+      if (times.length > 0) {
+        items.push(
+          <li key={`time-${at}`} className="scan-need">
+            <p className="scan-need-who">{who} · time</p>
+            <p className="scan-need-what">Which time? The sheet says “{job.meta.timeWording}”</p>
+            <p className="muted">Doesn’t stop the save — but the prep day reads better with it.</p>
+            <div className="scan-need-actions">
+              {times.map((t) => (
+                <button key={t} type="button" onClick={() => patchJob(at, { serviceTime: t })}>
+                  {twelveHour(t)}
+                </button>
+              ))}
+              <button type="button" onClick={() => openJob(at)}>
+                Other
+              </button>
+            </div>
+          </li>,
+        );
+      }
+
+      for (const gap of jobGaps(page, at)) {
+        if (gap.field === HEADER_DATE_FIELD) continue;
+
+        if (gap.field === 'dishes') {
+          items.push(
+            <li key={`menu-${at}`} className="scan-need">
+              <p className="scan-need-who">{who} · menu</p>
+              <p className="scan-need-what">
+                No dishes are written under {job.draft.serviceType.trim() !== '' ? `“${job.draft.serviceType.trim()}”` : 'this booking'}
+              </p>
+              <p className="muted">
+                Add them now, or save it as “menu to be decided” — it stays out of shopping and
+                prep until you add dishes.
+              </p>
+              <div className="scan-need-actions">
+                <button
+                  type="button"
+                  onClick={() => {
+                    patchJob(at, {
+                      dishes: [
+                        ...job.draft.dishes,
+                        { read: null, matches: [], choice: { kind: 'none' }, portions: null },
+                      ],
+                    });
+                    openJob(at);
+                  }}
+                >
+                  Add a dish
+                </button>
+                <button type="button" onClick={() => patchJob(at, { menuToBeDecided: true })}>
+                  Menu to be decided
+                </button>
+              </div>
+            </li>,
+          );
+          continue;
+        }
+
+        items.push(
+          <li key={`${at}-${gap.field}`} className="scan-need">
+            <p className="scan-need-who">{who}</p>
+            <p className="scan-need-what">
+              {gap.label}
+              {gap.saw !== null && <span className="muted"> — saw “{gap.saw}”</span>}
+            </p>
+            <div className="scan-need-actions">
+              <button type="button" onClick={() => openJob(at)}>
+                Fix in Job {at + 1}
+              </button>
+            </div>
+          </li>,
+        );
+      }
+    });
+
+    if (items.length === 0) return null;
+
+    return (
+      <section className="needs-fixing">
+        <h2>Needs you</h2>
+        <p className="muted">Nothing here was guessed. These are what the sheet did not say clearly.</p>
+        <ul className="scan-needs">{items}</ul>
+      </section>
+    );
+  };
+
+  const heading = (block: number): ReactNode => {
+    if (page === null) return null;
+    const inBlock = jobs.filter((j) => j.meta.block === block);
+    const lead = inBlock.find((j) => j.savedJobId === null) ?? inBlock[0];
+    if (lead === undefined) return null;
+
+    const title =
+      inBlock.length > 1 ? `From the heading — applies to all ${inBlock.length} jobs` : 'Who and where';
+
+    return (
+      <section key={`heading-${block}`} className="units">
+        <h2>{title}</h2>
+        <ChoiceField
+          label="Customer"
+          value={choiceValue(lead.draft.customer.choice)}
+          options={nameOptions(customerList, lead.draft.customer)}
+          onChange={(v) =>
+            setPage((p) => (p === null ? null : setHeading(p, block, 'customer', choiceFrom(customerList, v))))
+          }
+          hint={nameHint(lead.draft.customer)}
+        />
+        <ChoiceField
+          label="Property"
+          value={choiceValue(lead.draft.property.choice)}
+          options={nameOptions(propertyList, lead.draft.property)}
+          onChange={(v) =>
+            setPage((p) => (p === null ? null : setHeading(p, block, 'property', choiceFrom(propertyList, v))))
+          }
+          hint={nameHint(lead.draft.property)}
+        />
+      </section>
+    );
+  };
+
+  const details = (at: number, job: PageJob): ReactNode => {
+    const d = job.draft;
+    return (
+      <div className="scan-job-details">
+        {scannedField('Date', d.from.serviceDate, d.serviceDate, (v) => patchJob(at, { serviceDate: v }), {
+          type: 'date',
+          hint: job.meta.dateFrom === 'header' ? 'Built from the line’s day and the page title.' : undefined,
+        })}
+        {scannedField('Time', d.from.serviceTime, d.serviceTime, (v) => patchJob(at, { serviceTime: v }), {
+          hint: job.meta.timeWording !== null ? `The sheet says “${job.meta.timeWording}”.` : undefined,
+        })}
+        {scannedField('Service type', d.from.serviceType, d.serviceType, (v) => patchJob(at, { serviceType: v }), {
+          hint: 'Must match a rate-card service type exactly for a rate to apply.',
+        })}
+        {scannedField(
+          'Guests',
+          d.from.guests === null ? null : String(d.from.guests),
+          d.guests,
+          (v) => patchJob(at, { guests: v }),
+          {
+            inputMode: 'numeric',
+            hint: job.meta.guestsWording !== null ? `Read “${job.meta.guestsWording}”.` : undefined,
+          },
+        )}
+
+        {/* RULE 12. His words for a vague count, kept beside the box. */}
+        {d.guestsWording !== null && (
+          <p className="unresolved">
+            The sheet said “{d.guestsWording}”, which is not a number and has not been turned into
+            one. Put the figure in the box when you know it.
+          </p>
+        )}
+
+        <div className="scan-job-dishes">
+          {d.dishes.map((dish, i) => (
+            <div key={i} className="line">
+              <ChoiceField
+                label={`Dish ${i + 1}`}
+                value={choiceValue(dish.choice)}
+                options={nameOptions(recipeList, dish)}
+                onChange={(v) =>
+                  patchJob(at, {
+                    dishes: d.dishes.map((x, j) => (j === i ? { ...x, choice: choiceFrom(recipeList, v) } : x)),
+                  })
+                }
+                hint={
+                  dish.matches.length > 0
+                    ? `“${dish.read ?? ''}” matches ${dish.matches.join(' and ')} — pick one.`
+                    : dish.read === null
+                      ? 'Added by you — pick the recipe.'
+                      : `Read “${dish.read}”${dish.portions !== null ? ` · ${dish.portions} portions` : ''}.`
+                }
+              />
+              <button
+                className="sm"
+                type="button"
+                onClick={() => patchJob(at, { dishes: d.dishes.filter((_, j) => j !== i) })}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+          <button
+            className="sm"
+            type="button"
+            onClick={() =>
+              patchJob(at, {
+                dishes: [...d.dishes, { read: null, matches: [], choice: { kind: 'none' }, portions: null }],
+              })
+            }
+          >
+            Add a dish
+          </button>
+        </div>
+
+        {/* RULES 9, 12 AND 16. The wording is the sheet's; the three fields
+            beside it cannot come off a photograph, so he sets them. */}
+        {d.dietaries.length > 0 && (
+          <section className="needs-fixing">
+            <h2>Dietary requirements — these need you</h2>
+            <p>
+              Kept exactly as the sheet had it. What kind of requirement it is and how serious it is
+              are not on the photograph and have not been guessed — a possible conflict is for you
+              to review, and nothing here will call anything safe.
+            </p>
+
+            {d.dietaries.map((dietary, i) => (
+              <div key={i} className="line">
+                <p className="unresolved">“{dietary.wording}”</p>
+                <Field
+                  label="What is it"
+                  value={dietary.dietType}
+                  onChange={(v) => patchDietary(at, i, { dietType: v })}
+                  placeholder="nut allergy"
+                  hint="Your own wording. There is no built-in list of diets."
+                />
+                <ChoiceField
+                  label="How serious"
+                  value={dietary.severity ?? ''}
+                  options={SEVERITIES}
+                  onChange={(v) =>
+                    patchDietary(at, i, { severity: v === '' ? null : (v as DietarySeverity) })
+                  }
+                  hint="Not set until you choose. Nothing is assumed from the wording."
+                />
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={dietary.excludesMeat}
+                    onChange={(e) => patchDietary(at, i, { excludesMeat: e.target.checked })}
+                  />
+                  This person eats no meat
+                </label>
+                <p className="hint muted">
+                  Tick only if you mean it — on a BBQ this changes how much meat is bought.
+                </p>
+              </div>
+            ))}
+          </section>
+        )}
+
+        <Field label="Notes" value={d.notes} onChange={(v) => patchJob(at, { notes: v })} multiline />
+      </div>
+    );
+  };
+
+  const jobCard = (job: PageJob, at: number): ReactNode => {
+    if (page === null) return null;
+    const d = job.draft;
+    const gaps = jobGaps(page, at);
+    const isOpen = open.has(at);
+    const newRecipes = creationsFromDraft(d).recipes;
+
+    const status =
+      job.savedJobId !== null
+        ? { text: 'Saved', cls: 'scan-pill done' }
+        : gaps.length === 0
+          ? { text: 'Ready', cls: 'scan-pill done' }
+          : { text: `${gaps.length} to fix`, cls: 'scan-pill' };
+
+    return (
+      <article key={at} className="scan-job">
+        <header className="scan-job-head">
+          <div>
+            <p className="scan-job-title">
+              Job {at + 1} · {shortDate(d.serviceDate) ?? 'No date yet'}
+            </p>
+            <p className="muted">{summaryOf(job)}</p>
+          </div>
+          <span className={status.cls}>{status.text}</span>
+        </header>
+
+        {d.dishes.length > 0 ? (
+          <ul className="scan-dishes">
+            {d.dishes.map((dish, i) => (
+              <li key={i}>
+                <span>
+                  {dish.choice.kind === 'none' ? (dish.read ?? 'A dish to choose') : dish.choice.name}
+                </span>
+                {dish.portions !== null && <span className="scan-num">× {dish.portions}</span>}
+              </li>
+            ))}
+          </ul>
+        ) : d.menuToBeDecided === true ? (
+          <p className="muted">
+            Menu to be decided — kept out of shopping and prep until you add dishes.{' '}
+            {job.savedJobId === null && (
+              <button type="button" className="sm" onClick={() => patchJob(at, { menuToBeDecided: false })}>
+                Undo
+              </button>
+            )}
+          </p>
+        ) : (
+          <p className="muted">No dishes are written under this booking.</p>
+        )}
+
+        {newRecipes.length > 0 && job.savedJobId === null && (
+          <p className="muted">
+            Creates {newRecipes.length === 1 ? 'a new recipe' : `${newRecipes.length} new recipes`} (
+            {newRecipes.join(', ')}) — names only. They won’t be bought or costed until you add their
+            ingredients.
+          </p>
+        )}
+
+        {job.savedJobId !== null ? (
+          <p role="status">Saved as a new enquiry — open it on the Jobs screen.</p>
+        ) : (
+          <div className="actions">
+            <button type="button" onClick={() => toggleJob(at)}>
+              {isOpen ? 'Hide details' : 'Show details'}
+            </button>
+            <button
+              type="button"
+              className="primary scan-job-save"
+              disabled={busy || !saveable(page, at)}
+              onClick={() => void saveJob(at)}
+            >
+              {busy ? 'Saving…' : 'Save this job'}
+            </button>
+          </div>
+        )}
+
+        {isOpen && job.savedJobId === null && details(at, job)}
+      </article>
+    );
+  };
+
+  // -------------------------------------------------------------------------
 
   return (
     <Screen title="Scan a job sheet">
       <p className="muted">
-        Photograph the sheet, fix anything wrong here, then save. Nothing is written until you
-        tap save.
+        Photograph the sheet, fix anything wrong here, then save. Nothing is written until you tap
+        save.
       </p>
 
       <PhotoGate sources={sources} busy={busy} onFile={(file) => void scan(file)} />
 
-      {busy && <p className="muted">Reading it…</p>}
+      {busy && page === null && <p className="muted">Reading it…</p>}
 
       {refusal !== null && (
         <p className="error" role="alert">
@@ -339,9 +803,7 @@ export function ScanJobSheet(): ReactNode {
       {partial.length > 0 && (
         <section className="unresolved-block">
           <h2>These were created before it failed</h2>
-          <p>
-            They already exist, so saving again will use them rather than making them twice.
-          </p>
+          <p>They already exist, so saving again will use them rather than making them twice.</p>
           <ul>
             {partial.map((p) => (
               <li key={p}>{p}</li>
@@ -350,231 +812,87 @@ export function ScanJobSheet(): ReactNode {
         </section>
       )}
 
-      {saved !== null && (
-        <p role="status">
-          Saved as a new enquiry. Open it on the Jobs screen to allocate portions and name the
-          guests behind any dietary.
-        </p>
-      )}
-
-      {draft === null && !busy && refusal === null && saved === null && (
+      {page === null && !busy && refusal === null && (
         <EmptyState
           title="Nothing scanned yet"
-          description="A photo of a job sheet becomes a job you can correct here and save in one go."
+          description="Photograph a whole page — every booking on it becomes a job you can check here and save."
         />
       )}
 
-      {draft !== null && (
+      {page !== null && (
         <>
           <section className="units">
-            <h2>Who and where</h2>
-
-            <ChoiceField
-              label="Customer"
-              value={choiceValue(draft.customer.choice)}
-              options={nameOptions(customerList, draft.customer)}
-              onChange={(v) =>
-                patch({ customer: { ...draft.customer, choice: choiceFrom(customerList, v) } })
-              }
-              hint={
-                draft.customer.matches.length > 0
-                  ? `The sheet said “${draft.customer.read ?? ''}”, which matches ${draft.customer.matches.join(' and ')}. Nothing has been chosen — pick the right one.`
-                  : draft.customer.read === null
-                    ? 'Nothing was read for this.'
-                    : `Read “${draft.customer.read}”.`
-              }
-            />
-
-            <ChoiceField
-              label="Property"
-              value={choiceValue(draft.property.choice)}
-              options={nameOptions(propertyList, draft.property)}
-              onChange={(v) =>
-                patch({ property: { ...draft.property, choice: choiceFrom(propertyList, v) } })
-              }
-              hint={
-                draft.property.matches.length > 0
-                  ? `The sheet said “${draft.property.read ?? ''}”, which matches ${draft.property.matches.join(' and ')}. Nothing has been chosen — pick the right one.`
-                  : draft.property.read === null
-                    ? 'Nothing was read for this.'
-                    : `Read “${draft.property.read}”.`
-              }
-            />
-          </section>
-
-          <section className="units">
-            <h2>When</h2>
-
-            {scannedField('Date', draft.from.serviceDate, draft.serviceDate, (v) =>
-              patch({ serviceDate: v }),
-              { type: 'date' },
-            )}
-            {scannedField('Time', draft.from.serviceTime, draft.serviceTime, (v) =>
-              patch({ serviceTime: v }),
-            )}
-            {scannedField('Service type', draft.from.serviceType, draft.serviceType, (v) =>
-              patch({ serviceType: v }),
-              { hint: 'Must match a rate-card service type exactly for a rate to apply.' },
-            )}
-            {scannedField(
-              'Guests',
-              draft.from.guests === null ? null : String(draft.from.guests),
-              draft.guests,
-              (v) => patch({ guests: v }),
-              { inputMode: 'numeric' },
-            )}
-
-            {/* RULE 12. His words for a vague count, kept beside the box and
-                kept after he fills it: 18 is his answer, "a few" is what he is
-                answering. */}
-            {draft.guestsWording !== null && (
-              <p className="unresolved">
-                The sheet said “{draft.guestsWording}”, which is not a number and has not been
-                turned into one. Put the figure in the box when you know it.
-              </p>
-            )}
-          </section>
-
-          <section className="units">
-            <h2>Dishes</h2>
-            {draft.dishes.length === 0 && <p className="muted">No dishes were read.</p>}
-
-            {draft.dishes.map((dish, at) => (
-              <div key={at} className="line">
-                <ChoiceField
-                  label={`Dish ${at + 1}`}
-                  value={choiceValue(dish.choice)}
-                  options={nameOptions(recipeList, dish)}
-                  onChange={(v) =>
-                    patch({
-                      dishes: draft.dishes.map((d, i) =>
-                        i === at ? { ...d, choice: choiceFrom(recipeList, v) } : d,
-                      ),
-                    })
-                  }
-                  hint={
-                    dish.matches.length > 0
-                      ? `“${dish.read ?? ''}” matches ${dish.matches.join(' and ')} — pick one.`
-                      : `Read “${dish.read ?? ''}”${dish.portions !== null ? ` · ${dish.portions} portions` : ''}.`
-                  }
-                />
-                <button
-                  className="sm"
-                  type="button"
-                  onClick={() => patch({ dishes: draft.dishes.filter((_, i) => i !== at) })}
-                >
-                  Remove
-                </button>
+            <h2>On this page</h2>
+            <p className="scan-count">
+              {jobs.length === 0
+                ? 'No bookings found on this page'
+                : `${jobs.length} ${jobs.length === 1 ? 'job' : 'jobs'} found on this page`}
+            </p>
+            {underLine() !== null && <p className="muted">{underLine()}</p>}
+            {page.unplaced.length === 0 ? (
+              jobs.length > 0 && <p className="scan-placed">✓ Every line on the page was placed in a job</p>
+            ) : (
+              <div className="unresolved">
+                <p>These lines were read but not placed in any job — check whether they belong to one:</p>
+                <ul>
+                  {page.unplaced.map((line) => (
+                    <li key={line}>“{line}”</li>
+                  ))}
+                </ul>
               </div>
-            ))}
+            )}
+            {page.uncertain.length > 0 && (
+              <p className="muted">
+                The scanner was unsure about:{' '}
+                {page.uncertain.map((u) => (u.saw === null ? u.field : `${u.field} (“${u.saw}”)`)).join('; ')}
+              </p>
+            )}
           </section>
 
-          {/* RULES 9, 12 AND 16. The wording is the sheet's; the three fields
-              beside it cannot come off a photograph, so he sets them. The
-              requirement is saved UNRESOLVED, which under Rule 12 blocks exact
-              purchase quantities until he names the guests on the job screen. */}
-          {draft.dietaries.length > 0 && (
-            <section className="needs-fixing">
-              <h2>Dietary requirements — these need you</h2>
-              <p>
-                Kept exactly as the sheet had it. What kind of requirement it is and how serious
-                it is are not on the photograph and have not been guessed — a possible conflict is
-                for you to review, and nothing here will call anything safe.
-              </p>
+          {needsYou()}
 
-              {draft.dietaries.map((dietary, at) => (
-                <div key={at} className="line">
-                  <p className="unresolved">“{dietary.wording}”</p>
+          {blocks.map((block) => heading(block))}
 
-                  <Field
-                    label="What is it"
-                    value={dietary.dietType}
-                    onChange={(v) => patchDietary(at, { dietType: v })}
-                    placeholder="nut allergy"
-                    hint="Your own wording. There is no built-in list of diets."
-                  />
-
-                  <ChoiceField
-                    label="How serious"
-                    value={dietary.severity ?? ''}
-                    options={SEVERITIES}
-                    onChange={(v) =>
-                      patchDietary(at, { severity: v === '' ? null : (v as DietarySeverity) })
-                    }
-                    hint="Not set until you choose. Nothing is assumed from the wording."
-                  />
-
-                  <label className="check">
-                    <input
-                      type="checkbox"
-                      checked={dietary.excludesMeat}
-                      onChange={(e) => patchDietary(at, { excludesMeat: e.target.checked })}
-                    />
-                    This person eats no meat
-                  </label>
-                  <p className="hint muted">
-                    Tick only if you mean it — on a BBQ this changes how much meat is bought.
-                  </p>
-                </div>
-              ))}
-            </section>
-          )}
-
-          <Field label="Notes" value={draft.notes} onChange={(v) => patch({ notes: v })} multiline />
-
-          {willCreate.length > 0 && (
-            <section className="unresolved-block">
-              <h2>Saving will also create</h2>
-              <ul>
-                {willCreate.map((w) => (
-                  <li key={w}>{w}</li>
-                ))}
-              </ul>
-              <p>
-                Only names read clearly off the sheet that you do not already have. A recipe
-                created this way is a NAME ONLY — it will not be bought or costed until you add
-                its ingredients, and the prep sheet says so on the line.
-              </p>
-            </section>
-          )}
-
-          {gaps.length > 0 && (
-            <section className="needs-fixing">
-              <h2>Still to settle</h2>
-              <p className="muted">
-                Nothing here was guessed. These are the things the sheet did not say clearly.
-              </p>
-              <ul>
-                {gaps.map((g) => (
-                  <li key={g.field}>
-                    {g.label}
-                    {g.saw !== null && <span className="muted"> — saw “{g.saw}”</span>}
-                  </li>
-                ))}
-              </ul>
+          {jobs.length > 0 && (
+            <section className="units">
+              <h2>Jobs on this page</h2>
+              {jobs.map((job, at) => jobCard(job, at))}
             </section>
           )}
 
           {/* Discard first, save last. Discard is secondary, not danger: it
               throws away a draft, not a record. */}
-          <div className="actions">
-            <button type="button" onClick={() => setDraft(null)} disabled={busy}>
-              Discard
-            </button>
-            <button
-              type="button"
-              className="primary"
-              disabled={busy || gaps.length > 0}
-              onClick={() => void confirm()}
-            >
-              {busy ? 'Saving…' : 'Confirm and save as a new job'}
-            </button>
-          </div>
+          {unsaved.length > 0 ? (
+            <div className="actions">
+              <button type="button" onClick={() => setPage(null)} disabled={busy}>
+                {savedCount > 0 ? 'Discard the rest' : 'Discard scan'}
+              </button>
+              <button
+                type="button"
+                className="primary"
+                disabled={busy || readyCount === 0}
+                onClick={() => void saveAllReady()}
+              >
+                {busy
+                  ? 'Saving…'
+                  : readyCount === 0
+                    ? 'Nothing ready to save yet'
+                    : `Save ${readyCount} ready ${readyCount === 1 ? 'job' : 'jobs'}`}
+              </button>
+            </div>
+          ) : (
+            jobs.length > 0 && (
+              <p role="status">
+                All {jobs.length} {jobs.length === 1 ? 'job is' : 'jobs are'} saved. Open them on the
+                Jobs screen to allocate portions and name the guests behind any dietary.
+              </p>
+            )
+          )}
 
-          {gaps.length > 0 && (
+          {unsaved.length > 0 && readyCount < unsaved.length && (
             <p className="muted">
-              Settle everything under “Still to settle” first — on a photograph, an unanswered
-              field is the one most likely to be wrong.
+              A job saves once everything under “Needs you” for it is settled. Saving one never loses
+              the others.
             </p>
           )}
         </>

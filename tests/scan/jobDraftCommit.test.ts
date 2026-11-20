@@ -41,6 +41,7 @@ import type { Db, Row } from '../../src/data/db';
 import type {
   Customer,
   CustomerId,
+  JobGroupId,
   KitchenId,
   Property,
   PropertyId,
@@ -481,5 +482,59 @@ describe('commitScannedDraft — created first, job last, one at a time', () => 
     // The screen turns these into `existing` choices before offering Try again.
     expect(result.ids.customerId).toBe('customers-1');
     expect(result.ids.recipeIds.get('Pavlova')).toBe('save_recipe-1');
+  });
+});
+
+describe('a page of several bookings — one event, records made once', () => {
+  it('writes the shared event id onto the job', async () => {
+    const db = trackingDb();
+    const result = await commitScannedDraft(db, draftOf(), KITCHEN, 'group-1' as JobGroupId);
+
+    expect(result.ok).toBe(true);
+    const job = db.writes.find((w) => w.table === 'save_job')?.rows[0] as
+      | { p_job?: { job_group?: unknown } }
+      | undefined;
+    expect(job?.p_job?.job_group).toBe('group-1');
+  });
+
+  it('leaves a lone job with no event, as every caller before it did', async () => {
+    const db = trackingDb();
+    await commitScannedDraft(db, draftOf(), KITCHEN);
+
+    const job = db.writes.find((w) => w.table === 'save_job')?.rows[0] as
+      | { p_job?: { job_group?: unknown } }
+      | undefined;
+    expect(job?.p_job?.job_group).toBeNull();
+  });
+
+  it('returns what it created on SUCCESS too, so the next job on the page reuses it', async () => {
+    // Without these, saving the Sunday job after the Friday job would create a
+    // second "Aoife" — the page settles its other jobs onto these ids.
+    const db = trackingDb();
+    const result = await commitScannedDraft(db, draftOf({ customer: 'Aoife', dishes: ['Pavlova'] }), KITCHEN);
+
+    expect(result.ok).toBe(true);
+    expect(result.ids.customerId).toBe('customers-1');
+    expect(result.ids.recipeIds.get('Pavlova')).toBe('save_recipe-1');
+  });
+});
+
+describe('menu to be decided — only on his say-so', () => {
+  it('refuses an empty menu he has not decided about', () => {
+    const result = draftToJob(draftOf({ dishes: [] }), noCreations);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.gaps.map((g) => g.field)).toContain('dishes');
+  });
+
+  it('saves a job with no dishes once he says the menu is not decided', () => {
+    const result = draftToJob({ ...draftOf({ dishes: [] }), menuToBeDecided: true }, noCreations);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // No dishes, so nothing reaches shopping or prep; the anomaly scan's
+    // "no dishes on the menu" flag keeps it in view.
+    expect(result.job.dishes).toEqual([]);
   });
 });

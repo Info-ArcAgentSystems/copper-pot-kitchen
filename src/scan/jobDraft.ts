@@ -38,6 +38,7 @@ import type {
   Job,
   JobDietaryId,
   JobDish,
+  JobGroupId,
   JobId,
   KitchenId,
   PropertyId,
@@ -118,6 +119,14 @@ export interface JobSheetDraft {
   readonly dishes: readonly DishDraft[];
   readonly dietaries: readonly DietaryDraft[];
   readonly notes: string;
+  /**
+   * He has SAID the menu is not decided yet. A booking written as just "BBQ for
+   * 13" is legitimate before the food is chosen, the same way a job with no
+   * customer is — but only on his say-so, never because the scan found nothing.
+   * The saved job has no dishes, so it adds nothing to shopping or prep, and the
+   * anomaly scan's existing "no dishes on the menu" flag keeps it in view.
+   */
+  readonly menuToBeDecided?: boolean;
 }
 
 /** The records a save would create, named for him to read BEFORE he confirms. */
@@ -277,7 +286,8 @@ export function draftGaps(draft: JobSheetDraft): readonly Gap[] {
     });
   }
 
-  if (draft.dishes.length === 0) {
+  // An empty menu blocks — until he says, explicitly, that it is not decided.
+  if (draft.dishes.length === 0 && draft.menuToBeDecided !== true) {
     gaps.push({ field: 'dishes', label: 'No dishes were read', saw: null });
   }
 
@@ -359,7 +369,16 @@ const idOf = (choice: NameChoice, created: string | null): string | null => {
   return null;
 };
 
-export function draftToJob(draft: JobSheetDraft, created: CreatedRecords): DraftToJob {
+/**
+ * `jobGroup` links the jobs written under one heading on one page into a single
+ * event (the Friday BBQ and the Sunday breakfast at Pandoras Cottage). Null for
+ * a lone job, which is what every caller passed before pages held several.
+ */
+export function draftToJob(
+  draft: JobSheetDraft,
+  created: CreatedRecords,
+  jobGroup: JobGroupId | null = null,
+): DraftToJob {
   const gaps = draftGaps(draft);
   if (gaps.length > 0) return { ok: false, gaps };
 
@@ -414,7 +433,7 @@ export function draftToJob(draft: JobSheetDraft, created: CreatedRecords): Draft
       kitchenId: '' as KitchenId,
       customerId: idOf(draft.customer.choice, created.customerId) as CustomerId | null,
       propertyId: idOf(draft.property.choice, created.propertyId) as PropertyId | null,
-      jobGroup: null,
+      jobGroup,
       serviceDate: draft.serviceDate.trim() as IsoDate,
       serviceTime: draft.serviceTime.trim() as IsoTime,
       serviceType: draft.serviceType.trim(),

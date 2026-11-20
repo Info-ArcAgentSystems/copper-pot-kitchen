@@ -22,6 +22,7 @@
  */
 
 import type { JobSheetRead } from './jobSheet';
+import type { BlockRead, PageRead, SittingRead } from './page';
 import type { InvoiceRead } from './invoice';
 import type { RecipeCardRead } from './recipeCard';
 import { toCents } from '../data/mappers';
@@ -30,6 +31,11 @@ import type { YieldType } from '../engine/types';
 export type ScanReply =
   | { readonly kind: 'read'; readonly read: JobSheetRead }
   /** Stated in words the owner can act on, never a stack trace. */
+  | { readonly kind: 'unresolved'; readonly reason: string };
+
+/** A whole page: every booking on it, under the heading it was written under. */
+export type PageReply =
+  | { readonly kind: 'read'; readonly page: PageRead }
   | { readonly kind: 'unresolved'; readonly reason: string };
 
 export type RecipeCardReply =
@@ -199,6 +205,111 @@ export function validateScan(raw: unknown): ScanReply {
   };
 }
 
+const dietaryWords = (value: unknown): { wording: string }[] =>
+  Array.isArray(value)
+    ? value
+        .map((d) => text((d as { wording?: unknown })?.wording))
+        .filter((w): w is string => w !== null)
+        .map((wording) => ({ wording }))
+    : [];
+
+/**
+ * One booking off the page, narrowed field by field.
+ *
+ * A date or time in the wrong shape is not thrown away: it moves to the
+ * verbatim field beside it ("7/7.30pm" sent as a time becomes the time
+ * WORDING), so the owner still sees what the sheet said.
+ */
+function sittingFrom(raw: unknown): SittingRead {
+  const s = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
+
+  const date = text(s['serviceDate']);
+  const time = text(s['serviceTime']);
+  const dateOk = date !== null && /^\d{4}-\d{2}-\d{2}$/.test(date.trim());
+  const timeOk = time !== null && /^\d{2}:\d{2}$/.test(time.trim());
+
+  return {
+    dayWritten: text(s['dayWritten']) ?? (dateOk ? null : date),
+    serviceDate: dateOk ? date.trim() : null,
+    serviceTime: timeOk ? time.trim() : null,
+    timeWording: text(s['timeWording']) ?? (timeOk ? null : time),
+    serviceType: text(s['serviceType']),
+    guests: count(s['guests']),
+    guestsWording: text(s['guestsWording']),
+    dishes: strings(s['dishes']),
+    dietaries: dietaryWords(s['dietaries']),
+    notes: text(s['notes']),
+    uncertain: uncertainties(s['uncertain']),
+  };
+}
+
+/**
+ * Validate a page: every booking under its heading.
+ *
+ * DEPLOY-ORDER SAFE. The browser and the edge function ship separately, so for
+ * a while one may be newer than the other. A reply with `blocks` is the page
+ * shape; a reply without is an older function's single job, and it is read as
+ * a page with one heading and one booking — exactly what it always meant.
+ */
+export function validatePage(raw: unknown): PageReply {
+  const single = validateScan(raw);
+  if (single.kind === 'unresolved') return single;
+
+  const r = (raw as { read: Record<string, unknown> }).read;
+
+  if (Array.isArray(r['blocks'])) {
+    const blocks: BlockRead[] = r['blocks'].map((b) => {
+      const block = (typeof b === 'object' && b !== null ? b : {}) as Record<string, unknown>;
+      return {
+        customer: text(block['customer']),
+        property: text(block['property']),
+        sittings: Array.isArray(block['sittings']) ? block['sittings'].map(sittingFrom) : [],
+      };
+    });
+
+    return {
+      kind: 'read',
+      page: {
+        pageHeader: text(r['pageHeader']),
+        blocks,
+        unplaced: strings(r['unplaced']),
+        uncertain: uncertainties(r['uncertain']),
+      },
+    };
+  }
+
+  const s = single.read;
+  return {
+    kind: 'read',
+    page: {
+      pageHeader: null,
+      blocks: [
+        {
+          customer: s.customer,
+          property: s.property,
+          sittings: [
+            {
+              dayWritten: null,
+              serviceDate: s.serviceDate,
+              serviceTime: s.serviceTime,
+              timeWording: null,
+              serviceType: s.serviceType,
+              guests: s.guests,
+              guestsWording: s.guestsWording,
+              dishes: s.dishes,
+              dietaries: s.dietaries,
+              notes: s.notes,
+              uncertain: s.uncertain,
+            },
+          ],
+        },
+      ],
+      unplaced: [],
+      uncertain: [],
+    },
+  };
+}
+
 export interface ScanOptions {
   readonly url: string;
   readonly token: string;
@@ -282,9 +393,9 @@ function unwrap(raw: unknown): { ok: true; read: Record<string, unknown> } | { o
   return { ok: true, read: candidate.read as Record<string, unknown> };
 }
 
-export async function parseJobSheet(image: string, options: ScanOptions): Promise<ScanReply> {
+export async function parseJobSheet(image: string, options: ScanOptions): Promise<PageReply> {
   const sent = await postScan(image, 'job_sheet', options);
-  return sent.ok ? validateScan(sent.body) : { kind: 'unresolved', reason: sent.reason };
+  return sent.ok ? validatePage(sent.body) : { kind: 'unresolved', reason: sent.reason };
 }
 
 /**

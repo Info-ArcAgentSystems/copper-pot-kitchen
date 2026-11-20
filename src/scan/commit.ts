@@ -49,6 +49,7 @@ import type {
   CustomerId,
   Ingredient,
   IngredientId,
+  JobGroupId,
   JobId,
   KitchenId,
   PropertyId,
@@ -215,7 +216,17 @@ export interface CreatedRecord {
 }
 
 export type DraftCommitResult =
-  | { readonly ok: true; readonly jobId: JobId; readonly created: readonly CreatedRecord[] }
+  | {
+      readonly ok: true;
+      readonly jobId: JobId;
+      readonly created: readonly CreatedRecord[];
+      /**
+       * The records this save made, on success too. A page holds several jobs,
+       * and the next job on it must point at the customer this one just created
+       * rather than make a second "Aoife".
+       */
+      readonly ids: CreatedRecords;
+    }
   | {
       readonly ok: false;
       readonly error: string;
@@ -261,6 +272,8 @@ export async function commitScannedDraft(
   db: Db,
   draft: JobSheetDraft,
   kitchenId: KitchenId,
+  /** Links the jobs under one heading on one page into one event. */
+  jobGroup: JobGroupId | null = null,
 ): Promise<DraftCommitResult> {
   const wanted = creationsFromDraft(draft);
   const created: CreatedRecord[] = [];
@@ -341,7 +354,7 @@ export async function commitScannedDraft(
   }
 
   // Built AGAIN, now that the ids exist. The first call was the gap check.
-  const built = draftToJob(draft, ids());
+  const built = draftToJob(draft, ids(), jobGroup);
   if (!built.ok) {
     return {
       ok: false,
@@ -352,7 +365,7 @@ export async function commitScannedDraft(
   }
 
   try {
-    return { ok: true, jobId: await jobRepository(db).save(built.job), created };
+    return { ok: true, jobId: await jobRepository(db).save(built.job), created, ids: ids() };
   } catch (cause) {
     return {
       ok: false,

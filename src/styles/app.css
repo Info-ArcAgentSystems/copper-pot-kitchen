@@ -767,6 +767,137 @@ fieldset.units legend {
   margin-top: calc(var(--space-1) * -1);
 }
 
+/*
+ * A scanned PAGE: one card per booking on it.
+ *
+ * Tokens only, so the UI refresh restyles this with every other screen. Missing
+ * data reads in the muted ink; `--ok` marks ready and saved. Nothing on this
+ * page uses the warning colour — none of it is a safety warning.
+ */
+.scan-count {
+  font-family: var(--font-display);
+  font-size: var(--size-lead);
+  font-weight: var(--weight-bold);
+}
+
+.scan-placed {
+  color: var(--ok);
+  font-weight: var(--weight-semi);
+  font-size: var(--size-small);
+}
+
+.scan-needs {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.scan-need {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--text-muted);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+}
+
+.scan-need-who {
+  font-size: var(--size-micro);
+  font-weight: var(--weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.scan-need-what {
+  font-weight: var(--weight-semi);
+}
+
+.scan-need-detail {
+  padding-left: var(--space-4);
+  font-size: var(--size-small);
+}
+
+.scan-need-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+}
+
+.scan-job {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  display: grid;
+  gap: var(--space-3);
+}
+
+.scan-job + .scan-job {
+  margin-top: var(--space-3);
+}
+
+.scan-job-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.scan-job-title {
+  font-weight: var(--weight-bold);
+  font-size: var(--size-lead);
+}
+
+.scan-pill {
+  flex: none;
+  font-size: var(--size-small);
+  font-weight: var(--weight-semi);
+  border-radius: var(--radius-pill);
+  padding: 2px var(--space-2);
+  background: var(--surface);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.scan-pill.done {
+  color: var(--ok);
+}
+
+.scan-dishes {
+  list-style: none;
+  padding: 0;
+}
+
+.scan-dishes li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+}
+
+.scan-num {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-semi);
+}
+
+.scan-job-details {
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-3);
+}
+
+.scan-job-dishes {
+  padding: var(--space-2) 0 var(--space-3);
+}
+
+/* One save bar on a phone; a save button per card only where there is room. */
+@media (max-width: 640px) {
+  .scan-job-save {
+    display: none;
+  }
+}
+
 .check {
   display: flex;
   align-items: center;

@@ -19,7 +19,9 @@
  * it described a condition and left the next move unstated.
  */
 
-import type { NoIngredient, UnpricedLine } from '../scan/invoice';
+import type { Cents } from '../engine/types';
+import type { NoIngredient, ReviewedLine, UnpricedLine } from '../scan/invoice';
+import { formatMoney } from './form';
 
 /** Why the ingredient did not resolve. Each fixes differently. */
 function unmatchedNote(reason: NoIngredient['reason']): string {
@@ -56,4 +58,71 @@ export function lineNote(price: UnpricedLine): string {
       return unhandled;
     }
   }
+}
+
+/**
+ * Receipt lines with the same printed description, together.
+ *
+ * A supermarket receipt prints one line per item scanned, so four tubs of the
+ * same sauce are four identical lines. Shown one by one they made a sixty-row
+ * wall of repeated names; grouped, he reads one row per thing he bought.
+ *
+ * DISPLAY ONLY. The review's lines are untouched and each is still priced and
+ * saved on its own; nothing here feeds a price.
+ */
+export interface LineGroup {
+  readonly description: string;
+  readonly lines: readonly ReviewedLine[];
+  /**
+   * The printed line totals added up — or NULL when any one of them could not
+   * be read. A sum missing a line would look complete and be wrong.
+   */
+  readonly totalCents: number | null;
+}
+
+export function groupLines(lines: readonly ReviewedLine[]): readonly LineGroup[] {
+  const order: string[] = [];
+  const byDescription = new Map<string, ReviewedLine[]>();
+
+  for (const line of lines) {
+    const existing = byDescription.get(line.description);
+    if (existing === undefined) {
+      order.push(line.description);
+      byDescription.set(line.description, [line]);
+    } else {
+      existing.push(line);
+    }
+  }
+
+  return order.map((description) => {
+    const group = byDescription.get(description) ?? [];
+    const totals = group.map((l) => l.lineTotalCents);
+    return {
+      description,
+      lines: group,
+      totalCents: totals.every((t): t is number => t !== null)
+        ? totals.reduce((sum, t) => sum + t, 0)
+        : null,
+    };
+  });
+}
+
+/** One line's numbers as printed: "2 kg · €9.00", or what could not be read. */
+function lineAsPrinted(line: ReviewedLine): string {
+  const amount =
+    line.quantity === null ? 'quantity not read' : `${line.quantity}${line.unit === null ? '' : ` ${line.unit}`}`;
+  return `${amount} · ${formatMoney(line.lineTotalCents as Cents | null, 'total not read')}`;
+}
+
+/**
+ * What the receipt said for a group, with the working shown when there is a
+ * sum: "1 · €1.50 + 1 · €1.50 = €3.00". A group with an unreadable total shows
+ * its lines and no sum.
+ */
+export function groupWorking(group: LineGroup): string {
+  const parts = group.lines.map(lineAsPrinted).join(' + ');
+  if (group.lines.length < 2) return parts;
+  return group.totalCents === null
+    ? `${parts} — no total, one line could not be read`
+    : `${parts} = ${formatMoney(group.totalCents as Cents, '')}`;
 }

@@ -80,6 +80,14 @@ export type UnpricedLine = Exclude<LinePrice, { kind: 'priced' }>;
 
 export interface ReviewedLine {
   readonly description: string;
+  /*
+   * The line's numbers exactly as read, kept for DISPLAY whatever the outcome.
+   * An unmatched line used to show its name and nothing else, so the one thing
+   * he wants from a receipt — what he paid — was read and then hidden.
+   */
+  readonly quantity: number | null;
+  readonly unit: string | null;
+  readonly lineTotalCents: number | null;
   readonly ingredient: Resolved<Ingredient>;
   /** The engine's four outcomes, or `no_ingredient` when there was nothing to price. */
   readonly price: LinePrice;
@@ -197,6 +205,9 @@ export function reviewInvoice(read: InvoiceRead, owner: InvoiceOwnerData): Invoi
 
     lines.push({
       description: line.description,
+      quantity: line.quantity,
+      unit: line.unit,
+      lineTotalCents: line.lineTotalCents,
       ingredient,
       price,
       previousPrice: ingredient.kind === 'matched' ? ingredient.record.pricePerPack : null,

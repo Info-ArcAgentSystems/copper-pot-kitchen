@@ -128,19 +128,33 @@ export function Ingredients(): ReactNode {
   );
 }
 
-function IngredientForm({
+/**
+ * Exported for the invoice scanner, which opens THIS form — not a second one —
+ * when a receipt line names something he has not added yet. One form is what
+ * keeps Rule 4's three units asked the same way wherever an ingredient is born.
+ *
+ * `prefill` only seeds a NEW ingredient's name and supplier, from what the
+ * receipt said. Units, pack and price are left for him: a receipt's "2L" is not
+ * evidence of how he counts or buys it.
+ */
+export function IngredientForm({
   ingredient,
   done,
+  prefill,
+  onSavedName,
 }: {
   ingredient: Ingredient | null;
   done: () => void;
+  prefill?: { readonly name: string; readonly supplierId: SupplierId | null };
+  /** Told the name a NEW ingredient was saved under, once the write succeeded. */
+  onSavedName?: (name: string) => void;
 }): ReactNode {
   const { state } = useKitchen();
   const db = supabaseDb();
   const repo = ingredientRepository(db);
   const suppliers = useAsync(() => supplierRepository(db).list(), []);
 
-  const [name, setName] = useState(textValue(ingredient?.name ?? null));
+  const [name, setName] = useState(textValue(ingredient?.name ?? prefill?.name ?? null));
   const [category, setCategory] = useState(textValue(ingredient?.category ?? null));
 
   const [recipeUnit, setRecipeUnit] = useState(textValue(ingredient?.recipeUnit ?? null));
@@ -160,7 +174,9 @@ function IngredientForm({
   // Defaults to assumed on a new ingredient: nothing is confirmed until he says so.
   const [packAssumed, setPackAssumed] = useState(ingredient?.pack?.assumed ?? true);
 
-  const [supplierId, setSupplierId] = useState(ingredient?.supplierId ?? '');
+  const [supplierId, setSupplierId] = useState<string>(
+    ingredient?.supplierId ?? prefill?.supplierId ?? '',
+  );
   const [price, setPrice] = useState(moneyValue(ingredient?.pricePerPack ?? null));
   const [allergens, setAllergens] = useState((ingredient?.allergens ?? []).join(', '));
 
@@ -294,6 +310,7 @@ function IngredientForm({
         }
       }
 
+      if (ingredient === null && saved !== null) onSavedName?.(saved.name);
       done();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save.');

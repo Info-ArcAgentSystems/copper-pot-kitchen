@@ -1988,3 +1988,44 @@ section.danger-zone h2 {
 .scan-phone > p {
   margin: 0 0 var(--space-2);
 }
+
+/* ---------------------------------------------------------------------------
+   INVOICE LINES — one row per thing bought, its printed numbers always shown.
+   --------------------------------------------------------------------------- */
+.invoice-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.invoice-line {
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border);
+}
+
+.invoice-line > * + * {
+  margin-top: var(--space-1);
+}
+
+.invoice-line p {
+  margin-bottom: 0;
+}
+
+.invoice-line-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.invoice-line-read {
+  font-size: var(--size-small);
+}
+
+.invoice-line > button {
+  margin-top: var(--space-2);
+}
+
+.invoice-add,
+.invoice-supplier {
+  margin-top: var(--space-3);
+}

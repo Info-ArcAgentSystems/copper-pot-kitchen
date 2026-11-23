@@ -15,16 +15,19 @@ import { useState, type ReactNode } from 'react';
 import { supabaseClient, supabaseDb } from '../../data/client';
 import { ingredientRepository, supplierRepository } from '../../data/repositories';
 import { commitScannedPrices } from '../../scan/commit';
-import { reviewInvoice, type InvoiceReview } from '../../scan/invoice';
+import { reviewInvoice, type InvoiceRead, type InvoiceReview } from '../../scan/invoice';
+import { tidyName } from '../../scan/jobDraft';
+import { IngredientForm } from '../setup/Ingredients';
 import { parseInvoice } from '../../scan/parseImage';
 import { toScaledDataUrl } from './scaleImage';
 import { PhotoGate } from './PhotoGate';
 import { formatMoney } from '../../ui/form';
-import { lineNote } from '../../ui/invoiceView';
+import { groupLines, groupWorking, lineNote } from '../../ui/invoiceView';
 import { Screen } from '../../ui/Screen';
 import { useAsync } from '../../ui/useAsync';
 import type { DataSource } from '../../ui/sourceState';
-import type { Cents } from '../../engine/types';
+import type { Cents, KitchenId, SupplierId } from '../../engine/types';
+import { useKitchen } from '../../auth/kitchenState';
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
@@ -33,10 +36,29 @@ export function ScanInvoice(): ReactNode {
   const ingredients = useAsync(() => ingredientRepository(db).list(), []);
   const suppliers = useAsync(() => supplierRepository(db).list(), []);
 
+  const { state: kitchen } = useKitchen();
+
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
-  const [review, setReview] = useState<InvoiceReview | null>(null);
+  /*
+   * What the scanner READ is the state; the review is DERIVED from it against
+   * his current ingredients and suppliers on every render. So adding an
+   * ingredient from a receipt line re-matches the whole receipt the moment the
+   * list reloads — the photo is not sent again, and nothing is re-read.
+   */
+  const [read, setRead] = useState<InvoiceRead | null>(null);
   const [saved, setSaved] = useState<number | null>(null);
+  /** The receipt line whose "Add as ingredient" form is open. */
+  const [adding, setAdding] = useState<string | null>(null);
+  /** The name he gave each ingredient added from a line, to explain a non-match. */
+  const [addedAs, setAddedAs] = useState<Readonly<Record<string, string>>>({});
+  const [supplierNote, setSupplierNote] = useState<string | null>(null);
+
+  const ingredientList = ingredients.state.status === 'ready' ? ingredients.state.data : [];
+  const supplierList = suppliers.state.status === 'ready' ? suppliers.state.data : [];
+
+  const review: InvoiceReview | null =
+    read === null ? null : reviewInvoice(read, { ingredients: ingredientList, suppliers: supplierList });
 
   const sources: readonly DataSource[] = [
     {
@@ -56,8 +78,11 @@ export function ScanInvoice(): ReactNode {
   const scan = async (file: File): Promise<void> => {
     setBusy(true);
     setRefusal(null);
-    setReview(null);
+    setRead(null);
     setSaved(null);
+    setAdding(null);
+    setAddedAs({});
+    setSupplierNote(null);
 
     try {
       const base = import.meta.env.VITE_SUPABASE_URL ?? '';
@@ -75,14 +100,9 @@ export function ScanInvoice(): ReactNode {
         return;
       }
 
-      // The division happens in here, in the engine — not on the server, and not
-      // by the model.
-      setReview(
-        reviewInvoice(reply.read, {
-          ingredients: ingredients.state.status === 'ready' ? ingredients.state.data : [],
-          suppliers: suppliers.state.status === 'ready' ? suppliers.state.data : [],
-        }),
-      );
+      // The division happens in the review, in the engine — not on the server,
+      // and not by the model.
+      setRead(reply.read);
     } catch (cause) {
       setRefusal(cause instanceof Error ? cause.message : 'Could not read that photo.');
     } finally {
@@ -100,11 +120,32 @@ export function ScanInvoice(): ReactNode {
 
     if (result.ok) {
       setSaved(result.updated);
-      setReview(null);
+      setRead(null);
+      ingredients.reload();
     } else {
       setRefusal(result.error);
     }
   };
+
+  /** One tap: the supplier exactly as printed, tidied only if in capitals. */
+  const addSupplier = async (name: string): Promise<void> => {
+    if (kitchen.status !== 'ready') return;
+    setSupplierNote(null);
+    try {
+      const created = await supplierRepository(db).create({
+        kitchenId: kitchen.membership.kitchenId as KitchenId,
+        name: tidyName(name),
+        notes: null,
+      });
+      if (created === null) setSupplierNote(`Couldn’t add ${name} — nothing was saved.`);
+    } catch (cause) {
+      setSupplierNote(cause instanceof Error ? cause.message : `Couldn’t add ${name}.`);
+    }
+    suppliers.reload();
+  };
+
+  const matchedSupplierId: SupplierId | null =
+    review?.supplier.kind === 'matched' ? review.supplier.record.id : null;
 
   return (
     <Screen title="Scan an invoice">
@@ -134,40 +175,112 @@ export function ScanInvoice(): ReactNode {
           <section className="units">
             <h2>What it read</h2>
             <p className="muted">
-              {review.invoiceDate ?? 'date not read'}
-              {review.supplier.kind === 'matched'
-                ? ` — ${(review.supplier as { record: { name: string } }).record.name}`
-                : ' — supplier not matched'}
+              {review.invoiceDate ?? 'Date not read'}
+              {review.supplier.kind === 'matched' && ` · ${review.supplier.record.name}`}
             </p>
 
-            <ul className="records">
-              {review.lines.map((line) => (
-                <li key={line.description}>
-                  <strong>{line.description}</strong>
+            {review.supplier.kind === 'new' && (
+              <div className="invoice-supplier">
+                <p className="muted">“{review.supplier.read}” isn’t one of your suppliers yet.</p>
+                <button
+                  type="button"
+                  className="sm"
+                  disabled={busy}
+                  onClick={() => void addSupplier(review.supplier.kind === 'new' ? review.supplier.read : '')}
+                >
+                  Add {tidyName(review.supplier.read)} as a supplier
+                </button>
+                {supplierNote !== null && <p className="unresolved">{supplierNote}</p>}
+              </div>
+            )}
+            {review.supplier.kind === 'missing' && (
+              <p className="muted">No supplier name was read.</p>
+            )}
+            {review.supplier.kind === 'ambiguous' && (
+              <p className="unresolved">
+                “{review.supplier.read}” matches {review.supplier.matches.join(' and ')}.
+              </p>
+            )}
 
-                  {line.price.kind === 'priced' ? (
-                    <>
-                      <span className="num">
-                        {' '}
-                        {formatMoney(line.price.pricePerPack as Cents, 'not known')} a pack
-                      </span>
-                      {/* The working, so the sum is checkable rather than trusted. */}
-                      <span className="muted">
-                        {' '}
-                        — {formatMoney(line.price.pricePerUnit as Cents, '')} a unit
-                        {line.previousPrice !== null &&
-                          `, was ${formatMoney(line.previousPrice, 'not priced')}`}
-                      </span>
-                    </>
-                  ) : (
-                    // Every unpriced outcome gets its OWN sentence, from one
-                    // exhaustive function. The chain of ternaries this replaced
-                    // ended in a bare else that told the owner his photograph was
-                    // illegible when his ingredient book was empty.
-                    <span className="unresolved"> — {lineNote(line.price)}</span>
-                  )}
-                </li>
-              ))}
+            <ul className="invoice-lines">
+              {groupLines(review.lines).map((group) => {
+                const first = group.lines[0];
+                if (first === undefined) return null;
+                const price = first.price;
+                const isNew = price.kind === 'no_ingredient' && price.reason === 'new';
+                const named = addedAs[group.description];
+
+                return (
+                  <li key={group.description} className="invoice-line">
+                    <div className="invoice-line-head">
+                      <strong>{group.description}</strong>
+                      {group.lines.length > 1 && (
+                        <span className="muted num">{group.lines.length} lines</span>
+                      )}
+                    </div>
+
+                    {/* What the receipt said, always — matched or not. */}
+                    <p className="muted num invoice-line-read">{groupWorking(group)}</p>
+
+                    {price.kind === 'priced' ? (
+                      <p className="num">
+                        {formatMoney(price.pricePerPack as Cents, 'not known')} a pack
+                        <span className="muted">
+                          {' '}
+                          — {formatMoney(price.pricePerUnit as Cents, '')} a unit
+                          {first.previousPrice !== null &&
+                            `, was ${formatMoney(first.previousPrice, 'not priced')}`}
+                        </span>
+                      </p>
+                    ) : (
+                      // Every unpriced outcome gets its OWN sentence, from one
+                      // exhaustive function.
+                      <p className="unresolved">{lineNote(price)}</p>
+                    )}
+
+                    {/* Only once the reloaded list holds it — before that, "doesn't
+                        match" would just mean "not re-read yet". */}
+                    {isNew && named !== undefined && ingredientList.some((i) => i.name === named) && (
+                      <p className="muted">
+                        You added “{named}”, but it doesn’t match “{group.description}”, so this
+                        line still isn’t linked. Keep the receipt’s words in the name to link it.
+                      </p>
+                    )}
+
+                    {isNew && adding !== group.description && (
+                      <button
+                        type="button"
+                        className="sm"
+                        disabled={busy || adding !== null}
+                        onClick={() => setAdding(group.description)}
+                      >
+                        Add as ingredient
+                      </button>
+                    )}
+
+                    {adding === group.description && (
+                      <div className="invoice-add">
+                        <p className="muted">
+                          The receipt says: {groupWorking(group)}. Set how you count and buy it
+                          below — the pack size and price are yours to enter, not read off the
+                          receipt.
+                        </p>
+                        <IngredientForm
+                          ingredient={null}
+                          prefill={{ name: tidyName(group.description), supplierId: matchedSupplierId }}
+                          done={() => {
+                            setAdding(null);
+                            ingredients.reload();
+                          }}
+                          onSavedName={(name) =>
+                            setAddedAs((prev) => ({ ...prev, [group.description]: name }))
+                          }
+                        />
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </section>
 
@@ -180,20 +293,8 @@ export function ScanInvoice(): ReactNode {
                 factor here would put a wrong price into every recipe using the ingredient.
               </p>
               <ul>
-                {review.needsManualHandling.map((note) => (
+                {[...new Set(review.needsManualHandling)].map((note) => (
                   <li key={note}>{note}</li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          {review.newThings.length > 0 && (
-            <section className="unresolved-block">
-              <h2>New to your ingredients</h2>
-              <p>Add these in Ingredients first — the scanner will not create them.</p>
-              <ul>
-                {review.newThings.map((n) => (
-                  <li key={n.read}>{n.read}</li>
                 ))}
               </ul>
             </section>

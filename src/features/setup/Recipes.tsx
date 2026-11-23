@@ -21,6 +21,7 @@ import { ingredientRepository, recipeRepository } from '../../data/repositories'
 import { ChoiceField, Field } from '../../ui/Field';
 import { RecordForm, RecordScreen } from '../../ui/RecordScreen';
 import { referenceRefusal } from '../../ui/bulkDelete';
+import { initials } from '../../ui/initials';
 import { SourceNotice } from '../../ui/SourceNotice';
 import { sourceState, type DataSource } from '../../ui/sourceState';
 import { useAsync } from '../../ui/useAsync';
@@ -146,7 +147,11 @@ export function Recipes(): ReactNode {
         noun: ['recipe', 'recipes'],
       }}
       renderRow={(r) => (
-        <>
+        <span className="record-row">
+          <span className="thumb" aria-hidden="true">
+            {initials(r.name)}
+          </span>
+          <span className="record-body">
           <strong>{r.name}</strong>
           <span className="muted num">
             {[
@@ -167,7 +172,8 @@ export function Recipes(): ReactNode {
               {r.confidence === 'missing' ? 'quantities missing' : 'needs confirming'}
             </span>
           )}
-        </>
+          </span>
+        </span>
       )}
       renderForm={(recipe, done) => <RecipeForm recipe={recipe} done={done} />}
     />

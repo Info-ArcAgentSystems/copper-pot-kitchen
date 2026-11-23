@@ -13,7 +13,7 @@
  * `tests/ui/derived.test.ts` fails if it ever does.
  */
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { supabaseDb } from '../../data/client';
 import {
   ingredientRepository,
@@ -248,6 +248,33 @@ export function Shopping({ range }: { range?: DateRange }): ReactNode {
           description="Everything these jobs need is already in stock or bought."
         />
       ) : null}
+
+      {/* How far through the list he is — counted from his own ticks over the
+          lines shown, nothing else. */}
+      {view !== null && view.groups.length > 0 && (() => {
+        const lines = view.groups.flatMap((g) => g.lines);
+        const got = lines.filter((l) => tickFor(l.ingredientId)?.done === true).length;
+        return (
+          <div className="progress-block">
+            <div
+              className="progress"
+              role="progressbar"
+              aria-label="Bought so far"
+              aria-valuemin={0}
+              aria-valuemax={lines.length}
+              aria-valuenow={got}
+              style={
+                {
+                  '--done': `${lines.length === 0 ? 0 : Math.round((got * 100) / lines.length)}%`,
+                } as CSSProperties
+              }
+            />
+            <p className="muted num">
+              {got} of {lines.length} bought
+            </p>
+          </div>
+        );
+      })()}
 
       {view?.groups.map((group) => (
         <section key={group.supplierName} className="supplier-group">

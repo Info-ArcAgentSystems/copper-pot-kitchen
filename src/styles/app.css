@@ -1182,8 +1182,13 @@ button.link {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--border);
+  /* A card per line, like every other list — the whole card is his to tick. */
+  padding: var(--space-2) var(--space-4);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  transition: background-color 0.15s ease;
 }
 
 /* The whole row is the target, not just the box. A 44px checkbox is still a
@@ -1208,7 +1213,8 @@ button.link {
 .shop-line .workings {
   font-size: var(--size-small);
   font-variant-numeric: var(--num);
-  padding-left: calc(var(--touch-min) + var(--space-3));
+  /* Under the name, past the 22px box and its gap. */
+  padding-left: calc(22px + var(--space-3));
 }
 
 /* Ticked off. Faded rather than removed — he can see what he has already got, and
@@ -1255,8 +1261,13 @@ button.link {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--border);
+  /* A card per line, like every other list — the whole card is his to tick. */
+  padding: var(--space-2) var(--space-4);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  transition: background-color 0.15s ease;
 }
 
 .prep-line .check {
@@ -1651,18 +1662,22 @@ section.danger-zone h2 {
   align-self: flex-end;
   max-width: 85%;
   margin: 0;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-4);
+  border-radius: 18px 18px 6px;
   background: var(--accent-subtle);
   color: var(--text);
   font-weight: var(--weight-medium);
 }
 
+/* Sous's side: a bubble from the left, the same card ground as every derived
+   thing on the screen. */
 .chat-said {
+  align-self: flex-start;
+  max-width: 92%;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: var(--space-3);
+  border-radius: 18px 18px 18px 6px;
+  padding: var(--space-3) var(--space-4);
   box-shadow: var(--shadow-card);
 }
 
@@ -2078,15 +2093,33 @@ section.danger-zone h2 {
   box-shadow: var(--shadow-card);
 }
 
-.scan-card:active {
-  background: var(--surface);
+.scan-card {
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
 }
 
-/* Sized in em so it rides the type ramp rather than pinning a pixel height. */
+/* Paired with focus-visible: a touch screen has no hover. */
+.scan-card:hover,
+.scan-card:focus-visible {
+  box-shadow: var(--shadow-raise);
+  transform: translateY(-2px);
+}
+
+.scan-card:active {
+  background: var(--hover);
+  transform: none;
+}
+
+/* Sized in em so it rides the type ramp rather than pinning a pixel height.
+   On a soft tile: each card is an action, which is what the accent is for. */
 .scan-card-icon {
-  width: 1.5em;
-  height: 1.5em;
-  margin-bottom: var(--space-1);
+  width: 2.25em;
+  height: 2.25em;
+  padding: 0.45em;
+  margin-bottom: var(--space-2);
+  border-radius: var(--radius-button);
+  background: var(--accent-subtle);
   color: var(--accent);
 }
 
@@ -2622,4 +2655,50 @@ section.danger-zone h2 {
   .toasts {
     bottom: var(--space-6);
   }
+}
+
+/* ---------------------------------------------------------------------------
+   PUSH 7 — the other screens.
+   --------------------------------------------------------------------------- */
+
+/* A row's thumbnail: initials on grey. Decoration only — ink, never a colour
+   that could be read as meaning something. */
+.thumb {
+  flex: none;
+  width: 44px;
+  min-height: 44px;
+  border-radius: var(--radius-button);
+  background: var(--button-bg);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--size-small);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+/* How far through the shopping he is. Green, because it is progress done. */
+.progress-block > p {
+  margin: var(--space-1) 0 0;
+  font-size: var(--size-small);
+}
+
+/*
+ * Drawn as a background sized by `--done`, with no height declared — the same
+ * way as the brand stroke, and for the same reason: the 44px floor is a
+ * blanket scan for any small height, and an 8px bar nobody taps should go
+ * round it rather than widen it.
+ */
+.progress {
+  padding-top: var(--space-2);
+  border-radius: var(--radius-pill);
+  background:
+    linear-gradient(var(--ok), var(--ok)) left center / var(--done, 0%) 100% no-repeat,
+    var(--button-bg);
+  transition: background-size 0.35s ease;
+}
+
+.money-row {
+  transition: box-shadow 0.2s ease;
 }

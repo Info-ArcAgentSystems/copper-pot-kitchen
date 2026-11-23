@@ -25,6 +25,7 @@ import {
 import { ChoiceField, Field } from '../../ui/Field';
 import { RecordForm, RecordScreen } from '../../ui/RecordScreen';
 import { referenceRefusal } from '../../ui/bulkDelete';
+import { initials } from '../../ui/initials';
 import { SourceNotice } from '../../ui/SourceNotice';
 import { onHandNote, stockWrite } from '../../ui/stockView';
 import { sourceState, type DataSource } from '../../ui/sourceState';
@@ -107,7 +108,11 @@ export function Ingredients(): ReactNode {
         noun: ['ingredient', 'ingredients'],
       }}
       renderRow={(i) => (
-        <>
+        <span className="record-row">
+          <span className="thumb" aria-hidden="true">
+            {initials(i.name)}
+          </span>
+          <span className="record-body">
           <strong>{i.name}</strong>
           <span className="muted num">
             {[
@@ -128,7 +133,8 @@ export function Ingredients(): ReactNode {
               .filter((x) => x !== null)
               .join(' · ')}
           </span>
-        </>
+          </span>
+        </span>
       )}
       renderForm={(ingredient, done) => (
         <IngredientForm ingredient={ingredient} done={done} />

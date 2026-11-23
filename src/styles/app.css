@@ -1510,15 +1510,20 @@ button.link {
   border-left: 4px solid var(--warn);
 }
 
+/* Three figures as equal cells, side by side — each its own small stat, so the
+   eye compares across a row rather than reading a wrapped run of words. */
 .money-figures {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-4);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
   margin: 0;
 }
 
 .money-figures > div {
-  min-width: 7rem;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-button);
+  background: var(--bg);
 }
 
 .money-figures dt {
@@ -1540,14 +1545,45 @@ button.link {
   max-width: 22rem;
 }
 
+/* Why a figure is blank, as a short list of fixes: what is missing on the
+   left, where to fix it on the right — no bullets, no run-on sentence. */
+.blockers-block {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.blockers-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--size-micro);
+  font-weight: var(--weight-semi);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
 .blockers {
-  margin: var(--space-3) 0 0;
-  padding-left: var(--space-5);
+  list-style: none;
+  margin: 0;
+  padding: 0;
   font-size: var(--size-small);
 }
 
 .blockers li {
-  margin-bottom: var(--space-1);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-2) 0;
+}
+
+.blockers li + li {
+  border-top: 1px solid var(--border);
+}
+
+.blockers-where {
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 /* ---------------------------------------------------------------------------
@@ -2701,4 +2737,105 @@ section.danger-zone h2 {
 
 .money-row {
   transition: box-shadow 0.2s ease;
+}
+
+/* ---------------------------------------------------------------------------
+   POLISH — dates as a bar, quiet absences, tidy rows and empty states.
+   --------------------------------------------------------------------------- */
+.date-range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.date-range-label {
+  font-size: var(--size-micro);
+  font-weight: var(--weight-semi);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.date-range-fields {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.date-range-field {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.date-range-field input {
+  width: 100%;
+  min-width: 0;
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-3);
+}
+
+/* On a phone the two dates take the full row, side by side. */
+@media (max-width: 519px) {
+  .date-range-fields {
+    flex: 1 1 100%;
+  }
+}
+
+@media (min-width: 520px) {
+  .date-range-field input {
+    width: 10rem;
+  }
+}
+
+/* Named for the screen reader; the dash and the order say it to the eye. */
+.visually-quiet {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.date-range-dash {
+  color: var(--text-muted);
+}
+
+.date-range > .hint {
+  flex-basis: 100%;
+  margin-top: 0;
+}
+
+/* An absence reads as a sentence in grey, at body size — the known numbers
+   are what should stand out. */
+.money-figures dd.is-absent,
+.money-figures dd.unresolved {
+  font-size: var(--size-small);
+  font-weight: var(--weight-normal);
+  color: var(--text-muted);
+}
+
+.money-row-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.money-row-head > h3 {
+  margin: 0;
+  min-width: 0;
+}
+
+/* An empty state: title and sentence read as one block, not two islands. */
+.empty > h2,
+.empty > p {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.empty > h2 + p {
+  margin-top: calc(var(--space-2) * -1);
 }

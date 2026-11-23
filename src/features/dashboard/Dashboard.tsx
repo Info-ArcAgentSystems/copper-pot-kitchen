@@ -28,7 +28,7 @@ import {
 } from '../../data/repositories';
 import { buildDashboardView } from '../../ui/dashboardView';
 import { BACKUP_STORAGE_KEY } from '../../ui/backup';
-import { Field } from '../../ui/Field';
+import { AHEAD, DateRangeBar } from '../../ui/DateRangeBar';
 import { formatMoney } from '../../ui/form';
 import { useAsync } from '../../ui/useAsync';
 import { Screen } from '../../ui/Screen';
@@ -194,13 +194,7 @@ export function Dashboard(): ReactNode {
           divs, which read as two unrelated blocks once the container owns the
           rhythm — and it was the only one of the three date-ranged screens that
           did not box its pair. */}
-      <fieldset className="units">
-        <legend>Which dates</legend>
-        <div className="date-pair">
-          <Field label="From" value={from} onChange={setFrom} type="date" />
-          <Field label="To" value={to} onChange={setTo} type="date" />
-        </div>
-      </fieldset>
+      <DateRangeBar from={from} to={to} setFrom={setFrom} setTo={setTo} presets={AHEAD} />
 
       {/* ------------------------------------------------------------------ */}
       <h2>Next jobs</h2>

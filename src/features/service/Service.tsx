@@ -28,8 +28,8 @@ import { Prep } from '../prep/Prep';
 import { Packing } from '../packing/Packing';
 import { Screen } from '../../ui/Screen';
 import { Segmented, SegmentPanel, type Segment } from '../../ui/Segmented';
-import { Field } from '../../ui/Field';
 import { RANGE_CAPTION, useDateRange } from '../../ui/dateRange';
+import { AHEAD, DateRangeBar } from '../../ui/DateRangeBar';
 
 type View = 'shopping' | 'prep' | 'packing';
 
@@ -67,14 +67,14 @@ function ServiceView({ view, onView }: { view: View; onView: (v: View) => void }
     >
       <Segmented label="Service view" segments={SEGMENTS} active={view} onChange={onView} />
 
-      <fieldset className="units">
-        <legend>Which dates</legend>
-        <div className="date-pair">
-          <Field label="From" value={range.from} onChange={range.setFrom} type="date" />
-          <Field label="To" value={range.to} onChange={range.setTo} type="date" />
-        </div>
-        <p className="hint muted">{RANGE_CAPTION[view]}</p>
-      </fieldset>
+      <DateRangeBar
+        from={range.from}
+        to={range.to}
+        setFrom={range.setFrom}
+        setTo={range.setTo}
+        presets={AHEAD}
+        caption={RANGE_CAPTION[view]}
+      />
 
       {/* Not remounted on switch: each view holds live state — ticks in flight —
           and remounting would discard it. */}

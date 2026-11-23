@@ -25,9 +25,9 @@ import {
   recipeRepository,
 } from '../../data/repositories';
 import { jobMargin, jobRevenue, rangeMoney } from '../../engine/costing';
-import { buildMoneyView } from '../../ui/moneyView';
+import { buildMoneyView, UNKNOWN_FIGURE } from '../../ui/moneyView';
 import { EmptyState } from '../../ui/EmptyState';
-import { Field } from '../../ui/Field';
+import { BEHIND, DateRangeBar } from '../../ui/DateRangeBar';
 import { useAsync } from '../../ui/useAsync';
 import { Screen } from '../../ui/Screen';
 import { SourceNotice } from '../../ui/SourceNotice';
@@ -39,6 +39,19 @@ const addDays = (date: string, days: number): string => {
 };
 
 const today = (): string => new Date().toISOString().slice(0, 10);
+
+/** The figure, or its absence said quietly — grey and normal weight, never a
+ *  bold black "not known yet" shouting louder than the numbers that ARE known. */
+function FigureValue({ value }: { readonly value: string }): ReactNode {
+  return value === UNKNOWN_FIGURE ? (
+    <dd className="is-absent">Not known yet</dd>
+  ) : (
+    <dd className="num">{value}</dd>
+  );
+}
+
+const statusLabel = (status: string): string =>
+  status === 'in_prep' ? 'In prep' : status.charAt(0).toUpperCase() + status.slice(1);
 
 export function Money(): ReactNode {
   const db = supabaseDb();
@@ -130,11 +143,7 @@ export function Money(): ReactNode {
       description="Revenue, food cost and margin for jobs serving in these dates."
     >
 
-      <fieldset className="units">
-        <legend>Which dates</legend>
-        <Field label="From" value={from} onChange={setFrom} type="date" />
-        <Field label="To" value={to} onChange={setTo} type="date" />
-      </fieldset>
+      <DateRangeBar from={from} to={to} setFrom={setFrom} setTo={setTo} presets={BEHIND} />
 
       {view !== null && view.rows.length === 0 ? (
         <EmptyState
@@ -150,7 +159,7 @@ export function Money(): ReactNode {
           <dl className="money-figures">
             <div>
               <dt>Revenue</dt>
-              <dd className="num">{view.summary.revenue}</dd>
+              <FigureValue value={view.summary.revenue} />
               {view.summary.revenueNote !== null && (
                 <dd className="muted note">{view.summary.revenueNote}</dd>
               )}
@@ -158,7 +167,7 @@ export function Money(): ReactNode {
 
             <div>
               <dt>Food cost</dt>
-              <dd className="num">{view.summary.foodCost}</dd>
+              <FigureValue value={view.summary.foodCost} />
               {view.summary.foodCostNote !== null && (
                 <dd className="muted note">{view.summary.foodCostNote}</dd>
               )}
@@ -166,7 +175,7 @@ export function Money(): ReactNode {
 
             <div>
               <dt>Margin</dt>
-              <dd className="num">{view.summary.margin}</dd>
+              <FigureValue value={view.summary.margin} />
               {view.summary.marginNote !== null && (
                 <dd className="muted note">{view.summary.marginNote}</dd>
               )}
@@ -182,23 +191,24 @@ export function Money(): ReactNode {
           {/* The open question, said out loud rather than resolved by picking one.
               A margin as a share of price and as a share of cost are different
               numbers, and only the owner can say which he runs his business on. */}
-          <p className="muted">
-            Shown as amounts, not shares. Whether a margin should read against the price or
-            against the cost is your call — tell us which and it will appear here.
+          <p className="hint">
+            Margin is shown as an amount. Tell us whether you want it as a share of the price or
+            of the cost.
           </p>
         </section>
       )}
 
       {view?.rows.map((row) => (
         <section key={row.jobId} className={row.isLoss ? 'money-row loss' : 'money-row'}>
-          <h3>
-            {row.heading} <span className="muted">· {row.status}</span>
-          </h3>
+          <div className="money-row-head">
+            <h3>{row.heading}</h3>
+            <span className="status-pill">{statusLabel(row.status)}</span>
+          </div>
 
           <dl className="money-figures">
             <div>
               <dt>Revenue</dt>
-              <dd className="num">{row.revenue}</dd>
+              <FigureValue value={row.revenue} />
               {/* Rule 11: he can see what he overrode, not just the new figure. */}
               {row.overriddenFrom !== null && (
                 <dd className="muted note">rate card said {row.overriddenFrom}</dd>
@@ -206,24 +216,28 @@ export function Money(): ReactNode {
             </div>
             <div>
               <dt>Food cost</dt>
-              <dd className="num">{row.foodCost}</dd>
+              <FigureValue value={row.foodCost} />
             </div>
             <div>
               <dt>Margin</dt>
-              <dd className="num">{row.margin}</dd>
+              <FigureValue value={row.margin} />
               {row.isLoss && <dd className="unresolved note">this job loses money</dd>}
             </div>
           </dl>
 
           {/* Rule 8 at the surface: a blank figure always says why it is blank. */}
           {row.blockers.length > 0 && (
-            <ul className="blockers">
-              {row.blockers.map((b) => (
-                <li key={b.label}>
-                  {b.label} <span className="muted">— fix in {b.where}</span>
-                </li>
-              ))}
-            </ul>
+            <div className="blockers-block">
+              <p className="blockers-title">What’s missing</p>
+              <ul className="blockers">
+                {row.blockers.map((b) => (
+                  <li key={b.label}>
+                    <span>{b.label}</span>
+                    <span className="blockers-where">Fix in {b.where}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </section>
       ))}

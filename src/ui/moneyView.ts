@@ -25,7 +25,10 @@ import type { MarginResult, RangeMoneyResult, RevenueResult } from '../engine/co
 import type { Customer, Job, JobId } from '../engine/types';
 
 /** What an absent figure reads as. Never "€0.00", never blank. */
-const UNKNOWN = 'not known yet';
+/** What a figure reads when it cannot be worked out. Exported so the screen can
+ *  tell an absence from a number by identity, not by guessing at the text. */
+export const UNKNOWN_FIGURE = 'not known yet';
+const UNKNOWN = UNKNOWN_FIGURE;
 
 export interface MoneyRow {
   readonly jobId: JobId;

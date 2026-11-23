@@ -308,7 +308,9 @@ export async function commitScannedDraft(
         id: '' as CustomerId,
         kitchenId,
         name,
-        phone: null,
+        // The number written beside his name on the sheet, shown to him on the
+        // review before this save. Null when there was none or he declined it.
+        phone: draft.customerPhone ?? null,
         email: null,
         // Rule 11: NOT guessed. Without a client group no rate can apply, and
         // the job's revenue is null rather than wrong. He sets it when he

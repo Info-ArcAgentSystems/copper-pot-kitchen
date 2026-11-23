@@ -31,6 +31,7 @@
  * PURE. No React, no network, no repository.
  */
 
+import type { Customer } from '../engine/types';
 import { reviewJobSheet, type Gap, type JobSheetRead, type OwnerData } from './jobSheet';
 import {
   createdName,
@@ -70,6 +71,8 @@ export interface SittingRead {
 export interface BlockRead {
   readonly customer: string | null;
   readonly property: string | null;
+  /** The heading's phone number, verbatim. Null when none was written. */
+  readonly phone: string | null;
   readonly sittings: readonly SittingRead[];
 }
 
@@ -296,6 +299,8 @@ export interface SittingMeta {
   readonly timeOptions: readonly string[];
   /** The sheet's own guest wording, kept for display after it became a number. */
   readonly guestsWording: string | null;
+  /** The phone number written in this sitting's heading, verbatim. */
+  readonly phoneWritten: string | null;
 }
 
 export interface PageJob {
@@ -364,6 +369,7 @@ export function sittingToRead(
       timeWording: sitting.timeWording,
       timeOptions: times.length >= 2 ? times : [],
       guestsWording: sitting.guestsWording,
+      phoneWritten: block.phone,
     },
   };
 }
@@ -388,7 +394,12 @@ export function draftPage(
     for (const sitting of block.sittings) {
       const { read, meta } = sittingToRead(page, block, sitting, blockIndex);
       jobs.push({
-        draft: draftFromReview(reviewJobSheet(read, owner)),
+        /*
+         * The heading's phone rides with the draft so a customer CREATED by this
+         * save is created with it. It goes nowhere else: an existing customer's
+         * record is only changed by his own tap (see `phoneAction`).
+         */
+        draft: { ...draftFromReview(reviewJobSheet(read, owner)), customerPhone: block.phone },
         meta,
         group,
         savedJobId: null,
@@ -483,6 +494,74 @@ export function setHeading(
     jobs: page.jobs.map((job) =>
       job.meta.block === block && job.savedJobId === null
         ? { ...job, draft: { ...job.draft, [field]: { ...job.draft[field], choice } } }
+        : job,
+    ),
+  };
+}
+
+/**
+ * The phone number on a sheet, compared by its digits only.
+ *
+ * "086 203 4359", "086-2034359" and "0862034359" are one number written three
+ * ways. Formatting only — no digit is added, dropped or reordered, and a
+ * country prefix is NOT assumed: "+353 86…" and "086…" compare as different, and
+ * he decides.
+ */
+export const phoneDigits = (phone: string): string => phone.replace(/\D/g, '');
+
+/**
+ * What the screen does with a phone number written in a heading.
+ *
+ *   none        nothing was written, or nothing usable
+ *   with-new    the heading creates a new customer; the number is saved with it
+ *               unless he says not to
+ *   offer       an existing customer with NO phone on record — one tap adds it
+ *   same        his record already has this number; nothing to do
+ *   differs     his record has a DIFFERENT number. Both are shown and nothing is
+ *               overwritten: a number written in a notebook is not evidence the
+ *               saved one is out of date
+ *   unassigned  no customer is chosen yet, so there is no record to put it on
+ */
+export type PhoneAction =
+  | { readonly kind: 'none' }
+  | { readonly kind: 'with-new'; readonly phone: string; readonly saving: boolean }
+  | { readonly kind: 'offer'; readonly phone: string; readonly customer: Customer }
+  | { readonly kind: 'same'; readonly phone: string }
+  | { readonly kind: 'differs'; readonly phone: string; readonly customer: Customer }
+  | { readonly kind: 'unassigned'; readonly phone: string };
+
+export function phoneAction(job: PageJob, customers: readonly Customer[]): PhoneAction {
+  const phone = job.meta.phoneWritten?.trim() ?? '';
+  if (phoneDigits(phone) === '') return { kind: 'none' };
+
+  const choice = job.draft.customer.choice;
+  if (choice.kind === 'none') return { kind: 'unassigned', phone };
+  if (choice.kind === 'create') {
+    return { kind: 'with-new', phone, saving: (job.draft.customerPhone ?? null) !== null };
+  }
+
+  const customer = customers.find((c) => c.id === choice.id);
+  // Just created by this page and not yet re-read: it was created WITH the
+  // number, so there is nothing to ask.
+  if (customer === undefined) return { kind: 'same', phone };
+
+  const onRecord = customer.phone?.trim() ?? '';
+  if (phoneDigits(onRecord) === '') return { kind: 'offer', phone, customer };
+  return phoneDigits(onRecord) === phoneDigits(phone)
+    ? { kind: 'same', phone }
+    : { kind: 'differs', phone, customer };
+}
+
+/**
+ * Whether a NEW customer under this heading is created with the sheet's number.
+ * Every unsaved job in the block follows, exactly as `setHeading` does.
+ */
+export function setNewCustomerPhone(page: PageDraft, block: number, saving: boolean): PageDraft {
+  return {
+    ...page,
+    jobs: page.jobs.map((job) =>
+      job.meta.block === block && job.savedJobId === null
+        ? { ...job, draft: { ...job.draft, customerPhone: saving ? job.meta.phoneWritten : null } }
         : job,
     ),
   };

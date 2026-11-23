@@ -1979,3 +1979,12 @@ section.danger-zone h2 {
   font-size: var(--size-small);
   color: var(--text-muted);
 }
+
+/* The heading's phone number, under the customer it belongs to. */
+.scan-phone {
+  margin-top: var(--space-2);
+}
+
+.scan-phone > p {
+  margin: 0 0 var(--space-2);
+}

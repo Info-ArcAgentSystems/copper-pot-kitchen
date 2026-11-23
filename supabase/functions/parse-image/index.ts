@@ -185,13 +185,18 @@ const JOB_SHEET_TOOL = [
                   type: ['string', 'null'],
                   description: 'The venue, house or address in this heading, exactly as written.',
                 },
+                phone: {
+                  type: ['string', 'null'],
+                  description:
+                    'The phone number written in this heading, copied exactly as written. Null when the heading has none. Never a number from anywhere else on the page.',
+                },
                 sittings: {
                   type: 'array',
                   description: 'One entry per booking under this heading. Never merge two bookings, never drop one.',
                   items: SITTING_SCHEMA,
                 },
               },
-              required: ['customer', 'property', 'sittings'],
+              required: ['customer', 'property', 'phone', 'sittings'],
             },
           },
           unplaced: {
@@ -223,7 +228,8 @@ const JOB_SHEET_SYSTEM = `You read photographs of handwritten catering job sheet
 A PAGE USUALLY HOLDS SEVERAL BOOKINGS. Report every one of them.
 - A HEADING names a venue or a customer, often underlined, often with a phone number. It
   applies to every booking below it until the next heading. Each heading is one entry in
-  blocks.
+  blocks. The customer's name goes in customer and the phone number in phone, copied as
+  written; neither field ever holds the other.
 - A BOOKING starts at a line giving a day, a time or a guest count, such as "FRI. 20TH AT
   7PM FOR 13PPL". The lines indented under it (dishes, the style of service, dietary notes)
   belong to that booking. Each booking is one entry in its heading's sittings.

@@ -432,6 +432,24 @@ describe('commitScannedDraft — created first, job last, one at a time', () => 
     expect(row?.['client_group'] ?? null).toBeNull();
   });
 
+  it('creates a new customer WITH the phone number written beside the name', async () => {
+    const db = trackingDb();
+
+    await commitScannedDraft(db, { ...draftOf({ customer: 'Laura' }), customerPhone: '0862034359' }, KITCHEN);
+
+    const row = db.writes.find((w) => w.table === 'customers')?.rows[0];
+    expect(row?.['phone']).toBe('0862034359');
+  });
+
+  it('creates a new customer with NO phone when the sheet had none, or he declined it', async () => {
+    const db = trackingDb();
+
+    await commitScannedDraft(db, { ...draftOf({ customer: 'Laura' }), customerPhone: null }, KITCHEN);
+
+    const row = db.writes.find((w) => w.table === 'customers')?.rows[0];
+    expect(row?.['phone'] ?? null).toBeNull();
+  });
+
   it('RULE 8 — a created property gets no guessed eircode or address', async () => {
     // An invented eircode is a van sent to the wrong house.
     const db = trackingDb();

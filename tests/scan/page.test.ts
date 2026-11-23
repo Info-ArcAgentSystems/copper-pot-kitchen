@@ -32,6 +32,7 @@ import {
 } from '../../src/scan/page';
 import { validatePage } from '../../src/scan/parseImage';
 import { creationsFromDraft } from '../../src/scan/jobDraft';
+import { phoneAction, phoneDigits, setNewCustomerPhone } from '../../src/scan/page';
 import type {
   Customer,
   CustomerId,
@@ -76,6 +77,7 @@ const PANDORAS: PageRead = {
     {
       customer: 'Aoife',
       property: 'Pandoras Cottage',
+      phone: '0862034359',
       sittings: [
         sitting({
           dayWritten: 'FRI. 20TH', timeWording: '7/7.30pm', serviceType: 'B.B.Q',
@@ -99,6 +101,7 @@ const TRANQUILITY: PageRead = {
     {
       customer: 'Mary',
       property: 'Tranquility House',
+      phone: null,
       sittings: [
         sitting({
           dayWritten: 'SAT 21ST', timeWording: '9.30AM', guestsWording: '17PPL',
@@ -378,6 +381,7 @@ describe('a page written in block capitals', () => {
       {
         customer: 'AOIFE',
         property: 'PANDORAS COTTAGE',
+        phone: null,
         sittings: [
           sitting({
             dayWritten: 'SUN. 22ND', timeWording: '10AM', guestsWording: '16PPL',
@@ -432,6 +436,65 @@ describe('a dish he typed himself', () => {
   });
 });
 
+describe('the phone number beside the name is placed, never dropped', () => {
+  /*
+   * THE BUG THIS EXISTS FOR. The scanner was told to copy the customer's name
+   * "without any phone number" and given nowhere else to put it, so Aoife's
+   * 0862034359 vanished on every scan — while the screen said every line on the
+   * page had been placed.
+   */
+  it('compares numbers by their digits, assuming no country prefix', () => {
+    expect(phoneDigits('086 203 4359')).toBe(phoneDigits('086-2034359'));
+    expect(phoneDigits('+353 86 203 4359')).not.toBe(phoneDigits('086 203 4359'));
+  });
+
+  it('saves it with a NEW customer, and lets him decline', () => {
+    const page = draftPage(PANDORAS, empty, ids);
+    expect(page.jobs[0]?.draft.customerPhone).toBe('0862034359');
+    expect(phoneAction(page.jobs[0]!, [])).toEqual({ kind: 'with-new', phone: '0862034359', saving: true });
+
+    const declined = setNewCustomerPhone(page, 0, false);
+    expect(declined.jobs.map((j) => j.draft.customerPhone)).toEqual([null, null]);
+    expect(phoneAction(declined.jobs[0]!, [])).toMatchObject({ kind: 'with-new', saving: false });
+  });
+
+  it('OFFERS it for an existing customer with no phone — it never writes it on its own', () => {
+    const aoife = customer('c1', 'Aoife');
+    const page = draftPage(PANDORAS, { ...empty, customers: [aoife] }, ids);
+
+    expect(phoneAction(page.jobs[0]!, [aoife])).toEqual({ kind: 'offer', phone: '0862034359', customer: aoife });
+  });
+
+  it('says nothing to do when his record already has the same number, however written', () => {
+    const aoife = { ...customer('c1', 'Aoife'), phone: '086 203 4359' };
+    const page = draftPage(PANDORAS, { ...empty, customers: [aoife] }, ids);
+
+    expect(phoneAction(page.jobs[0]!, [aoife])).toEqual({ kind: 'same', phone: '0862034359' });
+  });
+
+  it('shows a DIFFERENT number beside his and changes neither', () => {
+    const aoife = { ...customer('c1', 'Aoife'), phone: '0871112222' };
+    const page = draftPage(PANDORAS, { ...empty, customers: [aoife] }, ids);
+
+    expect(phoneAction(page.jobs[0]!, [aoife])).toEqual({ kind: 'differs', phone: '0862034359', customer: aoife });
+  });
+
+  it('waits for a customer to be chosen when the name matched two', () => {
+    const page = draftPage(
+      PANDORAS,
+      { ...empty, customers: [customer('c1', 'Aoife'), customer('c2', 'Aoife')] },
+      ids,
+    );
+
+    expect(phoneAction(page.jobs[0]!, [])).toEqual({ kind: 'unassigned', phone: '0862034359' });
+  });
+
+  it('has nothing to say when the heading had no number', () => {
+    const page = draftPage(TRANQUILITY, empty, ids);
+    expect(phoneAction(page.jobs[0]!, [])).toEqual({ kind: 'none' });
+  });
+});
+
 describe('a lone booking is just a job', () => {
   it('makes one job with no event group', () => {
     const one: PageRead = { ...PANDORAS, blocks: [{ ...PANDORAS.blocks[0]!, sittings: [PANDORAS.blocks[0]!.sittings[1]!] }] };
@@ -451,6 +514,7 @@ describe('validatePage — the browser and the scanner can ship in either order'
           {
             customer: 'Aoife',
             property: 'Pandoras Cottage',
+            phone: '0862034359',
             sittings: [{ dayWritten: 'FRI. 20TH', guestsWording: '13ppl', dishes: [], dietaries: [], uncertain: [] }],
           },
         ],
@@ -463,6 +527,22 @@ describe('validatePage — the browser and the scanner can ship in either order'
     if (reply.kind !== 'read') return;
     expect(reply.page.blocks[0]?.sittings[0]?.dayWritten).toBe('FRI. 20TH');
     expect(reply.page.unplaced).toEqual(['call Aoife Thursday']);
+    expect(reply.page.blocks[0]?.phone).toBe('0862034359');
+  });
+
+  it('reads a heading with no phone field — an older scanner — as no phone, not an error', () => {
+    const reply = validatePage({
+      read: {
+        pageHeader: null,
+        blocks: [{ customer: 'Aoife', property: null, sittings: [] }],
+        unplaced: [],
+        uncertain: [],
+      },
+    });
+
+    expect(reply.kind).toBe('read');
+    if (reply.kind !== 'read') return;
+    expect(reply.page.blocks[0]?.phone).toBeNull();
   });
 
   it('reads an OLDER single-job reply as a page with one booking', () => {

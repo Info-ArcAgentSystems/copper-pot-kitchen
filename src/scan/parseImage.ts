@@ -263,6 +263,8 @@ export function validatePage(raw: unknown): PageReply {
       return {
         customer: text(block['customer']),
         property: text(block['property']),
+        // Absent from replies sent before the scanner read phone numbers.
+        phone: text(block['phone']),
         sittings: Array.isArray(block['sittings']) ? block['sittings'].map(sittingFrom) : [],
       };
     });
@@ -287,6 +289,7 @@ export function validatePage(raw: unknown): PageReply {
         {
           customer: s.customer,
           property: s.property,
+          phone: null,
           sittings: [
             {
               dayWritten: null,

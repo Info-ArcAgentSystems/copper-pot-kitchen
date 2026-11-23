@@ -66,8 +66,10 @@ import {
   jobGaps,
   markSaved,
   needsDateConfirm,
+  phoneAction,
   saveable,
   setHeading,
+  setNewCustomerPhone,
   settleAcrossPage,
   shortDate,
   timeQuestion,
@@ -201,6 +203,8 @@ export function ScanJobSheet(): ReactNode {
   const [open, setOpen] = useState<ReadonlySet<number>>(new Set());
   /** What a failed save managed to create, so he is not told nothing happened. */
   const [partial, setPartial] = useState<readonly string[]>([]);
+  /** The outcome of adding a sheet's phone number to an existing customer. */
+  const [phoneNote, setPhoneNote] = useState<string | null>(null);
 
   /**
    * The three reads a photograph is no use without, each named as he would name
@@ -566,6 +570,77 @@ export function ScanJobSheet(): ReactNode {
     );
   };
 
+  /*
+   * The phone number written beside the name. It is placed, never dropped: a new
+   * customer is created with it, and an existing one gets it only by his tap.
+   * A record that already holds a DIFFERENT number is never overwritten.
+   */
+  const addPhone = async (customer: Customer, phone: string): Promise<void> => {
+    setPhoneNote(null);
+    const saved = await customerRepository(db).update(customer.id, { ...customer, phone });
+    setPhoneNote(
+      saved === null ? `Couldn’t add the number to ${customer.name} — nothing was changed.` : null,
+    );
+    customers.reload();
+  };
+
+  const phoneLine = (block: number, lead: PageJob): ReactNode => {
+    const action = phoneAction(lead, customerList);
+    if (action.kind === 'none') return null;
+
+    const said = `The sheet has the number “${action.phone}”`;
+    switch (action.kind) {
+      case 'with-new':
+        return (
+          <div className="scan-phone">
+            <p className="muted">
+              {said}.{' '}
+              {action.saving ? 'It is saved with the new customer.' : 'It won’t be saved.'}
+            </p>
+            <button
+              className="sm"
+              type="button"
+              onClick={() =>
+                setPage((p) => (p === null ? null : setNewCustomerPhone(p, block, !action.saving)))
+              }
+            >
+              {action.saving ? 'Don’t save this number' : 'Save it with the customer'}
+            </button>
+          </div>
+        );
+      case 'offer':
+        return (
+          <div className="scan-phone">
+            <p className="muted">
+              {said}. {action.customer.name} has no phone saved.
+            </p>
+            <button
+              className="sm"
+              type="button"
+              disabled={busy}
+              onClick={() => void addPhone(action.customer, action.phone)}
+            >
+              Add it to {action.customer.name}
+            </button>
+            {phoneNote !== null && <p className="unresolved">{phoneNote}</p>}
+          </div>
+        );
+      case 'same':
+        return <p className="muted scan-phone">{said} — it matches the customer’s record.</p>;
+      case 'differs':
+        return (
+          <p className="muted scan-phone">
+            {said}. {action.customer.name}’s record has “{action.customer.phone}” — nothing has been
+            changed. Update it in Setup if the sheet is right.
+          </p>
+        );
+      case 'unassigned':
+        return (
+          <p className="muted scan-phone">{said}. Pick or create the customer to keep it.</p>
+        );
+    }
+  };
+
   const heading = (block: number): ReactNode => {
     if (page === null) return null;
     const inBlock = jobs.filter((j) => j.meta.block === block);
@@ -587,6 +662,7 @@ export function ScanJobSheet(): ReactNode {
           }
           hint={nameHint(lead.draft.customer)}
         />
+        {phoneLine(block, lead)}
         <ChoiceField
           label="Property"
           value={choiceValue(lead.draft.property.choice)}

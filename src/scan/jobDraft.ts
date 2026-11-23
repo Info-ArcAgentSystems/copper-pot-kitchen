@@ -127,6 +127,12 @@ export interface JobSheetDraft {
    * anomaly scan's existing "no dishes on the menu" flag keeps it in view.
    */
   readonly menuToBeDecided?: boolean;
+  /**
+   * The phone number a customer CREATED by this save is created with — the
+   * sheet's own words, or null when there was none or he said not to keep it.
+   * Never used to change an existing customer; that is a separate tap.
+   */
+  readonly customerPhone?: string | null;
 }
 
 /** The records a save would create, named for him to read BEFORE he confirms. */

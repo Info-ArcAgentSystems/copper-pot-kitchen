@@ -90,10 +90,21 @@ describe('touch targets', () => {
     // target; the input still exists for the accessibility tree and the keyboard.
     // Skipping it is not a loophole in the floor, because a clipped element has
     // no touch target to be too small.
-    const rules = [...allCss.matchAll(/\{([^}]*)\}/g)].map((m) => m[1] ?? '');
+    const rules = [...allCss.matchAll(/([^{}]*)\{([^}]*)\}/g)].map((m) => ({
+      selector: (m[1] ?? '').trim(),
+      body: m[2] ?? '',
+    }));
 
-    for (const rule of rules) {
+    for (const { selector, body: rule } of rules) {
       if (/clip-path:\s*inset\(/.test(rule)) continue;
+      /*
+       * THE ONE SMALL BOX, and why it is not a hole in the floor. A checkbox
+       * inside `.check` sits in a LABEL that is the touch target — tapping the
+       * words ticks it — and the test below holds that label at 44px. The box
+       * drawn at 44px was the loudest thing on every form. Exempt by exact
+       * selector only, so no other rule can borrow it.
+       */
+      if (selector.endsWith(".check input[type='checkbox']")) continue;
 
       for (const found of rule.matchAll(/(?:min-)?height:\s*(\d+)px/g)) {
         const px = Number(found[1]);
@@ -101,6 +112,14 @@ describe('touch targets', () => {
         expect(px, `a rule sets ${px}px, below the 44px floor`).toBeGreaterThanOrEqual(44);
       }
     }
+  });
+
+  it('the checkbox row carries the floor, so its box may be drawn small', () => {
+    const check = /\n\.check \{([^}]*)\}/.exec(allCss)?.[1] ?? '';
+    expect(check, '.check has no rule').not.toBe('');
+    expect(check, 'the label stopped being a 44px target').toMatch(
+      /min-height:\s*var\(--touch-min\)/,
+    );
   });
 
   it('keeps inputs at 16px so iOS Safari does not zoom the page on focus', () => {

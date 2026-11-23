@@ -204,7 +204,7 @@ export function RecordScreen<T>({
               const locked = bulk.lockedReason?.(item) ?? null;
               return (
                 <li key={key}>
-                  <label className={`record record-select${locked === null ? '' : ' is-locked'}`}>
+                  <label className={`record record-select check${locked === null ? '' : ' is-locked'}`}>
                     <input
                       type="checkbox"
                       checked={selected.has(key)}

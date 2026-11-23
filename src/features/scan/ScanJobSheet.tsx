@@ -914,11 +914,10 @@ export function ScanJobSheet(): ReactNode {
   // -------------------------------------------------------------------------
 
   return (
-    <Screen title="Scan a job sheet">
-      <p className="muted">
-        Photograph the sheet, fix anything wrong here, then save. Nothing is written until you tap
-        save.
-      </p>
+    <Screen
+      title="Scan a job sheet"
+      description="Photograph the sheet, fix anything wrong here, then save. Nothing is written until you tap save."
+    >
 
       <PhotoGate sources={sources} busy={busy} onFile={(file) => void scan(file)} />
 

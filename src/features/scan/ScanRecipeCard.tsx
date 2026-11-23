@@ -109,10 +109,10 @@ export function ScanRecipeCard(): ReactNode {
   };
 
   return (
-    <Screen title="Scan a recipe card">
-      <p className="muted">
-        Photograph the card. Nothing is saved until you have read it back and confirmed it.
-      </p>
+    <Screen
+      title="Scan a recipe card"
+      description="Photograph the card. Nothing is saved until you have read it back and confirmed it."
+    >
 
       <PhotoGate sources={sources} busy={busy} onFile={(file) => void scan(file)} />
 

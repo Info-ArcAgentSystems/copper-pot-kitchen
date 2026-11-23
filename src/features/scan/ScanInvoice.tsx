@@ -161,11 +161,10 @@ export function ScanInvoice(): ReactNode {
     review?.supplier.kind === 'matched' ? review.supplier.record.id : null;
 
   return (
-    <Screen title="Scan an invoice">
-      <p className="muted">
-        Photograph the invoice. Prices are worked out from the quantity and the line total —
-        nothing is saved until you have checked them.
-      </p>
+    <Screen
+      title="Scan an invoice"
+      description="Photograph the invoice. Prices are worked out from the quantity and the line total — nothing is saved until you have checked them."
+    >
 
       <PhotoGate sources={sources} busy={busy} onFile={(file) => void scan(file)} />
 

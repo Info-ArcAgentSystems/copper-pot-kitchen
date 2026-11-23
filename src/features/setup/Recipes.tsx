@@ -541,7 +541,7 @@ function RecipeForm({ recipe, done }: { recipe: Recipe | null; done: () => void 
           checked={sameDayOnly}
           onChange={(e) => setSameDayOnly(e.target.checked)}
         />
-        Same day only — overrides make-ahead days, because it is the harder constraint
+        Same day only (this overrides make-ahead days)
       </label>
 
       {/* --- components ------------------------------------------------- */}
@@ -665,9 +665,8 @@ function RecipeForm({ recipe, done }: { recipe: Recipe | null; done: () => void 
       <fieldset className="units">
         <legend>Unquantified components</legend>
         <p className="muted">
-          Named things with no measured amount. They appear on the shopping list as “check this
-          yourself”, never as a number. <strong>There is deliberately no quantity box here</strong>
-          — a zero would look like a real answer.
+          Things with no measured amount, like “salt to taste”. They show on the shopping list as
+          “check this yourself”, never as a number.
         </p>
 
         {unquantified.map((u) => (

@@ -615,7 +615,10 @@ button:disabled {
 .hint {
   font-size: var(--size-micro);
   color: var(--text-muted);
-  margin: 0;
+  margin-bottom: 0;
+  /* Never touching the control above it, and never a 150-character line. */
+  margin-top: var(--space-2);
+  max-width: 65ch;
 }
 
 .field .error {
@@ -755,17 +758,40 @@ button.danger:active {
    apart (Rule 4) and by Recipes for its two line editors.
    --------------------------------------------------------------------------- */
 
+/*
+ * ONE LEFT EDGE. A grouped set of fields is a SECTION, not a box.
+ *
+ * Bordered fieldsets pushed their labels in by the box's padding and their
+ * titles in again by the legend's, so a recipe form had text starting at three
+ * or four different x positions down one column — the eye zig-zagged. The group
+ * is now separated by its heading and the space above it, and every label sits
+ * on the column's edge. A box is kept only for something that is ONE object: a
+ * component row (`.line`), a job card, a web result.
+ */
 fieldset.units {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: var(--space-3);
-  margin-bottom: var(--space-4);
-  background: var(--card);
+  border: 0;
+  padding: 0;
+  min-width: 0;
+  /* The browser's 2px inline margin on a fieldset was the last offset left. */
+  margin-left: 0;
+  margin-right: 0;
+  margin-bottom: var(--space-5);
+}
+
+/* The legend's own margin is the gap under the heading — not that plus a
+   paragraph's browser margin on top. */
+fieldset.units > legend + * {
+  margin-top: 0;
 }
 
 fieldset.units legend {
-  font-weight: 700;
-  padding: 0 var(--space-2);
+  padding: 0;
+  margin-bottom: var(--space-3);
+  font-size: var(--size-micro);
+  font-weight: var(--weight-semi);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
 /* A component or unquantified row inside a recipe. Boxed so it reads as one
@@ -864,11 +890,24 @@ fieldset.units legend {
   margin-top: var(--space-3);
 }
 
+/* The card's grid gap is the ONLY vertical spacing inside it. Browser margins
+   on its paragraphs and list doubled every gap and left the pill floating
+   above the title it belongs beside. */
+.scan-job p,
+.scan-job ul {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
 .scan-job-head {
   display: flex;
-  align-items: flex-start;
+  align-items: baseline;
   justify-content: space-between;
   gap: var(--space-3);
+}
+
+.scan-job-head .muted {
+  margin-top: var(--space-1);
 }
 
 .scan-job-title {
@@ -891,9 +930,12 @@ fieldset.units legend {
   color: var(--ok);
 }
 
+/* The count stays within reach of the dish it counts, not 1,000px away at
+   the far edge of a desktop card. */
 .scan-dishes {
   list-style: none;
   padding: 0;
+  max-width: 28rem;
 }
 
 .scan-dishes li {
@@ -924,17 +966,32 @@ fieldset.units legend {
   }
 }
 
+/*
+ * THE ROW IS THE TARGET; THE BOX IS A NORMAL SIZE.
+ *
+ * The tick used to be a 44px solid square beside a bold label — the loudest
+ * thing on any form it sat in, louder than the save button. The 44px floor is
+ * about where a thumb lands, and the whole label is tappable, so the LABEL
+ * carries the floor and the box inside it is drawn at 22px.
+ * `tests/ui/tokens.test.ts` holds both halves: this exact selector is the only
+ * one allowed a small box, and only while `.check` keeps the 44px row.
+ */
 .check {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
+  min-height: var(--touch-min);
   margin-bottom: var(--space-4);
-  font-weight: 600;
+  font-weight: var(--weight-normal);
+  cursor: pointer;
 }
 
-.check input {
-  width: auto;
-  min-width: var(--touch-min);
+.check input[type='checkbox'] {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  margin: 0;
 }
 
 /* The assumed-pack state: visible until the owner confirms it, because an
@@ -1840,6 +1897,20 @@ section.danger-zone h2 {
       linear-gradient(var(--accent), var(--accent)) left center / 3px 60% no-repeat,
       var(--accent-subtle);
   }
+
+  /*
+   * The column starts a fixed distance from the rail instead of floating in
+   * the middle of what is left: centred, it left ~250px of empty canvas between
+   * the navigation and the page title, and the title lined up with nothing.
+   */
+  #root:has(> .tabs) .app-main {
+    padding: var(--space-6) var(--space-6) var(--space-6);
+  }
+
+  #root:has(> .tabs) .content {
+    margin-left: 0;
+    max-width: 760px;
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -2040,10 +2111,9 @@ section.danger-zone h2 {
   cursor: pointer;
 }
 
-.record-select > input[type='checkbox'] {
-  flex: none;
-  width: auto;
-  margin: 2px 0 0;
+.record-select.check {
+  margin-bottom: 0;
+  align-items: flex-start;
 }
 
 .record-select-body {

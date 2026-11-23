@@ -146,11 +146,10 @@ export function ScanMenu(): ReactNode {
   };
 
   return (
-    <Screen title="Find recipes from a menu">
-      <p className="muted">
-        Photograph a menu and Sous will look for recipes for each dish. Nothing is saved — each
-        one opens in the recipe editor for you to check and adjust to your own portions first.
-      </p>
+    <Screen
+      title="Find recipes from a menu"
+      description="Photograph a menu and Sous will look for recipes for each dish. Nothing is saved — each one opens in the recipe editor for you to check and adjust to your own portions first."
+    >
 
       <PhotoGate sources={sources} busy={busy} onFile={(file) => void scan(file)} />
 

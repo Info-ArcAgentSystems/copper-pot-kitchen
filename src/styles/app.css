@@ -485,10 +485,14 @@ button {
    * row it sits in is tight.
    */
   padding: 0 var(--space-4);
-  border: 1px solid var(--border-strong);
+  border: 1px solid transparent;
   border-radius: var(--radius-button);
-  background: var(--card);
+  background: var(--button-bg);
   color: var(--text);
+  transition:
+    background-color 0.15s ease,
+    transform 0.1s ease,
+    box-shadow 0.15s ease;
   font-weight: var(--weight-semi);
   line-height: 1;
   cursor: pointer;
@@ -500,8 +504,16 @@ button.sm {
   padding: 0 var(--space-3);
 }
 
+/* Paired with focus-visible: a touch screen has no hover. */
+button:hover,
+button:focus-visible {
+  background: var(--button-hover);
+}
+
+/* The press registers under the thumb, where there is no hover to tell him. */
 button:active {
-  background: var(--surface);
+  background: var(--button-hover);
+  transform: scale(0.98);
 }
 
 .signin button[type='submit'] {
@@ -578,18 +590,36 @@ button:disabled {
   align-items: flex-start;
   gap: 2px;
   width: 100%;
-  padding: var(--space-3);
+  padding: var(--space-3) var(--space-4);
   text-align: left;
   text-decoration: none;
+  /* A row is read, not pressed like a button: body weight, so the bold name
+     is the one thing that stands out in it. */
+  font-weight: var(--weight-normal);
+  line-height: var(--leading-body);
   color: var(--text);
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-card);
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.2s ease,
+    background-color 0.15s ease;
+}
+
+/* The card lifts under a pointer or a keyboard focus — never the only sign of
+   anything; the card already reads as one without it. */
+.record:hover,
+.record:focus-visible {
+  background: var(--card);
+  box-shadow: var(--shadow-raise);
+  transform: translateY(-1px);
 }
 
 .record:active {
-  background: var(--surface);
+  background: var(--hover);
+  transform: none;
 }
 
 .record .muted {
@@ -714,6 +744,8 @@ button.primary {
   border-color: var(--accent-strong);
 }
 
+button.primary:hover,
+button.primary:focus-visible,
 button.primary:active {
   background: var(--accent);
   border-color: var(--accent);
@@ -736,6 +768,8 @@ button.danger {
   border-color: var(--danger-border);
 }
 
+button.danger:hover,
+button.danger:focus-visible,
 button.danger:active {
   background: var(--danger-subtle);
 }
@@ -1401,18 +1435,24 @@ button.link {
 
 .tile {
   display: block;
-  padding: var(--space-3);
+  padding: var(--space-4);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--card);
   color: var(--text);
   text-decoration: none;
+  box-shadow: var(--shadow-card);
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
 }
 
 /* Paired with focus-visible: a touch screen has no hover. */
 .tile:hover,
 .tile:focus-visible {
   border-color: var(--border-strong);
+  box-shadow: var(--shadow-raise);
+  transform: translateY(-1px);
 }
 
 .tile > h3 {
@@ -1917,32 +1957,40 @@ section.danger-zone h2 {
    SEGMENTED CONTROL — Shopping/Prep/Packing, Recipes/Ingredients.
    --------------------------------------------------------------------------- */
 
+/*
+ * A TRACK WITH A RAISED THUMB. The chosen view is a white card sitting in a grey
+ * track — the shape every phone uses for this — rather than a blue fill, which
+ * spent the accent on navigation.
+ */
 .segmented {
   display: flex;
-  border: 1px solid var(--border-strong);
+  gap: 3px;
+  padding: 3px;
+  background: var(--button-bg);
   border-radius: var(--radius);
-  overflow: hidden;
 }
 
 .segmented button {
   flex: 1;
   min-height: var(--touch-min);
   border: none;
-  border-right: 1px solid var(--border);
-  border-radius: 0;
-  background: var(--card);
+  border-radius: calc(var(--radius) - 3px);
+  background: transparent;
   color: var(--text-muted);
   font-size: var(--size-small);
   font-weight: var(--weight-semi);
 }
 
-.segmented button:last-child {
-  border-right: none;
+.segmented button:hover,
+.segmented button:focus-visible {
+  background: var(--hover);
+  color: var(--text);
 }
 
 .segmented button[aria-selected='true'] {
-  background: var(--accent-subtle);
-  color: var(--accent);
+  background: var(--card);
+  color: var(--text);
+  box-shadow: var(--shadow-card);
 }
 
 /* The ring sits inside, or it is clipped by the rounded overflow. */
@@ -2139,4 +2187,95 @@ section.danger-zone h2 {
 
 .bulk-bar > p {
   margin: 0 0 var(--space-2);
+}
+
+/* ---------------------------------------------------------------------------
+   A JOB ROW: a date chip, the job, and its status — read at arm's length.
+   --------------------------------------------------------------------------- */
+.record-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+/*
+ * The date as a chip: day of the week over the number, the way a calendar app
+ * shows it. Ink on a grey ground, NOT the accent — blue is for acting, and a
+ * date is something he reads. No date is said, not left blank.
+ */
+.date-chip {
+  flex: none;
+  width: 50px;
+  min-height: 54px;
+  border-radius: var(--radius-button);
+  background: var(--button-bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.date-chip-dow {
+  font-size: 11px;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+
+.date-chip-day {
+  font-size: 20px;
+  font-weight: 800;
+  margin-top: 3px;
+  font-variant-numeric: tabular-nums;
+}
+
+.date-chip.is-none {
+  gap: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: var(--weight-semi);
+  text-align: center;
+}
+
+.record-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.record-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.record-head > strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Where a job is in its life. Neutral by default; green once the food has gone
+   out; cancelled reads quieter still. Never the accent, never amber. */
+.status-pill {
+  margin-left: auto;
+  flex: none;
+  font-size: var(--size-micro);
+  font-weight: var(--weight-bold);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--button-bg);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.status-pill.is-done {
+  color: var(--ok);
 }

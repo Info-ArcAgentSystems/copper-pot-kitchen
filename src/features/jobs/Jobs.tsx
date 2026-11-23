@@ -78,6 +78,29 @@ const SEVERITIES: { value: DietarySeverity; label: string }[] = [
   { value: 'severe', label: 'Severe' },
 ];
 
+const STATUS_LABEL: Record<JobStatus, string> = {
+  enquiry: 'Enquiry',
+  confirmed: 'Confirmed',
+  in_prep: 'In prep',
+  delivered: 'Delivered',
+  invoiced: 'Invoiced',
+  paid: 'Paid',
+  cancelled: 'Cancelled',
+};
+
+const DONE: ReadonlySet<JobStatus> = new Set(['delivered', 'invoiced', 'paid']);
+
+const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/** "2026-11-27" → Fri / 27, read as a local calendar date. Null for no date. */
+function dateChip(iso: string | null): { dow: string; day: number; label: string } | null {
+  if (iso === null || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
+  const [y, m, d] = iso.split('-').map(Number);
+  const date = new Date(y ?? 0, (m ?? 1) - 1, d ?? 1);
+  const dow = DOW[date.getDay()] ?? '';
+  return { dow, day: date.getDate(), label: `${dow} ${date.getDate()}` };
+}
+
 export function Jobs(): ReactNode {
   const repo = jobRepository(supabaseDb());
 
@@ -113,23 +136,44 @@ export function Jobs(): ReactNode {
           refusal: (cause) => (cause instanceof Error ? cause.message : 'could not be deleted'),
           noun: ['job', 'jobs'],
         }}
-        renderRow={(j) => (
-          <>
-            <strong>
-              {j.serviceDate ?? 'no date'} · {j.serviceType ?? 'no service type'}
-            </strong>
-            <span className="muted num">
-              {[
-                j.guests === null ? 'no guest count' : `${j.guests} guests`,
-                `${j.dishes.length} dish${j.dishes.length === 1 ? '' : 'es'}`,
-                j.status,
-              ].join(' · ')}
+        renderRow={(j) => {
+          const chip = dateChip(j.serviceDate);
+          return (
+            <span className="record-row">
+              {chip === null ? (
+                <span className="date-chip is-none">
+                  <span>No</span>
+                  <span>date</span>
+                </span>
+              ) : (
+                <span className="date-chip" aria-label={chip.label}>
+                  <span className="date-chip-dow">{chip.dow}</span>
+                  <span className="date-chip-day">{chip.day}</span>
+                </span>
+              )}
+              <span className="record-body">
+                <span className="record-head">
+                  <strong>{j.serviceType ?? 'No service type'}</strong>
+                  <span className={`status-pill${DONE.has(j.status) ? ' is-done' : ''}`}>
+                    {STATUS_LABEL[j.status]}
+                  </span>
+                </span>
+                <span className="muted num">
+                  {[
+                    j.serviceTime === null ? null : j.serviceTime.slice(0, 5),
+                    j.guests === null ? 'no guest count' : `${j.guests} guests`,
+                    `${j.dishes.length} dish${j.dishes.length === 1 ? '' : 'es'}`,
+                  ]
+                    .filter((x) => x !== null)
+                    .join(' · ')}
+                </span>
+                {j.dietaries.some((d) => d.kind === 'unresolved') && (
+                  <span className="unresolved">unresolved dietary</span>
+                )}
+              </span>
             </span>
-            {j.dietaries.some((d) => d.kind === 'unresolved') && (
-              <span className="unresolved">unresolved dietary</span>
-            )}
-          </>
-        )}
+          );
+        }}
             renderForm={(job, done) => <JobForm job={job} done={done} />}
         />
       </div>

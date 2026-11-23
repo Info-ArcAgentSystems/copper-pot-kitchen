@@ -150,7 +150,7 @@
   --space-5: 24px;
   --space-6: 32px;
 
-  --radius: 8px;
+  --radius: 12px;
   /*
    * Buttons alone. The shared 8px is on cards, inputs, tinted blocks and the
    * segmented control, and moving it would re-round the whole app to restyle
@@ -262,6 +262,19 @@
    * texture. The border is still what separates.
    */
   --shadow-card: 0 1px 2px rgb(0 0 0 / 4%);
+
+  /*
+   * THE LIFT, for a card under a pointer or a keyboard focus. Never the only
+   * sign of anything — a touch screen has no hover, so every rule using it
+   * pairs with :focus-visible and the card already reads as a card without it.
+   */
+  --shadow-raise: 0 4px 14px rgb(0 0 0 / 9%), 0 1px 3px rgb(0 0 0 / 6%);
+
+  /* A secondary button is a soft grey fill, not an outline: quieter than the
+     primary, and still plainly a button. */
+  --button-bg: #e4e6eb;
+  --button-hover: #d8dbe0;
+  --hover: #f5f6f8;
 }
 
 /*
@@ -317,6 +330,10 @@
     --warn-border: #a16207;
 
     --shadow-card: none;
+    --shadow-raise: 0 6px 18px rgb(0 0 0 / 45%);
+    --button-bg: #262c34;
+    --button-hover: #313843;
+    --hover: #1b2026;
   }
 }
 

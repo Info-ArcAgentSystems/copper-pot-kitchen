@@ -72,8 +72,22 @@ export interface NoIngredient {
   readonly reason: 'new' | 'ambiguous' | 'missing';
 }
 
-/** Every outcome a line can have: the engine's four, plus the unmatched case. */
-export type LinePrice = InvoicePrice | NoIngredient;
+/**
+ * Two or more lines for ONE ingredient that work out to different pack prices.
+ *
+ * THE DEFECT THIS EXISTS FOR. A supermarket receipt read "JUICE ORANGE FC 2L" as
+ * 2 L at €2.79 on one line and 4 L at €2.79 on the next. Against a 2 L pack those
+ * price at €2.79 and €1.40, and the save loop wrote every priced line in turn —
+ * so whichever came LAST silently became the price. Neither is saved now; the
+ * receipt is what needs checking.
+ */
+export interface LinesDisagree {
+  readonly kind: 'disagrees';
+  readonly packPrices: readonly Cents[];
+}
+
+/** Every outcome a line can have: the engine's four, the unmatched case, and a disagreement. */
+export type LinePrice = InvoicePrice | NoIngredient | LinesDisagree;
 
 /** The outcomes that need a sentence rather than a figure. */
 export type UnpricedLine = Exclude<LinePrice, { kind: 'priced' }>;
@@ -113,7 +127,7 @@ export interface InvoiceReview {
   readonly newThings: readonly NewIngredient[];
   /** Lines a person has to deal with by hand, in words. */
   readonly needsManualHandling: readonly string[];
-  /** How many lines would actually update a price. */
+  /** How many INGREDIENTS would have their price updated — not lines. */
   readonly priceableCount: number;
   readonly readyToSave: boolean;
 }
@@ -147,7 +161,22 @@ function resolveSupplier(name: string | null, suppliers: readonly Supplier[]): R
   return { kind: 'matched', record: matches[0] as Supplier, read: name.trim() };
 }
 
-export function reviewInvoice(read: InvoiceRead, owner: InvoiceOwnerData): InvoiceReview {
+/**
+ * `onePackEach` holds the descriptions of receipt lines the OWNER has said are
+ * one of his packs per item — "1 × JUICE ORANGE FC 2L" is one 2 L pack.
+ *
+ * A shop receipt prints a count and no unit, and the engine rightly refuses to
+ * price a count against a 2 L pack: nothing on the page says the item IS that
+ * pack. His tap says so. The line is then restated in the pack's own unit —
+ * quantity × pack size — and priced by the same engine function as every other
+ * line, so the division still happens in exactly one place. Never applied
+ * without his say-so, and never to a line that printed a unit of its own.
+ */
+export function reviewInvoice(
+  read: InvoiceRead,
+  owner: InvoiceOwnerData,
+  onePackEach: ReadonlySet<string> = new Set(),
+): InvoiceReview {
   const gaps: Gap[] = [];
   const newThings: NewIngredient[] = [];
   const needsManualHandling: string[] = [];
@@ -173,11 +202,18 @@ export function reviewInvoice(read: InvoiceRead, owner: InvoiceOwnerData): Invoi
     // It reports `no_ingredient`, NOT `unreadable`. The numbers on this line may
     // be perfectly legible; what is absent is the ingredient to price them
     // against, and saying otherwise points the owner at his camera.
+    const pack = ingredient.kind === 'matched' ? ingredient.record.pack : null;
+    const asPacks =
+      pack !== null &&
+      line.unit === null &&
+      line.quantity !== null &&
+      onePackEach.has(line.description);
+
     const price: LinePrice =
       ingredient.kind === 'matched'
         ? pricePerPackFromInvoice(ingredient.record, {
-            quantity: line.quantity,
-            unit: (line.unit ?? '') as StockUnit,
+            quantity: asPacks ? (line.quantity as number) * pack.size : line.quantity,
+            unit: (asPacks ? pack.unit : (line.unit ?? '')) as StockUnit,
             lineTotal: line.lineTotalCents === null ? null : (line.lineTotalCents as Cents),
           })
         : { kind: 'no_ingredient', reason: ingredient.kind };
@@ -187,7 +223,9 @@ export function reviewInvoice(read: InvoiceRead, owner: InvoiceOwnerData): Invoi
       // different pack size or a hand-entered price, and he cannot choose without
       // knowing what did not reconcile.
       needsManualHandling.push(
-        `"${line.description}" is invoiced in ${price.invoiceUnit} but stocked in ${price.packUnit} packs. Enter its price by hand.`,
+        price.invoiceUnit === ''
+          ? `"${line.description}" has no unit on the receipt, and your pack is ${price.packUnit}. If each one is one of your packs, say so on its line; otherwise enter its price by hand.`
+          : `"${line.description}" is invoiced in ${price.invoiceUnit} but stocked in ${price.packUnit} packs. Enter its price by hand.`,
       );
     }
     if (price.kind === 'no_pack') {
@@ -214,18 +252,60 @@ export function reviewInvoice(read: InvoiceRead, owner: InvoiceOwnerData): Invoi
     });
   }
 
-  const priceableCount = lines.filter((l) => l.price.kind === 'priced').length;
+  /*
+   * ONE PRICE PER INGREDIENT. Lines that agree are the same price written more
+   * than once, which is harmless; lines that disagree mean the receipt was read
+   * inconsistently, and choosing between them would be a guess. All of that
+   * ingredient's lines become `disagrees`, and none of them is saved.
+   */
+  const pricesFor = new Map<string, Set<number>>();
+  for (const l of lines) {
+    if (l.price.kind !== 'priced' || l.ingredient.kind !== 'matched') continue;
+    const id = l.ingredient.record.id;
+    const seen = pricesFor.get(id) ?? new Set<number>();
+    seen.add(l.price.pricePerPack as number);
+    pricesFor.set(id, seen);
+  }
+
+  const settled: ReviewedLine[] = lines.map((l) => {
+    if (l.price.kind !== 'priced' || l.ingredient.kind !== 'matched') return l;
+    const seen = pricesFor.get(l.ingredient.record.id);
+    if (seen === undefined || seen.size < 2) return l;
+    return {
+      ...l,
+      price: { kind: 'disagrees', packPrices: [...seen].sort((a, b) => b - a) as Cents[] },
+    };
+  });
+
+  for (const [id, seen] of pricesFor) {
+    if (seen.size < 2) continue;
+    const name = settled.find((l) => l.ingredient.kind === 'matched' && l.ingredient.record.id === id);
+    needsManualHandling.push(
+      `The lines for "${name?.description ?? id}" work out to different prices per pack, so none of them is saved. Check the receipt and enter the price by hand.`,
+    );
+  }
+
+  const priceableCount = new Set(
+    settled
+      .filter((l) => l.price.kind === 'priced' && l.ingredient.kind === 'matched')
+      .map((l) => (l.ingredient.kind === 'matched' ? l.ingredient.record.id : '')),
+  ).size;
 
   return {
     supplier: resolveSupplier(read.supplier, owner.suppliers),
     invoiceDate: read.invoiceDate,
-    lines,
+    lines: settled,
     gaps,
     newThings,
     needsManualHandling,
     priceableCount,
-    // Something must actually be priceable, and nothing may be outstanding.
-    // An invoice where every line needs hand-entering is not a saveable scan.
-    readyToSave: gaps.length === 0 && needsManualHandling.length === 0 && priceableCount > 0,
+    /*
+     * Something must be priceable, and no gap may stand. A line needing hand
+     * entry NO LONGER blocks the rest: it is listed, and it is simply not saved.
+     * Blocking made a receipt with one unpacked item save nothing at all — and
+     * on a first receipt, where most items are new, that was every receipt.
+     * Skipping writes nothing wrong; only a priced line is ever written.
+     */
+    readyToSave: gaps.length === 0 && priceableCount > 0,
   };
 }

@@ -401,11 +401,13 @@ const INVOICE_TOOL = [
                 description: { type: 'string', description: 'The line description, as printed.' },
                 quantity: {
                   type: ['number', 'null'],
-                  description: 'How much was delivered. The number in the quantity column, as printed.',
+                  description:
+                    'How much was delivered or bought. The number in the quantity column, as printed. Never a size taken from the item name.',
                 },
                 unit: {
                   type: ['string', 'null'],
-                  description: 'The unit in that column — kg, g, L, each, case. As printed.',
+                  description:
+                    'The unit in the quantity column — kg, g, L, each, case. As printed. Null when there is no quantity column; never a unit taken from the item name.',
                 },
                 lineTotalPrinted: {
                   type: ['number', 'null'],
@@ -413,7 +415,7 @@ const INVOICE_TOOL = [
                     'The line total EXACTLY AS PRINTED, in the currency on the page. A line reading 45.00 is 45.00. Do NOT convert it, do not scale it, do not add up the column. Read the figure and nothing else.',
                 },
               },
-              required: ['description', 'quantity', 'unit', 'lineTotal'],
+              required: ['description', 'quantity', 'unit', 'lineTotalPrinted'],
             },
           },
           uncertain: {
@@ -449,6 +451,14 @@ convert units or currencies. If a figure is unreadable it is null and you name i
 Report every figure EXACTLY AS PRINTED. A total reading 45.00 is 45.00. A quantity reading 5
 is 5. Scaling, rounding or reformatting them is calculation, and calculation is not your job
 here — something else does it, the same way every time.
+
+SHOP RECEIPTS. A supermarket receipt usually has no quantity column: each item bought is
+printed on its own line, and the same item bought twice is printed twice. For such a line
+the quantity is 1 and the unit is null. When a line prints a multiple, such as 2 x 0.79
+with 1.58 beside it, the quantity is 2 and the line total is 1.58.
+A size printed in the item's name, such as 2L, 500G or 1KG, is part of the description.
+It is never the quantity and never the unit. "JUICE ORANGE 2L 2.79" is quantity 1, unit
+null, line total 2.79.
 
 You are not given the owner's ingredients or suppliers. Report each description as printed.
 Matching happens elsewhere.

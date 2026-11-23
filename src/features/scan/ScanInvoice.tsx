@@ -53,12 +53,24 @@ export function ScanInvoice(): ReactNode {
   /** The name he gave each ingredient added from a line, to explain a non-match. */
   const [addedAs, setAddedAs] = useState<Readonly<Record<string, string>>>({});
   const [supplierNote, setSupplierNote] = useState<string | null>(null);
+  /** Receipt lines he has said are one of his packs per item. His word, per line. */
+  const [onePackEach, setOnePackEach] = useState<ReadonlySet<string>>(new Set());
 
   const ingredientList = ingredients.state.status === 'ready' ? ingredients.state.data : [];
   const supplierList = suppliers.state.status === 'ready' ? suppliers.state.data : [];
 
   const review: InvoiceReview | null =
-    read === null ? null : reviewInvoice(read, { ingredients: ingredientList, suppliers: supplierList });
+    read === null
+      ? null
+      : reviewInvoice(read, { ingredients: ingredientList, suppliers: supplierList }, onePackEach);
+
+  const togglePackEach = (description: string): void =>
+    setOnePackEach((prev) => {
+      const next = new Set(prev);
+      if (next.has(description)) next.delete(description);
+      else next.add(description);
+      return next;
+    });
 
   const sources: readonly DataSource[] = [
     {
@@ -83,6 +95,7 @@ export function ScanInvoice(): ReactNode {
     setAdding(null);
     setAddedAs({});
     setSupplierNote(null);
+    setOnePackEach(new Set());
 
     try {
       const base = import.meta.env.VITE_SUPABASE_URL ?? '';
@@ -240,6 +253,24 @@ export function ScanInvoice(): ReactNode {
 
                     {/* Only once the reloaded list holds it — before that, "doesn't
                         match" would just mean "not re-read yet". */}
+                    {/* A receipt count against his pack: priced only on his word. */}
+                    {first.ingredient.kind === 'matched' &&
+                      first.ingredient.record.pack !== null &&
+                      first.unit === null &&
+                      (onePackEach.has(group.description) ||
+                        (price.kind === 'unconvertible' && price.invoiceUnit === '')) && (
+                        <button
+                          type="button"
+                          className="sm"
+                          disabled={busy}
+                          onClick={() => togglePackEach(group.description)}
+                        >
+                          {onePackEach.has(group.description)
+                            ? 'Undo — not one pack each'
+                            : `Each one is one ${first.ingredient.record.pack.size} ${first.ingredient.record.pack.unit} pack`}
+                        </button>
+                      )}
+
                     {isNew && named !== undefined && ingredientList.some((i) => i.name === named) && (
                       <p className="muted">
                         You added “{named}”, but it doesn’t match “{group.description}”, so this

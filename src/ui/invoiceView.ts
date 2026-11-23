@@ -48,7 +48,13 @@ export function lineNote(price: UnpricedLine): string {
       // are photographed differently and fixed differently.
       return `could not read the ${price.missing.join(' and ')} on this line`;
     case 'unconvertible':
-      return `invoiced in ${price.invoiceUnit}, stocked in ${price.packUnit} — enter this price by hand`;
+      return price.invoiceUnit === ''
+        ? `no unit on the receipt, and your pack is ${price.packUnit}`
+        : `invoiced in ${price.invoiceUnit}, stocked in ${price.packUnit} — enter this price by hand`;
+    case 'disagrees':
+      return `these lines work out to different prices per pack (${price.packPrices
+        .map((c) => formatMoney(c, ''))
+        .join(', ')}) — check the receipt; not saved`;
     case 'no_pack':
       return 'no pack size recorded — set one in Ingredients';
     default: {

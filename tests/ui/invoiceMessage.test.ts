@@ -47,6 +47,7 @@ const BY_KIND: Record<UnpricedLine['kind'], UnpricedLine> = {
   unreadable: { kind: 'unreadable', missing: ['quantity'] },
   unconvertible: { kind: 'unconvertible', invoiceUnit: 'case', packUnit: 'kg' },
   no_pack: { kind: 'no_pack' },
+  disagrees: { kind: 'disagrees', packPrices: [279 as Cents, 140 as Cents] },
 };
 
 /** And every reason within the unmatched case, which must also read differently. */

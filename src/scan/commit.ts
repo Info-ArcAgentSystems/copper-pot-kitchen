@@ -174,12 +174,17 @@ export async function commitScannedPrices(
 
   const repo = ingredientRepository(db);
   let updated = 0;
+  // One write per ingredient. Repeated receipt lines that agree would otherwise
+  // write the same price again, with `previousPrice` taken from a stale record.
+  const written = new Set<string>();
 
   try {
     for (const line of review.lines) {
       if (line.price.kind !== 'priced' || line.ingredient.kind !== 'matched') continue;
 
       const ingredient = line.ingredient.record;
+      if (written.has(ingredient.id)) continue;
+      written.add(ingredient.id);
       await repo.update(ingredient.id, {
         ...ingredient,
         pricePerPack: line.price.pricePerPack,

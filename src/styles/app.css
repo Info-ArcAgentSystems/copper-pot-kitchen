@@ -370,10 +370,13 @@ h3 {
   flex: 1 0 auto;
   min-width: 4.5rem;
   display: flex;
+  /* Icon over label on the bar; the rail lays them side by side (below). */
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 2px;
   min-height: var(--touch-min);
-  padding: var(--space-3) var(--space-2);
+  padding: var(--space-2) var(--space-1);
   color: var(--text-muted); /* 4.57 on the light chrome */
   font-family: var(--font-display);
   text-decoration: none;
@@ -384,16 +387,39 @@ h3 {
    * weight — which is most of why the page read as flat. Sentence case, body
    * face, small step.
    */
-  font-size: var(--size-small);
+  font-size: var(--size-micro);
   font-weight: var(--weight-semi);
   letter-spacing: 0.01em;
 }
 
-/* The active tab is the one place in the chrome that carries the accent — it
-   is a state, and the underline and the colour say the same thing. */
+/* The glyph never shrinks — a squashed icon is worse than none. */
+.tab-icon {
+  flex: none;
+}
+
+/* The label ellipses rather than wraps, so five tabs never grow the bar. */
+.tab-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * The active tab is the one place in the chrome that carries the accent — it
+ * is a state, and the mark and the colour say the same thing.
+ *
+ * A short 26px mark over the icon rather than a full-width line: it points at
+ * ONE tab instead of underlining a fifth of the screen. Drawn as a background
+ * for the same reason as the brand stroke: a sized pseudo-element would trip
+ * the 44px floor scan for a decoration nobody taps.
+ */
 .tabs a[aria-current='page'] {
   color: var(--accent);
-  box-shadow: inset 0 2px 0 var(--accent);
+  background-image: linear-gradient(var(--accent), var(--accent));
+  background-size: 26px 3px;
+  background-repeat: no-repeat;
+  background-position: center top;
 }
 
 /* Selection is shown by colour and weight, never by hover alone. */
@@ -1724,8 +1750,18 @@ section.danger-zone h2 {
 .app-header-inner {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-3);
+}
+
+/*
+ * The brand takes the slack; the actions sit together at the far edge.
+ *
+ * `space-between` across four items spread Ask Sous and Setup out into the
+ * middle of the bar — at desktop width they floated hundreds of pixels from
+ * anything, and on a phone they took room the kitchen name needed.
+ */
+.app-header-inner > span:first-child {
+  margin-right: auto;
 }
 
 /* Five tabs share the width evenly instead of each claiming a minimum and
@@ -1736,43 +1772,73 @@ section.danger-zone h2 {
 }
 
 /* ---------------------------------------------------------------------------
-   720px — ALL NAVIGATION MOVES TO THE TOP.
+   1024px — THE BAR BECOMES A SIDE RAIL.
 
-   The same 720px as the reading column above, and deliberately not a new
-   number: it is the width at which the column stops growing, which is where the
-   layout changes character. The app's other three breakpoints (420, 480, 620)
-   are all phone-size refinements and none of them is a desktop boundary.
+   Below 1024px — phones, and an iPad in either orientation — the bar stays at
+   the BOTTOM, icon over label, where a thumb reaches it. An iPad on a kitchen
+   counter is used the way a phone is, and the old 720px move to a top row put
+   the navigation at the one edge a held tablet cannot reach.
 
-   TWO ROWS, because one does not fit. Measured with the real fonts and tokens:
-   the brand is 148px, the five tabs 378px, and Ask Sous / Setup / Sign out
-   198px — 780px in one row with the gaps and padding, which overflows 720px by
-   60px and even 768px by 12px. One row would need a ~1024px breakpoint and
-   leave 720–1024px with no arrangement at all; and the brand is the kitchen
-   name out of the database, so a one-row layout would be one long name away
-   from breaking.
+   At 1024px and up there is a desk and a pointer, and the width to spare: the
+   five sections become a column down the left, with the header across the
+   top. Grid, not a new wrapper element — the DOM order (header, nav, main) is
+   unchanged, so focus order, landmarks and the single render site in
+   `App.tsx` all stay exactly as they were.
 
-   So: brand and actions on the header row, the tabs on their own row beneath
-   it, and the content scrolling below both. `order: 0` is just the bar
-   returning to its DOM position — this is where visual order, DOM order and
-   focus order all agree.
+   `:has(> .tabs)` scopes the grid to the signed-in shell. The sign-in screen
+   and the loading state render into the same #root without a tab bar, and
+   must keep the plain column.
    --------------------------------------------------------------------------- */
 
-@media (min-width: 720px) {
-  .tabs {
-    order: 0;
-    /* The border follows the bar. Under the header it divides the chrome from
-       the content below, which is the edge it is now drawing. */
-    border-top: 0;
-    border-bottom: 1px solid var(--border);
-    /* The home indicator is at the bottom of the screen, and the bar no longer
-       is. */
-    padding-bottom: 0;
+@media (min-width: 1024px) {
+  #root:has(> .tabs) {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
-  /* The active tab's marker stays on the edge nearest the content, so it reads
-     as pointing at the panel it opens rather than at the header above it. */
+  #root:has(> .tabs) > .app-header {
+    grid-column: 1 / -1;
+  }
+
+  /* The header spans the window, so its contents do too: brand over the rail,
+     actions at the far edge. */
+  #root:has(> .tabs) .app-header-inner {
+    max-width: none;
+  }
+
+  .tabs {
+    order: 0;
+    border-top: 0;
+    border-right: 1px solid var(--chrome-border);
+    padding: var(--space-4) var(--space-3);
+    overflow-y: auto;
+  }
+
+  .tabs-inner {
+    flex-direction: column;
+    gap: var(--space-1);
+    max-width: none;
+    margin: 0;
+  }
+
+  .tabs-inner a {
+    flex: none;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: var(--space-3);
+    min-height: 46px;
+    padding: 0 var(--space-3);
+    border-radius: var(--radius-button);
+    font-size: var(--size-body);
+  }
+
+  /* On the rail the mark moves to the left edge, against the label it names,
+     over a faint accent ground so the active row reads at a glance. */
   .tabs a[aria-current='page'] {
-    box-shadow: inset 0 -2px 0 var(--accent);
+    background:
+      linear-gradient(var(--accent), var(--accent)) left center / 3px 60% no-repeat,
+      var(--accent-subtle);
   }
 }
 

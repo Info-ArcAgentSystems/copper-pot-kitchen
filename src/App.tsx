@@ -88,13 +88,60 @@ function Header(): ReactNode {
   );
 }
 
+/*
+ * One line icon per tab, drawn inline so nothing is fetched and the stroke takes
+ * the tab's own colour through `currentColor` — idle grey, active accent.
+ *
+ * Decoration beside a label, never instead of one: `aria-hidden`, and the label
+ * is always shown. A row of bare glyphs is a guessing game in a kitchen.
+ *
+ * Sized by attribute, not by CSS. `tests/ui/tokens.test.ts` scans the stylesheet
+ * for any height under the 44px touch floor, and a 22px icon rule would trip it
+ * for something nobody taps on its own.
+ */
+const ICON_PATHS: Readonly<Record<(typeof TABS)[number]['to'], readonly string[]>> = {
+  // Jobs — a calendar page.
+  '/': ['M4 6.5h16v13H4z', 'M4 10.5h16', 'M8.5 4v4', 'M15.5 4v4'],
+  // Service — a clipboard with ticks: shopping, prep, packing.
+  '/service': ['M7 5H5.5v15h13V5H17', 'M9 3.5h6v3H9z', 'M8.5 11l1.5 1.5 3-3', 'M8.5 16.5h7'],
+  // Money — a note.
+  '/money': ['M3.5 7h17v10h-17z', 'M12 9.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5', 'M6.5 10v4', 'M17.5 10v4'],
+  // Library — an open book.
+  '/library': ['M12 6.5C10 5 7 4.8 4 5.5v13c3-.7 6-.5 8 1', 'M12 6.5c2-1.5 5-1.7 8-1v13c-3-.7-6-.5-8 1', 'M12 6.5v13'],
+  // Scan — a camera.
+  '/scan': ['M4 8h3.5L9 5.5h6L16.5 8H20v11H4z', 'M12 10.5a3 3 0 1 0 0 6a3 3 0 1 0 0-6'],
+};
+
+function TabIcon({ to }: { readonly to: (typeof TABS)[number]['to'] }): ReactNode {
+  return (
+    <svg
+      className="tab-icon"
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {ICON_PATHS[to].map((d) => (
+        <path key={d} d={d} />
+      ))}
+    </svg>
+  );
+}
+
 function TabBar(): ReactNode {
   return (
     <nav className="tabs" aria-label="Sections">
       <div className="tabs-inner">
         {TABS.map((tab) => (
           <NavLink key={tab.to} to={tab.to} end={tab.to === '/'} className="tap">
-            {tab.label}
+            <TabIcon to={tab.to} />
+            <span className="tab-label">{tab.label}</span>
           </NavLink>
         ))}
       </div>

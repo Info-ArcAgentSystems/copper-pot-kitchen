@@ -153,7 +153,7 @@ export function IngredientForm({
   onSavedName,
 }: {
   ingredient: Ingredient | null;
-  done: () => void;
+  done: (said?: string) => void;
   prefill?: { readonly name: string; readonly supplierId: SupplierId | null };
   /** Told the name a NEW ingredient was saved under, once the write succeeded. */
   onSavedName?: (name: string) => void;
@@ -320,7 +320,7 @@ export function IngredientForm({
       }
 
       if (ingredient === null && saved !== null) onSavedName?.(saved.name);
-      done();
+      done('Saved');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save.');
       setSaving(false);
@@ -332,7 +332,7 @@ export function IngredientForm({
     setSaving(true);
     try {
       await repo.remove(ingredient.id);
-      done();
+      done('Deleted');
     } catch (cause) {
       // `recipe_ingredients.ingredient_id` is `on delete restrict`, so the
       // database REFUSES this rather than silently orphaning a recipe line.

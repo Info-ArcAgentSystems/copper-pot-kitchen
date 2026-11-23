@@ -41,7 +41,7 @@ function SupplierForm({
   done,
 }: {
   supplier: Supplier | null;
-  done: () => void;
+  done: (said?: string) => void;
 }): ReactNode {
   const { state } = useKitchen();
   const db = supabaseDb();
@@ -75,7 +75,7 @@ function SupplierForm({
     try {
       if (supplier === null) await repo.create(value);
       else await repo.update(supplier.id, value);
-      done();
+      done('Saved');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save.');
       setSaving(false);
@@ -87,7 +87,7 @@ function SupplierForm({
     setSaving(true);
     try {
       await repo.remove(supplier.id);
-      done();
+      done('Deleted');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not delete.');
       setSaving(false);

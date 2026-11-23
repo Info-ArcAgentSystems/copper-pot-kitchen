@@ -48,7 +48,7 @@ function CustomerForm({
   done,
 }: {
   customer: Customer | null;
-  done: () => void;
+  done: (said?: string) => void;
 }): ReactNode {
   const { state } = useKitchen();
   const db = supabaseDb();
@@ -89,7 +89,7 @@ function CustomerForm({
     try {
       if (customer === null) await repo.create(value);
       else await repo.update(customer.id, value);
-      done();
+      done('Saved');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save.');
       setSaving(false);
@@ -114,7 +114,7 @@ function CustomerForm({
     setSaving(true);
     try {
       await repo.remove(customer.id);
-      done();
+      done('Deleted');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not delete.');
       setSaving(false);

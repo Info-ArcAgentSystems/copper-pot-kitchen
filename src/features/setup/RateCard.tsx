@@ -59,7 +59,7 @@ export function RateCard(): ReactNode {
   );
 }
 
-function RateForm({ rate, done }: { rate: ClientRate | null; done: () => void }): ReactNode {
+function RateForm({ rate, done }: { rate: ClientRate | null; done: (said?: string) => void }): ReactNode {
   const { state } = useKitchen();
   const repo = clientRateRepository(supabaseDb());
 
@@ -104,7 +104,7 @@ function RateForm({ rate, done }: { rate: ClientRate | null; done: () => void })
     try {
       if (rate === null) await repo.create(value);
       else await repo.update(rate.id, value);
-      done();
+      done('Saved');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save.');
       setSaving(false);
@@ -116,7 +116,7 @@ function RateForm({ rate, done }: { rate: ClientRate | null; done: () => void })
     setSaving(true);
     try {
       await repo.remove(rate.id);
-      done();
+      done('Deleted');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not delete.');
       setSaving(false);

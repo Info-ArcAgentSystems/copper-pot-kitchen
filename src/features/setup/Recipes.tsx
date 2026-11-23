@@ -187,7 +187,7 @@ interface LineDraft {
 let seq = 0;
 const newKey = (): string => `l${(seq += 1)}`;
 
-function RecipeForm({ recipe, done }: { recipe: Recipe | null; done: () => void }): ReactNode {
+function RecipeForm({ recipe, done }: { recipe: Recipe | null; done: (said?: string) => void }): ReactNode {
   const { state } = useKitchen();
   const navigate = useNavigate();
   const db = supabaseDb();
@@ -334,7 +334,7 @@ function RecipeForm({ recipe, done }: { recipe: Recipe | null; done: () => void 
 
     try {
       await repo.save(value);
-      done();
+      done('Saved');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save.');
       setSaving(false);
@@ -346,7 +346,7 @@ function RecipeForm({ recipe, done }: { recipe: Recipe | null; done: () => void 
     setSaving(true);
     try {
       await repo.remove(recipe.id);
-      done();
+      done('Deleted');
     } catch (cause) {
       setError(
         cause instanceof Error && cause.message.includes('violates foreign key')

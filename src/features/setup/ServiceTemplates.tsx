@@ -61,7 +61,7 @@ function TemplateForm({
   done,
 }: {
   template: ServiceTemplate | null;
-  done: () => void;
+  done: (said?: string) => void;
 }): ReactNode {
   const { state } = useKitchen();
   const repo = serviceTemplateRepository(supabaseDb());
@@ -100,7 +100,7 @@ function TemplateForm({
     try {
       if (template === null) await repo.create(value);
       else await repo.update(template.id, value);
-      done();
+      done('Saved');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save.');
       setSaving(false);
@@ -112,7 +112,7 @@ function TemplateForm({
     setSaving(true);
     try {
       await repo.remove(template.id);
-      done();
+      done('Deleted');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not delete.');
       setSaving(false);

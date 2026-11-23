@@ -43,7 +43,7 @@ function PropertyForm({
   done,
 }: {
   property: Property | null;
-  done: () => void;
+  done: (said?: string) => void;
 }): ReactNode {
   const { state } = useKitchen();
   const db = supabaseDb();
@@ -84,7 +84,7 @@ function PropertyForm({
     try {
       if (property === null) await repo.create(value);
       else await repo.update(property.id, value);
-      done();
+      done('Saved');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save.');
       setSaving(false);
@@ -96,7 +96,7 @@ function PropertyForm({
     setSaving(true);
     try {
       await repo.remove(property.id);
-      done();
+      done('Deleted');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not delete.');
       setSaving(false);

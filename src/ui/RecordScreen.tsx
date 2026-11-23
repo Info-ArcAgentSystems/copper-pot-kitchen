@@ -10,10 +10,11 @@
  * row appears is if the owner saved one.
  */
 
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { EmptyState } from './EmptyState';
 import { Screen } from './Screen';
 import { Sheet } from './Sheet';
+import { SwipeRow } from './SwipeRow';
 import { SourceNotice } from './SourceNotice';
 import { sourceState, type DataSource } from './sourceState';
 import { useAsync } from './useAsync';
@@ -59,7 +60,11 @@ export interface RecordScreenProps<T> {
   readonly keyOf: (item: T) => string;
   readonly renderRow: (item: T) => ReactNode;
   /** The form for a new or existing record. `null` means "new". */
-  readonly renderForm: (item: T | null, done: () => void) => ReactNode;
+  /**
+   * `done` closes the sheet. A form passes what it did — "Saved", "Deleted" —
+   * and the list confirms it in a toast; Cancel passes nothing and says nothing.
+   */
+  readonly renderForm: (item: T | null, done: (said?: string) => void) => ReactNode;
   /**
    * Anything the screen needs to say about a SECOND read of its own, placed
    * under the heading and above the list.
@@ -150,7 +155,22 @@ export function RecordScreen<T>({
     });
   };
 
-  const done = (): void => {
+  // Short confirmations at the foot of the screen. Each says what happened,
+  // to what, and goes on its own; nothing waits on it.
+  const [toasts, setToasts] = useState<readonly { id: number; text: string }[]>([]);
+  const toastId = useRef(0);
+  const toast = (text: string): void => {
+    toastId.current += 1;
+    const id = toastId.current;
+    setToasts((prev) => [...prev, { id, text }]);
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3200);
+  };
+
+  const done = (said?: string): void => {
+    if (said !== undefined) {
+      const name = editing === null || editing === undefined ? null : (sheetTitle?.(editing) ?? null);
+      toast(name === null ? said : `${said} — ${name}`);
+    }
     setEditing(undefined);
     reload();
   };
@@ -273,12 +293,40 @@ export function RecordScreen<T>({
           <ul className="records">
             {visible.map((item) => {
               const key = keyOf(item);
-              if (!selecting || bulk === undefined) {
+              if (bulk === undefined) {
                 return (
                   <li key={key}>
                     <button type="button" className="record" onClick={() => setEditing(item)}>
                       {renderRow(item)}
                     </button>
+                  </li>
+                );
+              }
+
+              if (!selecting) {
+                const lockedReason = bulk.lockedReason?.(item) ?? null;
+                return (
+                  <li key={key}>
+                    <SwipeRow
+                      locked={lockedReason}
+                      onOpen={() => setEditing(item)}
+                      onSelect={() => {
+                        if (lockedReason !== null) return;
+                        setOutcome(null);
+                        setSelecting(true);
+                        setSelected(new Set([key]));
+                      }}
+                      onDelete={() => {
+                        // The same confirmation as the bar — never a delete on
+                        // the swipe alone.
+                        setOutcome(null);
+                        setSelecting(true);
+                        setSelected(new Set([key]));
+                        setConfirming(true);
+                      }}
+                    >
+                      {renderRow(item)}
+                    </SwipeRow>
                   </li>
                 );
               }
@@ -334,7 +382,15 @@ export function RecordScreen<T>({
                 setDeleting(true);
                 const result = await deleteEach(chosen, bulk.remove, bulk.nameOf, bulk.refusal);
                 setDeleting(false);
-                setOutcome(result);
+                // Everything went: a toast says so. Anything kept: the panel
+                // stays on screen naming each one and why — a toast that faded
+                // would take the reasons with it.
+                if (result.kept.length === 0) {
+                  const k = result.deleted.length;
+                  toast(`Deleted ${k} ${k === 1 ? bulk.noun[0] : bulk.noun[1]}`);
+                } else {
+                  setOutcome(result);
+                }
                 stopSelecting();
                 reload();
               };
@@ -394,6 +450,14 @@ export function RecordScreen<T>({
       )}
 
       {sheet}
+
+      <div className="toasts" aria-live="polite">
+        {toasts.map((t) => (
+          <p key={t.id} className="toast">
+            {t.text}
+          </p>
+        ))}
+      </div>
     </Screen>
   );
 }

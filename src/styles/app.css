@@ -2510,3 +2510,116 @@ section.danger-zone h2 {
     opacity: 0;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   SWIPE ROW — touch shortcut to Select or Delete. The actions sit behind the
+   row and are only painted while it is moved, so their colour never bleeds
+   at the rounded corners of a row at rest.
+   --------------------------------------------------------------------------- */
+.swipe {
+  position: relative;
+  border-radius: var(--radius);
+  overflow: hidden;
+  touch-action: pan-y;
+}
+
+.swipe-actions {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: flex-end;
+  visibility: hidden;
+}
+
+.swipe.is-revealed .swipe-actions {
+  visibility: visible;
+}
+
+.swipe-actions > button {
+  width: 88px;
+  border: 0;
+  border-radius: 0;
+  color: #fff;
+  font-weight: var(--weight-bold);
+}
+
+.swipe-select {
+  background: #4b5563;
+}
+
+.swipe-delete {
+  background: var(--danger);
+}
+
+.swipe-select:hover,
+.swipe-select:focus-visible {
+  background: #374151;
+}
+
+.swipe-delete:hover,
+.swipe-delete:focus-visible {
+  background: var(--danger);
+  filter: brightness(0.92);
+}
+
+.swipe-locked {
+  width: 176px;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-3);
+  background: #6b7280;
+  color: #fff;
+  font-size: var(--size-small);
+  font-weight: var(--weight-semi);
+}
+
+.swipe-front {
+  position: relative;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.swipe-front.is-dragging {
+  transition: none;
+}
+
+/* ---------------------------------------------------------------------------
+   TOASTS — a short line confirming what just happened, then gone.
+   --------------------------------------------------------------------------- */
+.toasts {
+  position: fixed;
+  left: 50%;
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 60;
+  width: min(92vw, 460px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+
+.toast {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-button);
+  background: #1f2937;
+  color: #f9fafb;
+  box-shadow: var(--shadow-raise);
+  font-size: var(--size-small);
+  animation: toast-in 0.25s ease;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@media (min-width: 1024px) {
+  .toasts {
+    bottom: var(--space-6);
+  }
+}

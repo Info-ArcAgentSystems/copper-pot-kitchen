@@ -312,7 +312,7 @@ function portionsHint(recipe: Recipe | undefined): string {
     : `Type a number — a ${recipe.course} is a choice, not an even split, so the guest count cannot decide for it. Left blank, this dish is left out of prep, shopping and cost.`;
 }
 
-function JobForm({ job, done }: { job: Job | null; done: () => void }): ReactNode {
+function JobForm({ job, done }: { job: Job | null; done: (said?: string) => void }): ReactNode {
   const { state } = useKitchen();
   const db = supabaseDb();
   const repo = jobRepository(db);
@@ -385,7 +385,11 @@ function JobForm({ job, done }: { job: Job | null; done: () => void }): ReactNod
   const [customerId, setCustomerId] = useState(job?.customerId ?? '');
   const [propertyId, setPropertyId] = useState(job?.propertyId ?? '');
   const [serviceDate, setServiceDate] = useState(textValue(job?.serviceDate ?? null));
-  const [serviceTime, setServiceTime] = useState(textValue(job?.serviceTime ?? null));
+  // The database hands the time back with seconds ("19:00:00"); he wrote and
+  // reads hours and minutes.
+  const [serviceTime, setServiceTime] = useState(
+    textValue(job?.serviceTime === undefined || job.serviceTime === null ? null : job.serviceTime.slice(0, 5)),
+  );
   const [serviceType, setServiceType] = useState(textValue(job?.serviceType ?? null));
   const [guests, setGuests] = useState(job?.guests === null || job === null ? '' : String(job.guests));
   const [guestsConfirmed, setGuestsConfirmed] = useState(job?.guestsConfirmed ?? false);
@@ -516,7 +520,7 @@ function JobForm({ job, done }: { job: Job | null; done: () => void }): ReactNod
     setError(null);
     try {
       await repo.save(draft());
-      done();
+      done('Saved');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save.');
       setSaving(false);
@@ -528,7 +532,7 @@ function JobForm({ job, done }: { job: Job | null; done: () => void }): ReactNod
     setSaving(true);
     try {
       await repo.remove(job.id);
-      done();
+      done('Deleted');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not delete.');
       setSaving(false);

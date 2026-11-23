@@ -2029,3 +2029,44 @@ section.danger-zone h2 {
 .invoice-supplier {
   margin-top: var(--space-3);
 }
+
+/* ---------------------------------------------------------------------------
+   SELECT TO DELETE — a tick per row, and one bar that says what will happen.
+   --------------------------------------------------------------------------- */
+.record-select {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  cursor: pointer;
+}
+
+.record-select > input[type='checkbox'] {
+  flex: none;
+  width: auto;
+  margin: 2px 0 0;
+}
+
+.record-select-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.record-select.is-locked {
+  cursor: default;
+}
+
+/* Stays in reach at the bottom of a long list while he ticks. */
+.bulk-bar {
+  position: sticky;
+  bottom: 0;
+  background: var(--card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  box-shadow: var(--shadow-card);
+}
+
+.bulk-bar > p {
+  margin: 0 0 var(--space-2);
+}

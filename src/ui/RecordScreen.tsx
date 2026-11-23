@@ -17,6 +17,25 @@ import { SourceNotice } from './SourceNotice';
 import { sourceState, type DataSource } from './sourceState';
 import { useAsync } from './useAsync';
 import type { ReferenceCount } from './form';
+import { deleteEach, type BulkOutcome } from './bulkDelete';
+
+/**
+ * Opt-in: a Select mode that deletes several records with one confirmation.
+ *
+ * Each screen says how one record is removed and named, which records may not
+ * be ticked at all (Rule 15's closed jobs), and how a refusal reads in his
+ * terms. Everything else — ticking, the count, the confirm, the outcome — is
+ * here once.
+ */
+export interface BulkDelete<T> {
+  readonly remove: (item: T) => Promise<void>;
+  readonly nameOf: (item: T) => string;
+  /** Why a record cannot be selected, or null when it can. */
+  readonly lockedReason?: (item: T) => string | null;
+  readonly refusal: (cause: unknown) => string;
+  /** "recipe" / "recipes", for the count and the confirmation. */
+  readonly noun: readonly [one: string, many: string];
+}
 
 export interface RecordScreenProps<T> {
   readonly title: string;
@@ -65,6 +84,7 @@ export interface RecordScreenProps<T> {
    * filled-in form is the tab name a third time.
    */
   readonly inShell?: boolean;
+  readonly bulk?: BulkDelete<T>;
 }
 
 export function RecordScreen<T>({
@@ -78,10 +98,34 @@ export function RecordScreen<T>({
   renderForm,
   notice,
   inShell = false,
+  bulk,
 }: RecordScreenProps<T>): ReactNode {
   const { state, reload } = useAsync(load, []);
   // `undefined` = not editing. `null` = adding. A value = editing that record.
   const [editing, setEditing] = useState<T | null | undefined>(undefined);
+
+  // Select mode. Keys, so a reload cannot leave a stale record object ticked.
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [outcome, setOutcome] = useState<BulkOutcome | null>(null);
+
+  const stopSelecting = (): void => {
+    setSelecting(false);
+    setSelected(new Set());
+    setConfirming(false);
+  };
+
+  const toggle = (key: string): void => {
+    setConfirming(false);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   const done = (): void => {
     setEditing(undefined);
@@ -142,21 +186,164 @@ export function RecordScreen<T>({
         />
       ) : (
         <>
+          {outcome !== null && <BulkResult outcome={outcome} onDismiss={() => setOutcome(null)} />}
+
           <ul className="records">
-            {state.data.map((item) => (
-              <li key={keyOf(item)}>
-                <button type="button" className="record" onClick={() => setEditing(item)}>
-                  {renderRow(item)}
-                </button>
-              </li>
-            ))}
+            {state.data.map((item) => {
+              const key = keyOf(item);
+              if (!selecting || bulk === undefined) {
+                return (
+                  <li key={key}>
+                    <button type="button" className="record" onClick={() => setEditing(item)}>
+                      {renderRow(item)}
+                    </button>
+                  </li>
+                );
+              }
+
+              const locked = bulk.lockedReason?.(item) ?? null;
+              return (
+                <li key={key}>
+                  <label className={`record record-select${locked === null ? '' : ' is-locked'}`}>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(key)}
+                      disabled={locked !== null || deleting}
+                      onChange={() => toggle(key)}
+                    />
+                    <span className="record-select-body">
+                      {renderRow(item)}
+                      {locked !== null && <span className="muted">Can’t be deleted: {locked}</span>}
+                    </span>
+                  </label>
+                </li>
+              );
+            })}
           </ul>
-          <button type="button" onClick={() => setEditing(null)}>
-            {addLabel}
-          </button>
+
+          {bulk === undefined ? (
+            <button type="button" onClick={() => setEditing(null)}>
+              {addLabel}
+            </button>
+          ) : !selecting ? (
+            <div className="actions">
+              <button
+                type="button"
+                onClick={() => {
+                  setOutcome(null);
+                  setSelecting(true);
+                }}
+              >
+                Select to delete
+              </button>
+              <button type="button" onClick={() => setEditing(null)}>
+                {addLabel}
+              </button>
+            </div>
+          ) : (
+            (() => {
+              const deletable = state.data.filter((i) => (bulk.lockedReason?.(i) ?? null) === null);
+              const chosen = state.data.filter((i) => selected.has(keyOf(i)));
+              const n = chosen.length;
+              const noun = n === 1 ? bulk.noun[0] : bulk.noun[1];
+              const allTicked = deletable.length > 0 && deletable.every((i) => selected.has(keyOf(i)));
+
+              const run = async (): Promise<void> => {
+                setDeleting(true);
+                const result = await deleteEach(chosen, bulk.remove, bulk.nameOf, bulk.refusal);
+                setDeleting(false);
+                setOutcome(result);
+                stopSelecting();
+                reload();
+              };
+
+              return (
+                <div className="bulk-bar" role="region" aria-label="Delete selected">
+                  {confirming ? (
+                    <>
+                      <p>
+                        Delete {n} {noun}? This can’t be undone. Anything still in use is kept, and
+                        you’ll be told which.
+                      </p>
+                      <div className="actions">
+                        <button type="button" disabled={deleting} onClick={() => setConfirming(false)}>
+                          Keep them
+                        </button>
+                        <button type="button" className="danger" disabled={deleting} onClick={() => void run()}>
+                          {deleting ? 'Deleting…' : `Delete ${n} ${noun}`}
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="num">
+                        {n === 0 ? `Tick the ${bulk.noun[1]} to delete.` : `${n} ${noun} selected`}
+                      </p>
+                      <div className="actions">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSelected(allTicked ? new Set() : new Set(deletable.map(keyOf)))
+                          }
+                          disabled={deletable.length === 0}
+                        >
+                          {allTicked ? 'Clear all' : 'Select all'}
+                        </button>
+                        <button type="button" onClick={stopSelecting}>
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          className="danger"
+                          disabled={n === 0}
+                          onClick={() => setConfirming(true)}
+                        >
+                          Delete {n === 0 ? '' : `${n} `}
+                          {noun}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })()
+          )}
         </>
       )}
     </Screen>
+  );
+}
+
+/** What a bulk delete did — every record kept is named, with why. */
+function BulkResult({
+  outcome,
+  onDismiss,
+}: {
+  outcome: BulkOutcome;
+  onDismiss: () => void;
+}): ReactNode {
+  return (
+    <section className={outcome.kept.length > 0 ? 'unresolved-block' : 'card'} aria-live="polite">
+      <p>
+        Deleted {outcome.deleted.length}
+        {outcome.deleted.length > 0 && `: ${outcome.deleted.join(', ')}`}.
+      </p>
+      {outcome.kept.length > 0 && (
+        <>
+          <p>Kept {outcome.kept.length}:</p>
+          <ul>
+            {outcome.kept.map((k, i) => (
+              <li key={`${i}-${k.name}`}>
+                {k.name} — {k.reason}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <button type="button" className="sm" onClick={onDismiss}>
+        Done
+      </button>
+    </section>
   );
 }
 

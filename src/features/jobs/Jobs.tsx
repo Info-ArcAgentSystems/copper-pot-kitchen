@@ -30,6 +30,7 @@ import {
 } from '../../data/repositories';
 import { ChoiceField, Field } from '../../ui/Field';
 import { RecordForm, RecordScreen } from '../../ui/RecordScreen';
+import { jobLockedReason } from '../../ui/bulkDelete';
 import { SourceNotice } from '../../ui/SourceNotice';
 import { sourceState, type DataSource } from '../../ui/sourceState';
 import { useAsync, type AsyncState } from '../../ui/useAsync';
@@ -105,6 +106,13 @@ export function Jobs(): ReactNode {
           )
         }
         keyOf={(j) => j.id}
+        bulk={{
+          remove: (j) => repo.remove(j.id),
+          nameOf: (j) => `${j.serviceDate ?? 'no date'} · ${j.serviceType ?? 'no service type'}`,
+          lockedReason: jobLockedReason,
+          refusal: (cause) => (cause instanceof Error ? cause.message : 'could not be deleted'),
+          noun: ['job', 'jobs'],
+        }}
         renderRow={(j) => (
           <>
             <strong>

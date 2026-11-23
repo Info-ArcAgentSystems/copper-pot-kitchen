@@ -20,6 +20,7 @@ import { supabaseDb } from '../../data/client';
 import { ingredientRepository, recipeRepository } from '../../data/repositories';
 import { ChoiceField, Field } from '../../ui/Field';
 import { RecordForm, RecordScreen } from '../../ui/RecordScreen';
+import { referenceRefusal } from '../../ui/bulkDelete';
 import { SourceNotice } from '../../ui/SourceNotice';
 import { sourceState, type DataSource } from '../../ui/sourceState';
 import { useAsync } from '../../ui/useAsync';
@@ -134,6 +135,14 @@ export function Recipes(): ReactNode {
       emptyDescription="Recipes scale to the portions a job needs. Per-person recipes scale linearly; batch recipes round up to whole trays."
       load={async () => (await repo.list()).sort(byName((r) => r.name))}
       keyOf={(r) => r.id}
+      bulk={{
+        remove: (r) => repo.remove(r.id),
+        nameOf: (r) => r.name,
+        refusal: referenceRefusal(
+          'it’s on a job’s menu or used inside another recipe — remove it there first',
+        ),
+        noun: ['recipe', 'recipes'],
+      }}
       renderRow={(r) => (
         <>
           <strong>{r.name}</strong>

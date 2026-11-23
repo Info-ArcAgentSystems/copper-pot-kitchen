@@ -24,6 +24,7 @@ import {
 } from '../../data/repositories';
 import { ChoiceField, Field } from '../../ui/Field';
 import { RecordForm, RecordScreen } from '../../ui/RecordScreen';
+import { referenceRefusal } from '../../ui/bulkDelete';
 import { SourceNotice } from '../../ui/SourceNotice';
 import { onHandNote, stockWrite } from '../../ui/stockView';
 import { sourceState, type DataSource } from '../../ui/sourceState';
@@ -97,6 +98,12 @@ export function Ingredients(): ReactNode {
       emptyDescription="Each ingredient carries three units: how a recipe measures it, how you count it on hand, and how you buy it."
       load={async () => (await repo.list()).sort(byName((i) => i.name))}
       keyOf={(i) => i.id}
+      bulk={{
+        remove: (i) => repo.remove(i.id),
+        nameOf: (i) => i.name,
+        refusal: referenceRefusal('a recipe uses it — remove it from the recipe first'),
+        noun: ['ingredient', 'ingredients'],
+      }}
       renderRow={(i) => (
         <>
           <strong>{i.name}</strong>

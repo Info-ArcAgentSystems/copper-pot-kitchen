@@ -59,7 +59,16 @@ export function SourceNotice({
       // Naming what is outstanding rather than a bare "Loading…": on a
       // supermarket connection, "waiting on what you have already bought" is
       // the difference between slow and frozen.
-      <p className="muted">{state.message}</p>
+      <div aria-busy="true">
+        <p className="muted">{state.message}</p>
+        {/* Shape only, hidden from screen readers: the sentence above is what
+            is said, and nothing here could be mistaken for a value. */}
+        <div className="loading-rows" aria-hidden="true">
+          <span className="loading-row" />
+          <span className="loading-row" />
+          <span className="loading-row" />
+        </div>
+      </div>
     );
 
   if (title === undefined) return body;

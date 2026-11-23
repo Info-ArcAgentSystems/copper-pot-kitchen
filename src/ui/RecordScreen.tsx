@@ -85,6 +85,21 @@ export interface RecordScreenProps<T> {
    */
   readonly inShell?: boolean;
   readonly bulk?: BulkDelete<T>;
+  /** Opt-in search: the text a record is matched on. */
+  readonly searchText?: (item: T) => string;
+  /**
+   * Opt-in views as chips — Upcoming / Done for jobs. The first is the default.
+   * Each may order its own rows: what is coming up reads soonest first, history
+   * latest first.
+   */
+  readonly filters?: readonly ListFilter<T>[];
+}
+
+export interface ListFilter<T> {
+  readonly key: string;
+  readonly label: string;
+  readonly test: (item: T) => boolean;
+  readonly sort?: (a: T, b: T) => number;
 }
 
 export function RecordScreen<T>({
@@ -99,6 +114,8 @@ export function RecordScreen<T>({
   notice,
   inShell = false,
   bulk,
+  searchText,
+  filters,
 }: RecordScreenProps<T>): ReactNode {
   const { state, reload } = useAsync(load, []);
   // `undefined` = not editing. `null` = adding. A value = editing that record.
@@ -110,6 +127,8 @@ export function RecordScreen<T>({
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [outcome, setOutcome] = useState<BulkOutcome | null>(null);
+  const [query, setQuery] = useState('');
+  const [filterKey, setFilterKey] = useState(filters?.[0]?.key ?? '');
 
   const stopSelecting = (): void => {
     setSelecting(false);
@@ -156,6 +175,18 @@ export function RecordScreen<T>({
   if (state.status !== 'ready')
     return <SourceNotice state={loaded} title={inShell ? undefined : title} />;
 
+  /* What the list shows: the chosen view, then the search, in the view's order. */
+  const filter = filters?.find((f) => f.key === filterKey) ?? filters?.[0];
+  const words = query.trim().toLowerCase().split(/\s+/).filter((w) => w !== '');
+  const visible = state.data
+    .filter((item) => filter === undefined || filter.test(item))
+    .filter((item) => {
+      if (searchText === undefined || words.length === 0) return true;
+      const text = searchText(item).toLowerCase();
+      return words.every((w) => text.includes(w));
+    });
+  if (filter?.sort !== undefined) visible.sort(filter.sort);
+
   if (editing !== undefined) {
     const heading = editing === null ? addLabel : title;
 
@@ -188,8 +219,52 @@ export function RecordScreen<T>({
         <>
           {outcome !== null && <BulkResult outcome={outcome} onDismiss={() => setOutcome(null)} />}
 
+          {(searchText !== undefined || filters !== undefined) && (
+            <div className="list-tools">
+              {searchText !== undefined && (
+                <input
+                  type="search"
+                  className="list-search"
+                  placeholder={`Search ${title.toLowerCase()}`}
+                  aria-label={`Search ${title.toLowerCase()}`}
+                  value={query}
+                  // Read without DOM types: this file is also compiled by the
+                  // test build, which has none.
+                  onChange={(e) => setQuery((e.currentTarget as unknown as { value: string }).value)}
+                />
+              )}
+              {filters !== undefined && (
+                <div className="chips" role="group" aria-label={`Show ${title.toLowerCase()}`}>
+                  {filters.map((f) => (
+                    <button
+                      key={f.key}
+                      type="button"
+                      className="chip"
+                      aria-pressed={f.key === filterKey}
+                      onClick={() => {
+                        setFilterKey(f.key);
+                        setSelected(new Set());
+                      }}
+                    >
+                      {f.label}
+                      <span className="chip-count num">{state.data.filter(f.test).length}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {visible.length === 0 && (
+            <p className="muted">
+              {query.trim() !== ''
+                ? `No ${title.toLowerCase()} match “${query.trim()}”.`
+                : `No ${title.toLowerCase()} here.`}
+            </p>
+          )}
+
           <ul className="records">
-            {state.data.map((item) => {
+            {visible.map((item) => {
               const key = keyOf(item);
               if (!selecting || bulk === undefined) {
                 return (
@@ -242,8 +317,8 @@ export function RecordScreen<T>({
             </div>
           ) : (
             (() => {
-              const deletable = state.data.filter((i) => (bulk.lockedReason?.(i) ?? null) === null);
-              const chosen = state.data.filter((i) => selected.has(keyOf(i)));
+              const deletable = visible.filter((i) => (bulk.lockedReason?.(i) ?? null) === null);
+              const chosen = visible.filter((i) => selected.has(keyOf(i)));
               const n = chosen.length;
               const noun = n === 1 ? bulk.noun[0] : bulk.noun[1];
               const allTicked = deletable.length > 0 && deletable.every((i) => selected.has(keyOf(i)));

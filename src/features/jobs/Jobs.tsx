@@ -101,8 +101,99 @@ function dateChip(iso: string | null): { dow: string; day: number; label: string
   return { dow, day: date.getDate(), label: `${dow} ${date.getDate()}` };
 }
 
+/** A job with its customer's name, for the list. The name is read, never guessed. */
+interface JobRow {
+  readonly job: Job;
+  readonly customer: string | null;
+}
+
+const rowTitle = (r: JobRow): string =>
+  [r.job.serviceType ?? 'No service type', r.customer].filter((x) => x !== null).join(' · ');
+
+const CLOSED: ReadonlySet<JobStatus> = new Set(['delivered', 'invoiced', 'paid', 'cancelled']);
+
+/** Soonest first, undated last — what is coming up reads top down. */
+const soonest = (a: JobRow, b: JobRow): number =>
+  (a.job.serviceDate ?? '9999').localeCompare(b.job.serviceDate ?? '9999');
+
+/** Most recent first, for history. */
+const latest = (a: JobRow, b: JobRow): number =>
+  (b.job.serviceDate ?? '').localeCompare(a.job.serviceDate ?? '');
+
+const JOB_FILTERS = [
+  { key: 'upcoming', label: 'Upcoming', test: (r: JobRow) => !CLOSED.has(r.job.status), sort: soonest },
+  { key: 'enquiries', label: 'Enquiries', test: (r: JobRow) => r.job.status === 'enquiry', sort: soonest },
+  { key: 'done', label: 'Done & cancelled', test: (r: JobRow) => CLOSED.has(r.job.status), sort: latest },
+  { key: 'all', label: 'All', test: () => true, sort: latest },
+] as const;
+
+/**
+ * One job as a row: date chip, what and who, its status, and what still needs
+ * him — each said in words at the point he looks, never left for a detail
+ * screen (Rule 12).
+ */
+function JobRowView({ row }: { readonly row: JobRow }): ReactNode {
+  const j = row.job;
+  const chip = dateChip(j.serviceDate);
+  const severe = j.dietaries.filter((d) => d.severity === 'severe');
+  const unresolved = j.dietaries.filter(
+    (d): d is Extract<typeof d, { kind: 'unresolved' }> => d.kind === 'unresolved',
+  );
+
+  return (
+    <span className="record-row">
+      {chip === null ? (
+        <span className="date-chip is-none">
+          <span>No</span>
+          <span>date</span>
+        </span>
+      ) : (
+        <span className="date-chip" aria-label={chip.label}>
+          <span className="date-chip-dow">{chip.dow}</span>
+          <span className="date-chip-day">{chip.day}</span>
+        </span>
+      )}
+      <span className="record-body">
+        <span className="record-head">
+          <strong>{rowTitle(row)}</strong>
+          <span className={`status-pill${DONE.has(j.status) ? ' is-done' : ''}`}>
+            {STATUS_LABEL[j.status]}
+          </span>
+        </span>
+        <span className="muted num">
+          {[
+            j.serviceTime === null ? null : j.serviceTime.slice(0, 5),
+            j.guests === null ? 'no guest count' : `${j.guests} guests`,
+            `${j.dishes.length} dish${j.dishes.length === 1 ? '' : 'es'}`,
+          ]
+            .filter((x) => x !== null)
+            .join(' · ')}
+        </span>
+        {(j.dishes.length === 0 || severe.length > 0 || unresolved.length > 0) && (
+          <span className="row-tags">
+            {j.dishes.length === 0 && <span className="row-tag">No menu yet</span>}
+            {unresolved.map((d) => (
+              <span key={d.id} className="row-tag">
+                “{d.originalWording}” — count not confirmed
+              </span>
+            ))}
+            {/* RULE 9. A severe requirement asks for review; it never claims a
+                conflict or its absence. Amber, the one colour that means look. */}
+            {severe.map((d) => (
+              <span key={d.id} className="row-tag is-warn">
+                Severe: {d.dietType} — review the menu
+              </span>
+            ))}
+          </span>
+        )}
+      </span>
+    </span>
+  );
+}
+
 export function Jobs(): ReactNode {
-  const repo = jobRepository(supabaseDb());
+  const db = supabaseDb();
+  const repo = jobRepository(db);
 
   return (
     <>
@@ -118,63 +209,45 @@ export function Jobs(): ReactNode {
           screen rather than a route, because the list IS on the same screen —
           the comment at that link records what the route did instead. */}
       <div id="jobs-list">
-        <RecordScreen<Job>
-        title="Jobs"
-        why="everything the kitchen does is one of them, and shopping, prep and packing are all derived from this list"
-        addLabel="Add a job"
-        emptyDescription="A job is one service: who, where, when, how many, and what you are cooking."
-        load={async () =>
-          (await repo.list()).sort((a, b) =>
-            (b.serviceDate ?? '').localeCompare(a.serviceDate ?? ''),
-          )
-        }
-        keyOf={(j) => j.id}
-        bulk={{
-          remove: (j) => repo.remove(j.id),
-          nameOf: (j) => `${j.serviceDate ?? 'no date'} · ${j.serviceType ?? 'no service type'}`,
-          lockedReason: jobLockedReason,
-          refusal: (cause) => (cause instanceof Error ? cause.message : 'could not be deleted'),
-          noun: ['job', 'jobs'],
-        }}
-        renderRow={(j) => {
-          const chip = dateChip(j.serviceDate);
-          return (
-            <span className="record-row">
-              {chip === null ? (
-                <span className="date-chip is-none">
-                  <span>No</span>
-                  <span>date</span>
-                </span>
-              ) : (
-                <span className="date-chip" aria-label={chip.label}>
-                  <span className="date-chip-dow">{chip.dow}</span>
-                  <span className="date-chip-day">{chip.day}</span>
-                </span>
-              )}
-              <span className="record-body">
-                <span className="record-head">
-                  <strong>{j.serviceType ?? 'No service type'}</strong>
-                  <span className={`status-pill${DONE.has(j.status) ? ' is-done' : ''}`}>
-                    {STATUS_LABEL[j.status]}
-                  </span>
-                </span>
-                <span className="muted num">
-                  {[
-                    j.serviceTime === null ? null : j.serviceTime.slice(0, 5),
-                    j.guests === null ? 'no guest count' : `${j.guests} guests`,
-                    `${j.dishes.length} dish${j.dishes.length === 1 ? '' : 'es'}`,
-                  ]
-                    .filter((x) => x !== null)
-                    .join(' · ')}
-                </span>
-                {j.dietaries.some((d) => d.kind === 'unresolved') && (
-                  <span className="unresolved">unresolved dietary</span>
-                )}
-              </span>
-            </span>
-          );
-        }}
-            renderForm={(job, done) => <JobForm job={job} done={done} />}
+        <RecordScreen<JobRow>
+          title="Jobs"
+          why="everything the kitchen does is one of them, and shopping, prep and packing are all derived from this list"
+          addLabel="Add a job"
+          emptyDescription="A job is one service: who, where, when, how many, and what you are cooking."
+          load={async () => {
+            /*
+             * The customer's NAME for each row, read alongside the jobs. A failed
+             * customer read does not fail the list: the rows show without names
+             * rather than not at all, and a name is never invented in its place.
+             */
+            const [jobs, customers] = await Promise.all([
+              repo.list(),
+              customerRepository(db)
+                .list()
+                .catch(() => null),
+            ]);
+            const nameOf = new Map((customers ?? []).map((c) => [c.id as string, c.name]));
+            return jobs.map((job) => ({
+              job,
+              customer: job.customerId === null ? null : (nameOf.get(job.customerId) ?? null),
+            }));
+          }}
+          keyOf={(r) => r.job.id}
+          searchText={(r) =>
+            [r.job.serviceType, r.customer, r.job.serviceDate, r.job.notes]
+              .filter((x): x is string => x !== null)
+              .join(' ')
+          }
+          filters={JOB_FILTERS}
+          bulk={{
+            remove: (r) => repo.remove(r.job.id),
+            nameOf: (r) => rowTitle(r),
+            lockedReason: (r) => jobLockedReason(r.job),
+            refusal: (cause) => (cause instanceof Error ? cause.message : 'could not be deleted'),
+            noun: ['job', 'jobs'],
+          }}
+          renderRow={(r) => <JobRowView row={r} />}
+          renderForm={(r, done) => <JobForm job={r?.job ?? null} done={done} />}
         />
       </div>
     </>

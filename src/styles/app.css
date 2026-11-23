@@ -2279,3 +2279,114 @@ section.danger-zone h2 {
 .status-pill.is-done {
   color: var(--ok);
 }
+
+/* ---------------------------------------------------------------------------
+   LIST TOOLS — search and view chips above a list.
+   --------------------------------------------------------------------------- */
+.list-tools {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.list-search {
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  padding-left: var(--space-4);
+}
+
+/* Scroll sideways on a phone rather than wrap into a second row. */
+.chips {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+
+.chips::-webkit-scrollbar {
+  display: none;
+}
+
+.chip {
+  flex: none;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: var(--size-small);
+}
+
+.chip:hover,
+.chip:focus-visible {
+  background: var(--hover);
+  color: var(--text);
+}
+
+/* The chosen view: solid ink, not the accent — blue is for acting. */
+.chip[aria-pressed='true'] {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--card);
+}
+
+.chip-count {
+  font-weight: var(--weight-normal);
+  opacity: 0.75;
+}
+
+/* What still needs him, on the row itself (Rule 12). */
+.row-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+
+.row-tag {
+  font-size: var(--size-micro);
+  font-weight: var(--weight-semi);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--button-bg);
+  color: var(--text-muted);
+}
+
+/* The one tag that asks him to look: amber edge and label, never a fill
+   that shouts. */
+.row-tag.is-warn {
+  background: var(--warn-bg);
+  color: var(--warn);
+  box-shadow: inset 0 0 0 1px var(--warn-border);
+}
+
+/* ---------------------------------------------------------------------------
+   LOADING — the sentence that names what is outstanding, over grey rows in
+   the shape of what is coming. The rows are shape only: no figure, no name,
+   nothing that could be read as data.
+   --------------------------------------------------------------------------- */
+.loading-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.loading-row {
+  display: block;
+  min-height: 64px;
+  border-radius: var(--radius);
+  background: linear-gradient(90deg, var(--button-bg) 25%, var(--hover) 37%, var(--button-bg) 63%);
+  background-size: 400% 100%;
+  animation: loading-shimmer 1.3s ease infinite;
+}
+
+@keyframes loading-shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0 50%;
+  }
+}

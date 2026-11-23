@@ -98,6 +98,7 @@ export function Ingredients(): ReactNode {
       emptyDescription="Each ingredient carries three units: how a recipe measures it, how you count it on hand, and how you buy it."
       load={async () => (await repo.list()).sort(byName((i) => i.name))}
       keyOf={(i) => i.id}
+      searchText={(i) => [i.name, i.category ?? ''].join(' ')}
       bulk={{
         remove: (i) => repo.remove(i.id),
         nameOf: (i) => i.name,

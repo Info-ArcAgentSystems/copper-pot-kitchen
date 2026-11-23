@@ -135,6 +135,7 @@ export function Recipes(): ReactNode {
       emptyDescription="Recipes scale to the portions a job needs. Per-person recipes scale linearly; batch recipes round up to whole trays."
       load={async () => (await repo.list()).sort(byName((r) => r.name))}
       keyOf={(r) => r.id}
+      searchText={(r) => r.name}
       bulk={{
         remove: (r) => repo.remove(r.id),
         nameOf: (r) => r.name,

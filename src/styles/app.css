@@ -2390,3 +2390,123 @@ section.danger-zone h2 {
     background-position: 0 50%;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   SHEET — a record opens over the list, which keeps his place underneath.
+   Up from the bottom on a phone (where a thumb is), in from the right on a
+   wide screen.
+   --------------------------------------------------------------------------- */
+.sheet-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-end;
+}
+
+.sheet-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 38%);
+  animation: sheet-fade 0.2s ease;
+}
+
+.sheet {
+  position: relative;
+  width: 100%;
+  max-height: 92dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -8px 30px rgb(0 0 0 / 16%);
+  padding-bottom: env(safe-area-inset-bottom);
+  animation: sheet-up 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  outline: none;
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  border-radius: 20px 20px 0 0;
+}
+
+/* The panel's own title — the record's name. Not an overline. */
+.sheet-head > h2 {
+  flex: 1;
+  margin: 0;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: var(--size-lead);
+  font-weight: var(--weight-bold);
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheet-close {
+  flex: none;
+  width: var(--touch-min);
+  padding: 0;
+  border-radius: var(--radius-pill);
+  font-size: 24px;
+  line-height: 1;
+}
+
+.sheet-body {
+  overflow-y: auto;
+  padding: var(--space-4);
+}
+
+/* Save and Cancel stay in reach at the foot of a long form. */
+.sheet-body .record-form > .actions {
+  position: sticky;
+  bottom: calc(var(--space-4) * -1);
+  margin: 0 calc(var(--space-4) * -1);
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+
+@media (min-width: 1024px) {
+  .sheet-layer {
+    justify-content: flex-end;
+    align-items: stretch;
+  }
+
+  .sheet {
+    width: 520px;
+    max-height: none;
+    border-radius: 20px 0 0 20px;
+    animation-name: sheet-in;
+  }
+
+  .sheet-head {
+    border-radius: 20px 0 0;
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes sheet-fade {
+  from {
+    opacity: 0;
+  }
+}

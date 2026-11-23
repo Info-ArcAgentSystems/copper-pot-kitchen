@@ -13,6 +13,7 @@
 import { useState, type ReactNode } from 'react';
 import { EmptyState } from './EmptyState';
 import { Screen } from './Screen';
+import { Sheet } from './Sheet';
 import { SourceNotice } from './SourceNotice';
 import { sourceState, type DataSource } from './sourceState';
 import { useAsync } from './useAsync';
@@ -93,6 +94,8 @@ export interface RecordScreenProps<T> {
    * latest first.
    */
   readonly filters?: readonly ListFilter<T>[];
+  /** The sheet's heading for an existing record — its own name, not the list's. */
+  readonly sheetTitle?: (item: T) => string;
 }
 
 export interface ListFilter<T> {
@@ -116,6 +119,7 @@ export function RecordScreen<T>({
   bulk,
   searchText,
   filters,
+  sheetTitle,
 }: RecordScreenProps<T>): ReactNode {
   const { state, reload } = useAsync(load, []);
   // `undefined` = not editing. `null` = adding. A value = editing that record.
@@ -187,16 +191,19 @@ export function RecordScreen<T>({
     });
   if (filter?.sort !== undefined) visible.sort(filter.sort);
 
-  if (editing !== undefined) {
-    const heading = editing === null ? addLabel : title;
-
-    return (
-      <Screen title={inShell ? undefined : heading}>
-        {inShell && editing === null && <h2>{heading}</h2>}
+  /*
+   * A record opens in a SHEET over the list rather than in place of it — the
+   * list keeps his place, and `done` closes the sheet and re-reads the list.
+   */
+  const sheet =
+    editing === undefined ? null : (
+      <Sheet
+        title={editing === null ? addLabel : (sheetTitle?.(editing) ?? title)}
+        onClose={() => setEditing(undefined)}
+      >
         {renderForm(editing, done)}
-      </Screen>
+      </Sheet>
     );
-  }
 
   return (
     <Screen title={inShell ? undefined : title}>
@@ -385,6 +392,8 @@ export function RecordScreen<T>({
           )}
         </>
       )}
+
+      {sheet}
     </Screen>
   );
 }

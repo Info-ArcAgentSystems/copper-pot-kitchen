@@ -136,6 +136,7 @@ export function Recipes(): ReactNode {
       load={async () => (await repo.list()).sort(byName((r) => r.name))}
       keyOf={(r) => r.id}
       searchText={(r) => r.name}
+      sheetTitle={(r) => r.name}
       bulk={{
         remove: (r) => repo.remove(r.id),
         nameOf: (r) => r.name,

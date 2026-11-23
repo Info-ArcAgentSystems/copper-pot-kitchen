@@ -246,6 +246,7 @@ export function Jobs(): ReactNode {
             refusal: (cause) => (cause instanceof Error ? cause.message : 'could not be deleted'),
             noun: ['job', 'jobs'],
           }}
+          sheetTitle={rowTitle}
           renderRow={(r) => <JobRowView row={r} />}
           renderForm={(r, done) => <JobForm job={r?.job ?? null} done={done} />}
         />

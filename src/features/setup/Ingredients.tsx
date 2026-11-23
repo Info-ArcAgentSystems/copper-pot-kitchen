@@ -99,6 +99,7 @@ export function Ingredients(): ReactNode {
       load={async () => (await repo.list()).sort(byName((i) => i.name))}
       keyOf={(i) => i.id}
       searchText={(i) => [i.name, i.category ?? ''].join(' ')}
+      sheetTitle={(i) => i.name}
       bulk={{
         remove: (i) => repo.remove(i.id),
         nameOf: (i) => i.name,

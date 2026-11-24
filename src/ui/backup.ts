@@ -36,6 +36,7 @@ export const EXPORTED_TABLES = [
   'recipes',
   'recipe_ingredients',
   'recipe_unquantified',
+  'menu_templates',
   'jobs',
   'job_dishes',
   'job_dietaries',

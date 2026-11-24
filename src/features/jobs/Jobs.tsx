@@ -22,6 +22,7 @@ import { useState, type ReactNode } from 'react';
 import { supabaseDb } from '../../data/client';
 import {
   clientRateRepository,
+  menuTemplateRepository,
   customerRepository,
   ingredientRepository,
   jobRepository,
@@ -35,6 +36,7 @@ import { SourceNotice } from '../../ui/SourceNotice';
 import { sourceState, type DataSource } from '../../ui/sourceState';
 import { useAsync, type AsyncState } from '../../ui/useAsync';
 import { formatMoney, moneyValue, parseCount, parseMoney, parseText, textValue } from '../../ui/form';
+import { menuFor } from '../../engine/menus';
 import { jobRevenue } from '../../engine/costing';
 import { portionsDerivable } from '../../engine/rules';
 import type { JobChanges } from '../../engine/impact';
@@ -325,6 +327,7 @@ function JobForm({ job, done }: { job: Job | null; done: (said?: string) => void
   const customers = useAsync(() => customerRepository(db).list(), []);
   const properties = useAsync(() => propertyRepository(db).list(), []);
   const rates = useAsync(() => clientRateRepository(db).list(), []);
+  const menus = useAsync(() => menuTemplateRepository(db).list(), []);
 
   /*
    * What the preview is made of. Gated separately because these three are the
@@ -377,6 +380,12 @@ function JobForm({ job, done }: { job: Job | null; done: (said?: string) => void
       why: 'without it no rate can apply, and the price stays blank',
       state: rates.state,
       reload: rates.reload,
+    },
+    {
+      what: 'your saved menus',
+      why: 'a job with no dishes is offered your usual menu for its service type',
+      state: menus.state,
+      reload: menus.reload,
     },
   ];
 
@@ -662,6 +671,32 @@ function JobForm({ job, done }: { job: Job | null; done: (said?: string) => void
       <fieldset className="units">
         <legend>Menu</legend>
         {dishes.length === 0 && <p className="muted">No dishes yet.</p>}
+
+        {/* His usual menu for this service type, OFFERED — never added by
+            itself (Rule 7). Only on a job with no dishes, so it never mixes
+            into a menu he has already started. */}
+        {dishes.length === 0 &&
+          (() => {
+            const saved = menuFor(
+              parseText(serviceType),
+              menus.state.status === 'ready' ? menus.state.data : [],
+            );
+            if (saved === null) return null;
+            return (
+              <button
+                type="button"
+                className="primary"
+                onClick={() =>
+                  setDishes(
+                    saved.recipeIds.map((recipeId) => ({ key: newKey(), recipeId, portions: '' })),
+                  )
+                }
+              >
+                Use your {saved.serviceType} menu ({saved.recipeIds.length} dish
+                {saved.recipeIds.length === 1 ? '' : 'es'})
+              </button>
+            );
+          })()}
 
         {dishes.map((d) => (
           <div key={d.key} className="line">

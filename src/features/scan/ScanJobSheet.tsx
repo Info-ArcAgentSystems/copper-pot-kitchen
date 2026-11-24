@@ -48,6 +48,7 @@ import { supabaseClient, supabaseDb } from '../../data/client';
 import {
   customerRepository,
   propertyRepository,
+  menuTemplateRepository,
   recipeRepository,
 } from '../../data/repositories';
 import { commitScannedDraft } from '../../scan/commit';
@@ -79,6 +80,7 @@ import {
 } from '../../scan/page';
 import { parseJobSheet } from '../../scan/parseImage';
 import { matchByName } from '../../engine/nameMatch';
+import { menuFor, ownSpelling, savedMenus } from '../../engine/menus';
 import { toScaledDataUrl } from './scaleImage';
 import { PhotoGate } from './PhotoGate';
 import { ChoiceField, Field } from '../../ui/Field';
@@ -89,6 +91,7 @@ import { useKitchen } from '../../auth/kitchenState';
 import type { DataSource } from '../../ui/sourceState';
 import type {
   Customer,
+  MenuTemplate,
   DietarySeverity,
   JobGroupId,
   KitchenId,
@@ -195,6 +198,7 @@ export function ScanJobSheet(): ReactNode {
   const customers = useAsync(() => customerRepository(db).list(), []);
   const properties = useAsync(() => propertyRepository(db).list(), []);
   const recipes = useAsync(() => recipeRepository(db).list(), []);
+  const menus = useAsync(() => menuTemplateRepository(db).list(), []);
 
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
@@ -231,7 +235,18 @@ export function ScanJobSheet(): ReactNode {
       state: recipes.state,
       reload: recipes.reload,
     },
+    {
+      what: 'your saved menus',
+      why: 'a booking with no dishes, like a sheet that just says “BBQ”, is offered your usual menu',
+      state: menus.state,
+      reload: menus.reload,
+    },
   ];
+
+  const menuList: readonly MenuTemplate[] = menus.state.status === 'ready' ? menus.state.data : [];
+
+  /** A typed service type, or null when the box is blank. */
+  const parseTextOrNull = (v: string): string | null => (v.trim() === '' ? null : v.trim());
 
   const customerList: readonly Customer[] =
     customers.state.status === 'ready' ? customers.state.data : [];
@@ -533,6 +548,7 @@ export function ScanJobSheet(): ReactNode {
                 >
                   Add a dish
                 </button>
+                {menuButton(at, job)}
                 <button type="button" onClick={() => patchJob(at, { menuToBeDecided: true })}>
                   Menu to be decided
                 </button>
@@ -641,6 +657,39 @@ export function ScanJobSheet(): ReactNode {
     }
   };
 
+  /*
+   * "Use your BBQ menu": his own saved dishes for this service type, in his
+   * order, each an existing recipe. Offered only — and only when every dish on
+   * the menu is still one of his recipes, so it never adds a dish that the
+   * save would then fail to find.
+   */
+  const menuButton = (at: number, job: PageJob): ReactNode => {
+    const saved = menuFor(parseTextOrNull(job.draft.serviceType), menuList);
+    if (saved === null) return null;
+    const byId = new Map(recipeList.map((r) => [r.id as string, r]));
+    const picked = saved.recipeIds.map((id) => byId.get(id));
+    if (picked.some((r) => r === undefined)) return null;
+
+    return (
+      <button
+        type="button"
+        className="primary"
+        onClick={() =>
+          patchJob(at, {
+            menuToBeDecided: false,
+            dishes: picked.flatMap((r) =>
+              r === undefined
+                ? []
+                : [{ read: null, matches: [], choice: { kind: 'existing', id: r.id, name: r.name }, portions: null }],
+            ),
+          })
+        }
+      >
+        Use your {saved.serviceType} menu ({picked.length} dish{picked.length === 1 ? '' : 'es'})
+      </button>
+    );
+  };
+
   const heading = (block: number): ReactNode => {
     if (page === null) return null;
     const inBlock = jobs.filter((j) => j.meta.block === block);
@@ -690,6 +739,21 @@ export function ScanJobSheet(): ReactNode {
         {scannedField('Service type', d.from.serviceType, d.serviceType, (v) => patchJob(at, { serviceType: v }), {
           hint: 'Must match a rate-card service type exactly for a rate to apply.',
         })}
+        {/* "B.B.Q" read, "BBQ" is how he writes it: offered, never swapped. */}
+        {(() => {
+          const own = ownSpelling(
+            parseTextOrNull(d.serviceType),
+            savedMenus(menuList).map((m) => m.serviceType),
+          );
+          return own === null ? null : (
+            <p className="muted scan-phone">
+              You write this as “{own}”.{' '}
+              <button type="button" className="sm" onClick={() => patchJob(at, { serviceType: own })}>
+                Use “{own}”
+              </button>
+            </p>
+          );
+        })()}
         {scannedField(
           'Guests',
           d.from.guests === null ? null : String(d.from.guests),

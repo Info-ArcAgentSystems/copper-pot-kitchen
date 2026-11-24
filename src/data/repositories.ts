@@ -36,6 +36,8 @@ import {
   prepStateToDomain,
   purchaseStateToDomain,
   recipeToDomain,
+  menuTemplateToDomain,
+  menuTemplateToRow,
   serviceTemplateToDomain,
   serviceTemplateToRow,
   stockToDomain,
@@ -58,6 +60,7 @@ import type {
   RecipeIngredientRow,
   RecipeRow,
   RecipeUnquantifiedRow,
+  MenuTemplateRow,
   ServiceTemplateRow,
   StockRow,
   SupplierRow,
@@ -77,6 +80,7 @@ import type {
   PurchaseState,
   Recipe,
   RecipeId,
+  MenuTemplate,
   ServiceTemplate,
   StockLevel,
   StockUnit,
@@ -101,6 +105,7 @@ const T = {
   jobExtras: 'job_extras',
   jobChanges: 'job_changes',
   serviceTemplates: 'service_templates',
+  menuTemplates: 'menu_templates',
   purchaseState: 'purchase_state',
   prepState: 'prep_state',
   packingState: 'packing_state',
@@ -183,6 +188,11 @@ export const clientRateRepository = (db: Db) =>
 
 export const supplierRepository = (db: Db) =>
   crudRepository<Supplier, SupplierRow>(db, T.suppliers, supplierToDomain, supplierToRow);
+
+export const menuTemplateRepository = (db: Db) =>
+  crudRepository<MenuTemplate, MenuTemplateRow>(
+    db, T.menuTemplates, menuTemplateToDomain, menuTemplateToRow,
+  );
 
 export const serviceTemplateRepository = (db: Db) =>
   crudRepository<ServiceTemplate, ServiceTemplateRow>(

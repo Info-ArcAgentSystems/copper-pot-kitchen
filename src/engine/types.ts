@@ -394,6 +394,22 @@ export interface ServiceTemplate {
   readonly position: number;
 }
 
+export type MenuTemplateId = Brand<string, 'MenuTemplateId'>;
+
+/**
+ * One dish on a saved menu. The rows sharing a service type ARE that menu, in
+ * `position` order — "BBQ" → his burgers, his sausages, his slaw. Owner-built
+ * from his own recipes; offered on a job, never applied to one by itself.
+ */
+export interface MenuTemplate {
+  readonly id: MenuTemplateId;
+  readonly kitchenId: KitchenId;
+  /** Owner-defined free text. Matched to a job's service type by its letters. */
+  readonly serviceType: string;
+  readonly recipeId: RecipeId;
+  readonly position: number;
+}
+
 // ---------------------------------------------------------------------------
 // Rule 6 — the only stored part of a derived list
 // ---------------------------------------------------------------------------

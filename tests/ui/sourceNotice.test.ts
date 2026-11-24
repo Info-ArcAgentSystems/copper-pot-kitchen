@@ -90,7 +90,7 @@ const GATED = [
    * `title` is null: this notice sits INSIDE the form, under the heading
    * `RecordScreen` has already rendered.
    */
-  { file: 'features/jobs/Jobs.tsx', reads: 6, title: null, whole: false, gate: 'self' },
+  { file: 'features/jobs/Jobs.tsx', reads: 7, title: null, whole: false, gate: 'self' },
   /*
    * The recipe form, where a failed read does not stop at silence. Both of its
    * reads fall back to `[]`, so a broken ingredients read renders "Choose an
@@ -121,7 +121,12 @@ const GATED = [
    * assertions below check the handover instead of the decision.
    * `tests/scan/photoGate.test.ts` covers the gate itself.
    */
-  { file: 'features/scan/ScanJobSheet.tsx', reads: 3, title: null, whole: false, gate: 'PhotoGate' },
+  /*
+   * Saved menus: the form picks from his recipes. Gated so a failed read says
+   * so, rather than an empty picker reading as "no recipes yet".
+   */
+  { file: 'features/setup/SavedMenus.tsx', reads: 1, title: null, whole: false, gate: 'self' },
+  { file: 'features/scan/ScanJobSheet.tsx', reads: 4, title: null, whole: false, gate: 'PhotoGate' },
   { file: 'features/scan/ScanRecipeCard.tsx', reads: 1, title: null, whole: false, gate: 'PhotoGate' },
   { file: 'features/scan/ScanMenu.tsx', reads: 1, title: null, whole: false, gate: 'PhotoGate' },
   { file: 'features/scan/ScanInvoice.tsx', reads: 2, title: null, whole: false, gate: 'PhotoGate' },
@@ -265,6 +270,7 @@ describe('the shared record screen — eight screens, one gate', () => {
     'features/setup/Suppliers.tsx',
     'features/setup/RateCard.tsx',
     'features/setup/ServiceTemplates.tsx',
+    'features/setup/SavedMenus.tsx',
     'features/setup/Recipes.tsx',
     'features/setup/Ingredients.tsx',
   ] as const;

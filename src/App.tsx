@@ -22,6 +22,7 @@ import { Properties } from './features/setup/Properties';
 import { Suppliers } from './features/setup/Suppliers';
 import { RateCard } from './features/setup/RateCard';
 import { ServiceTemplates } from './features/setup/ServiceTemplates';
+import { SavedMenus } from './features/setup/SavedMenus';
 import { BackupScreen } from './features/setup/Backup';
 import { Jobs } from './features/jobs/Jobs';
 import { Service } from './features/service/Service';
@@ -209,6 +210,7 @@ export default function App(): ReactNode {
               <Route path="/setup/suppliers" element={<Suppliers />} />
               <Route path="/setup/rates" element={<RateCard />} />
               <Route path="/setup/templates" element={<ServiceTemplates />} />
+              <Route path="/setup/menus" element={<SavedMenus />} />
               <Route path="/setup/backup" element={<BackupScreen />} />
 
               {/* LAST, and it must stay last: `<Routes>` picks the best match

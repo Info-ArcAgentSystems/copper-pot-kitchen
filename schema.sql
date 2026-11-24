@@ -339,6 +339,17 @@ create table service_templates (
   unique (kitchen_id, service_type, item)
 );
 
+-- Saved menus: the dishes a service type usually has, from his own recipes.
+-- Empty until he builds one (Rule 1); offered on a job, never applied by itself.
+create table menu_templates (
+  id            uuid primary key default gen_random_uuid(),
+  kitchen_id    uuid not null references kitchens(id) on delete cascade,
+  service_type  text not null,
+  recipe_id     uuid not null references recipes(id) on delete restrict,
+  position      integer not null default 0,
+  unique (kitchen_id, service_type, recipe_id)
+);
+
 -- ---------- 8. INVOICES ----------
 
 create table invoices (
@@ -378,6 +389,7 @@ create index on job_dietaries   (kitchen_id, job_id);
 create index on job_extras      (kitchen_id, job_id);
 create index on job_changes     (kitchen_id, job_id, changed_at desc);
 create index on invoice_lines   (kitchen_id, invoice_id);
+create index on menu_templates  (kitchen_id, service_type);
 create index on ingredient_price_history (kitchen_id, ingredient_id, recorded_at desc);
 
 -- ---------- 10. ROW LEVEL SECURITY ----------
@@ -389,7 +401,7 @@ begin
     'kitchens','kitchen_members','properties','customers','client_rates','suppliers',
     'ingredients','ingredient_price_history','stock','recipes','recipe_ingredients',
     'recipe_unquantified','jobs','job_dishes','job_dietaries','job_extras','job_changes',
-    'purchase_state','prep_state','packing_state','service_templates',
+    'purchase_state','prep_state','packing_state','service_templates','menu_templates',
     'invoices','invoice_lines'
   ]
   loop
@@ -405,7 +417,7 @@ begin
     'properties','customers','client_rates','suppliers','ingredients',
     'ingredient_price_history','stock','recipes','recipe_ingredients',
     'recipe_unquantified','jobs','job_dishes','job_dietaries','job_extras','job_changes',
-    'purchase_state','prep_state','packing_state','service_templates',
+    'purchase_state','prep_state','packing_state','service_templates','menu_templates',
     'invoices','invoice_lines'
   ]
   loop

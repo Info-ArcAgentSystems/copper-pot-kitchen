@@ -21,6 +21,8 @@
 import type {
   AllocatedDietary,
   Cents,
+  MenuTemplate,
+  MenuTemplateId,
   ServiceTemplate,
   ServiceTemplateId,
   ServiceTemplateKind,
@@ -72,6 +74,7 @@ import type {
 } from '../engine/types';
 import type {
   ClientRateRow,
+  MenuTemplateRow,
   ServiceTemplateRow,
   CustomerRow,
   IngredientRow,
@@ -535,4 +538,24 @@ export const packingStateToDomain = (r: PackingStateRow): PackingState => ({
   // stored is a stable key and not the label the owner reads.
   itemKey: r.item,
   done: r.done,
+});
+
+// ---------------------------------------------------------------------------
+// Saved menus
+// ---------------------------------------------------------------------------
+
+export const menuTemplateToDomain = (r: MenuTemplateRow): MenuTemplate => ({
+  id: r.id as MenuTemplateId,
+  kitchenId: r.kitchen_id as KitchenId,
+  serviceType: r.service_type,
+  recipeId: r.recipe_id as RecipeId,
+  position: r.position,
+});
+
+export const menuTemplateToRow = (t: MenuTemplate): MenuTemplateRow => ({
+  id: t.id,
+  kitchen_id: t.kitchenId,
+  service_type: t.serviceType,
+  recipe_id: t.recipeId,
+  position: t.position,
 });

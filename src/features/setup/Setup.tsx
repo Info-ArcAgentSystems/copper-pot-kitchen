@@ -15,6 +15,7 @@ const SECTIONS = [
   { to: 'suppliers', label: 'Suppliers', blurb: 'Used to group the shopping list' },
   { to: 'rates', label: 'Rate card', blurb: 'Per-head and flat rates by client group' },
   { to: 'templates', label: 'Service templates', blurb: 'What to pack for each service type' },
+  { to: 'menus', label: 'Saved menus', blurb: 'Your usual dishes for a service type — your BBQ' },
   // The live routes. `/ingredients` and `/recipes` still resolve, but only by
   // bouncing through a redirect that unmounts and remounts the whole Library.
   { to: '/library/ingredients', label: 'Ingredients', blurb: 'Three units, pack size and price' },

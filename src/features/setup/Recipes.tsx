@@ -142,7 +142,7 @@ export function Recipes(): ReactNode {
         remove: (r) => repo.remove(r.id),
         nameOf: (r) => r.name,
         refusal: referenceRefusal(
-          'it’s on a job’s menu or used inside another recipe — remove it there first',
+          'it’s on a job, a saved menu, or inside another recipe — remove it there first',
         ),
         noun: ['recipe', 'recipes'],
       }}

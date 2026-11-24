@@ -675,7 +675,7 @@ function JobForm({ job, done }: { job: Job | null; done: (said?: string) => void
         {/* His usual menu for this service type, OFFERED — never added by
             itself (Rule 7). Only on a job with no dishes, so it never mixes
             into a menu he has already started. */}
-        {dishes.length === 0 &&
+        {dishes.every((d) => d.recipeId === '') &&
           (() => {
             const saved = menuFor(
               parseText(serviceType),

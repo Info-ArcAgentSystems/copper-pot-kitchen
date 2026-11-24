@@ -140,6 +140,7 @@ export function Money(): ReactNode {
   return (
     <Screen
       title="Money"
+      icon="money"
       description="Revenue, food cost and margin for jobs serving in these dates."
     >
 

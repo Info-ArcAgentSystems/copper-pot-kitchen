@@ -334,7 +334,8 @@ describe('the shared record screen — eight screens, one gate', () => {
     // `strip` leaves the braces of the JSX comment between the two.)
     // The heading is `Screen`'s now, so the thing to compare against is the
     // element that draws it rather than the `<h1>` that used to be here.
-    const heading = source.indexOf('<Screen title={inShell ? undefined : title}>');
+    // Matched without the closing `>`: the element also carries the page icon.
+    const heading = source.indexOf('<Screen title={inShell ? undefined : title}');
     const slot = source.indexOf('{notice}');
     const list = source.indexOf('state.data.length === 0');
 

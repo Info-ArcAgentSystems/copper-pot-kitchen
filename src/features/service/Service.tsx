@@ -63,6 +63,7 @@ function ServiceView({ view, onView }: { view: View; onView: (v: View) => void }
   return (
     <Screen
       title="Service"
+      icon="service"
       description="Shopping, prep and packing for the jobs in these dates."
     >
       <Segmented label="Service view" segments={SEGMENTS} active={view} onChange={onView} />

@@ -65,6 +65,7 @@ export function ScanHub(): ReactNode {
   return (
     <Screen
       title="Scan"
+      icon="scan"
       description="Photograph a page and it becomes a draft you check before anything is saved."
     >
       <div className="scan-grid">

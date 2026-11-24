@@ -73,6 +73,7 @@ export function SavedMenus(): ReactNode {
   return (
     <RecordScreen<MenuRecord>
       title="Saved menus"
+      icon="menu"
       why="a job sheet that just says “BBQ” can then be given your usual dishes in one tap"
       addLabel="Add a menu"
       emptyDescription="The dishes a service type usually has — your BBQ, your breakfast. Built from your own recipes, and offered on a job, never added by itself."

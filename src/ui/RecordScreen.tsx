@@ -14,6 +14,7 @@ import { useRef, useState, type ReactNode } from 'react';
 import { EmptyState } from './EmptyState';
 import { Screen } from './Screen';
 import { Sheet } from './Sheet';
+import type { IconName } from './icons';
 import { SwipeRow } from './SwipeRow';
 import { SourceNotice } from './SourceNotice';
 import { sourceState, type DataSource } from './sourceState';
@@ -101,6 +102,8 @@ export interface RecordScreenProps<T> {
   readonly filters?: readonly ListFilter<T>[];
   /** The sheet's heading for an existing record — its own name, not the list's. */
   readonly sheetTitle?: (item: T) => string;
+  /** The page icon beside the title. */
+  readonly icon?: IconName;
 }
 
 export interface ListFilter<T> {
@@ -125,6 +128,7 @@ export function RecordScreen<T>({
   searchText,
   filters,
   sheetTitle,
+  icon,
 }: RecordScreenProps<T>): ReactNode {
   const { state, reload } = useAsync(load, []);
   // `undefined` = not editing. `null` = adding. A value = editing that record.
@@ -226,7 +230,7 @@ export function RecordScreen<T>({
     );
 
   return (
-    <Screen title={inShell ? undefined : title}>
+    <Screen title={inShell ? undefined : title} icon={icon}>
 
       {/* Under the heading, above the list: a second read of the screen's own
           has somewhere to speak without arriving before its own screen. */}

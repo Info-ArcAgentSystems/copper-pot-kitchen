@@ -29,6 +29,7 @@ import {
 import { buildDashboardView } from '../../ui/dashboardView';
 import { BACKUP_STORAGE_KEY } from '../../ui/backup';
 import { AHEAD, DateRangeBar } from '../../ui/DateRangeBar';
+import { IconTile, SectionHeading, type IconName } from '../../ui/icons';
 import { formatMoney } from '../../ui/form';
 import { useAsync } from '../../ui/useAsync';
 import { Screen } from '../../ui/Screen';
@@ -67,6 +68,60 @@ const addDays = (date: string, days: number): string => {
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 };
+
+/**
+ * One stat card: a label, a figure, a line saying what it covers — and its
+ * icon. A null figure shows a dash, and the caption says why.
+ */
+function Stat({
+  icon,
+  label,
+  value,
+  caption,
+}: {
+  icon: IconName;
+  label: string;
+  value: string | null;
+  caption: string;
+}): ReactNode {
+  return (
+    <div className="stat">
+      <div className="stat-head">
+        <span className="stat-label">{label}</span>
+        <IconTile name={icon} size={18} />
+      </div>
+      <p className={value === null ? 'stat-value is-absent' : 'stat-value num'}>
+        {value ?? '—'}
+      </p>
+      <p className="stat-caption">{caption}</p>
+    </div>
+  );
+}
+
+/**
+ * Readiness as a ring and a percentage, from the engine's met / total — the
+ * same two numbers written beside it in words. Green only when complete.
+ */
+function ReadinessRing({ met, total }: { met: number; total: number }): ReactNode {
+  const share = total === 0 ? 0 : met / total;
+  const r = 18;
+  const around = 2 * Math.PI * r;
+  return (
+    <span className={`ring${met === total && total > 0 ? ' is-done' : ''}`} aria-hidden="true">
+      <svg width="48" height="48" viewBox="0 0 48 48">
+        <circle className="ring-track" cx="24" cy="24" r={r} />
+        <circle
+          className="ring-fill"
+          cx="24"
+          cy="24"
+          r={r}
+          strokeDasharray={`${share * around} ${around}`}
+        />
+      </svg>
+      <span className="ring-label num">{Math.round(share * 100)}%</span>
+    </span>
+  );
+}
 
 /** A figure, or a stated absence in the same size — never a zero standing in. */
 function Figure({ label, value }: { label: string; value: string | null }): ReactNode {
@@ -185,9 +240,20 @@ export function Dashboard(): ReactNode {
 
   const money = view.money;
 
+  /* Guests booked: RECORDED guest counts added up, and the jobs without one
+     counted separately — a missing count is never added in as zero. */
+  const covers = view.nextJobs.reduce(
+    (acc, n) =>
+      n.job.guests === null
+        ? { ...acc, missing: acc.missing + 1 }
+        : { ...acc, total: acc.total + n.job.guests, counted: acc.counted + 1 },
+    { total: 0, counted: 0, missing: 0 },
+  );
+
   return (
     <Screen
       title="Today"
+      icon="jobs"
       description="What's coming up in your chosen dates, and where the gaps are."
     >
       {/* The SAME date control as Service and Money. It was two loose `.field`
@@ -196,8 +262,53 @@ export function Dashboard(): ReactNode {
           did not box its pair. */}
       <DateRangeBar from={from} to={to} setFrom={setFrom} setTo={setTo} presets={AHEAD} />
 
+      {/* ------------------------------------------------------------------
+          FOUR FIGURES, read first. Each is a number the engine already worked
+          out for this window — nothing new is calculated here except adding up
+          guest counts that were RECORDED. An unknown is a dash with a caption
+          saying why, never a zero standing in for it.
+          ------------------------------------------------------------------ */}
+      <div className="stats">
+        <Stat
+          icon="jobs"
+          label="Confirmed jobs"
+          value={String(view.nextJobs.length)}
+          caption={`${view.window.jobCount} in these dates, enquiries included`}
+        />
+        <Stat
+          icon="guests"
+          label="Guests booked"
+          value={covers.counted === 0 && covers.missing > 0 ? null : String(covers.total)}
+          caption={
+            covers.missing > 0
+              ? `${covers.missing} job${covers.missing === 1 ? ' has' : 's have'} no guest count yet`
+              : 'across the confirmed jobs'
+          }
+        />
+        <Stat
+          icon="cart"
+          label="To buy"
+          value={String(view.shopping.outstanding)}
+          caption={
+            view.shopping.blocked > 0
+              ? `lines outstanding · ${view.shopping.blocked} could not be worked out`
+              : 'lines outstanding'
+          }
+        />
+        <Stat
+          icon="money"
+          label="Revenue"
+          value={money.revenue.total === null ? null : formatMoney(money.revenue.total as Cents)}
+          caption={
+            money.revenue.unpriced > 0
+              ? `${money.revenue.unpriced} job${money.revenue.unpriced === 1 ? '' : 's'} not priced yet`
+              : 'in these dates'
+          }
+        />
+      </div>
+
       {/* ------------------------------------------------------------------ */}
-      <h2>Next jobs</h2>
+      <SectionHeading icon="jobs">Next jobs</SectionHeading>
       {view.nextJobs.length === 0 ? (
         <p className="muted">Nothing confirmed in these dates.</p>
       ) : (
@@ -210,18 +321,25 @@ export function Dashboard(): ReactNode {
                   list, where the job can be tapped. The real fix is logged
                   rather than bolted on here. */}
               <a className="record" href="#jobs-list">
-                <strong>
-                  {n.job.serviceType ?? 'Job'} · {n.job.serviceDate ?? 'no date'}
-                </strong>
-                <span className="muted">
-                  {n.job.guests === null ? 'guest count not recorded' : `${n.job.guests} guests`} ·{' '}
-                  {n.readiness.metCount} of {n.readiness.total} ready
-                </span>
-                {n.blocked > 0 && (
-                  <span className="unresolved">
-                    {n.blocked} {n.blocked === 1 ? 'quantity' : 'quantities'} could not be worked out
+                <span className="record-row">
+                  {/* How ready, as a ring: the engine's own count of checks met
+                      (guests confirmed, time, menu, priced, shopping…). */}
+                  <ReadinessRing met={n.readiness.metCount} total={n.readiness.total} />
+                  <span className="record-body">
+                    <strong>
+                      {n.job.serviceType ?? 'Job'} · {n.job.serviceDate ?? 'no date'}
+                    </strong>
+                    <span className="muted">
+                      {n.job.guests === null ? 'guest count not recorded' : `${n.job.guests} guests`} ·{' '}
+                      {n.readiness.metCount} of {n.readiness.total} ready
+                    </span>
+                    {n.blocked > 0 && (
+                      <span className="unresolved">
+                        {n.blocked} {n.blocked === 1 ? 'quantity' : 'quantities'} could not be worked out
+                      </span>
+                    )}
                   </span>
-                )}
+                </span>
               </a>
             </li>
           ))}
@@ -254,7 +372,7 @@ export function Dashboard(): ReactNode {
           as `.unresolved` "not known", and the blocked count is still carried
           separately. Making an empty state quieter must not make it silent.
           ------------------------------------------------------------------ */}
-      <h2>At a glance</h2>
+      <SectionHeading icon="chart">At a glance</SectionHeading>
       <div className="tiles">
         {/* `/service/shopping`, not `/shopping`: the short one is a bookmark
             redirect, and arriving through it mounts Service twice. */}
@@ -324,7 +442,7 @@ export function Dashboard(): ReactNode {
         </Link>
       </div>
 
-      <h2>Covers</h2>
+      <SectionHeading icon="guests">Covers served</SectionHeading>
       <section className="money-row">
         {view.history.completed === 0 ? (
           <p className="muted">Nothing in these dates has been delivered yet.</p>

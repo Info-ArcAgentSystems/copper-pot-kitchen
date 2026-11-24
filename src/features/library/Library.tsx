@@ -34,6 +34,7 @@ export function Library(): ReactNode {
   return (
     <Screen
       title="Library"
+      icon="library"
       description="Your recipes and the ingredients they are built from."
     >
       <Segmented

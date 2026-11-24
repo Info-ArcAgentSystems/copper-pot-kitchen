@@ -261,6 +261,7 @@ export function AskSous(): ReactNode {
   return (
     <Screen
       title="Ask Sous"
+      icon="chat"
       description="Ask about shopping, prep, packing, money or whether a job is ready."
     >
 

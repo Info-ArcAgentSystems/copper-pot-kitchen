@@ -774,6 +774,11 @@ export function ScanJobSheet(): ReactNode {
         )}
 
         <div className="scan-job-dishes">
+          {/* Still offered after "Add a dish" — while every dish is a blank row
+              he has not filled in, the menu replaces them rather than mixing in. */}
+          {d.dishes.length > 0 &&
+            d.dishes.every((x) => x.read === null && x.choice.kind === 'none') &&
+            menuButton(at, job)}
           {d.dishes.map((dish, i) => (
             <div key={i} className="line">
               <ChoiceField

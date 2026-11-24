@@ -29,13 +29,17 @@
  */
 
 import type { ReactNode } from 'react';
+import { IconTile, type IconName } from './icons';
 
 export function Screen({
   title,
   description,
+  icon,
   children,
 }: {
   readonly title?: string;
+  /** A small tile beside the title — decoration; the title is what is read. */
+  readonly icon?: IconName;
   /** The one line under the title saying what the screen is FOR, in his words. */
   readonly description?: string;
   readonly children: ReactNode;
@@ -43,9 +47,12 @@ export function Screen({
   return (
     <div className="screen">
       {title !== undefined && (
-        <div className="page-head">
-          <h1>{title}</h1>
-          {description !== undefined && <p className="page-sub">{description}</p>}
+        <div className="page-title-row">
+          {icon !== undefined && <IconTile name={icon} size={24} />}
+          <div className="page-head">
+            <h1>{title}</h1>
+            {description !== undefined && <p className="page-sub">{description}</p>}
+          </div>
         </div>
       )}
       {children}

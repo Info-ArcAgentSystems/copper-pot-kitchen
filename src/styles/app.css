@@ -2841,3 +2841,150 @@ section.danger-zone h2 {
 .empty > h2 + p {
   margin-top: calc(var(--space-2) * -1);
 }
+
+/* ---------------------------------------------------------------------------
+   ICONS — a soft tile beside a page title, a section heading, a stat or a
+   Setup row. Grey ink on a grey tile: decoration that helps the eye find its
+   place, never a colour that could be read as meaning something.
+   --------------------------------------------------------------------------- */
+.icon-tile {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2);
+  border-radius: var(--radius-button);
+  background: var(--button-bg);
+  color: var(--text-muted);
+}
+
+/* The page icon sits beside the title block; the block itself is unchanged. */
+.page-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.page-title-row > .icon-tile {
+  padding: 10px;
+  margin-top: 2px;
+}
+
+.page-title-row > .page-head {
+  min-width: 0;
+}
+
+h2.with-icon {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+h2.with-icon > .icon-tile {
+  padding: 7px;
+}
+
+/* ---------------------------------------------------------------------------
+   STAT CARDS — the four figures Today opens with.
+   --------------------------------------------------------------------------- */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+@media (min-width: 900px) {
+  .stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.stat {
+  min-width: 0;
+  padding: var(--space-4);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+}
+
+.stat-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.stat-label {
+  font-size: var(--size-micro);
+  font-weight: var(--weight-semi);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.stat-head > .icon-tile {
+  padding: 7px;
+}
+
+.stat-value {
+  margin: var(--space-2) 0 var(--space-1);
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  font-weight: var(--weight-bold);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+/* A dash where a figure cannot be known — grey, never a zero. */
+.stat-value.is-absent {
+  color: var(--text-muted);
+}
+
+.stat-caption {
+  margin: 0;
+  font-size: var(--size-small);
+  color: var(--text-muted);
+}
+
+/* ---------------------------------------------------------------------------
+   READINESS RING — a job's checks met, as a ring and a percentage.
+   --------------------------------------------------------------------------- */
+.ring {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ring svg {
+  transform: rotate(-90deg);
+}
+
+.ring-track,
+.ring-fill {
+  fill: none;
+  stroke-width: 4;
+}
+
+.ring-track {
+  stroke: var(--button-bg);
+}
+
+.ring-fill {
+  stroke: var(--text-muted);
+  stroke-linecap: round;
+}
+
+.ring.is-done .ring-fill {
+  stroke: var(--ok);
+}
+
+.ring-label {
+  position: absolute;
+  font-size: 10px;
+  font-weight: var(--weight-bold);
+  color: var(--text);
+}

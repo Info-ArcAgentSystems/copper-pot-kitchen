@@ -2000,9 +2000,18 @@ section.danger-zone h2 {
     padding: var(--space-6) var(--space-6) var(--space-6);
   }
 
+  /*
+   * CENTRED, AND WIDE ENOUGH TO USE THE SCREEN. A 760px column pinned to the
+   * rail left half of a large monitor empty on the right; centred at 760 it
+   * left a gap beside the rail on a laptop. 1040px centred does both jobs:
+   * small even margins on a laptop, balanced on a big screen — the way most
+   * apps with a side menu lay out their pages. Text inside keeps its own
+   * reading width (hints and descriptions cap at 65ch).
+   */
   #root:has(> .tabs) .content {
-    margin-left: 0;
-    max-width: 760px;
+    margin-left: auto;
+    margin-right: auto;
+    max-width: 1040px;
   }
 }
 
@@ -2987,4 +2996,16 @@ h2.with-icon > .icon-tile {
   font-size: 10px;
   font-weight: var(--weight-bold);
   color: var(--text);
+}
+
+/* Three figures — Money's summary. */
+@media (min-width: 720px) {
+  .stats.stats-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Readable line length for a page's one-line description on a wide column. */
+.page-sub {
+  max-width: 65ch;
 }

@@ -28,6 +28,8 @@ import { jobMargin, jobRevenue, rangeMoney } from '../../engine/costing';
 import { buildMoneyView, UNKNOWN_FIGURE } from '../../ui/moneyView';
 import { EmptyState } from '../../ui/EmptyState';
 import { BEHIND, DateRangeBar } from '../../ui/DateRangeBar';
+import { SectionHeading } from '../../ui/icons';
+import { Stat } from '../../ui/Stat';
 import { useAsync } from '../../ui/useAsync';
 import { Screen } from '../../ui/Screen';
 import { SourceNotice } from '../../ui/SourceNotice';
@@ -49,6 +51,9 @@ function FigureValue({ value }: { readonly value: string }): ReactNode {
     <dd className="num">{value}</dd>
   );
 }
+
+/** A figure for a stat card, or null when it is the absence marker. */
+const known = (value: string): string | null => (value === UNKNOWN_FIGURE ? null : value);
 
 const statusLabel = (status: string): string =>
   status === 'in_prep' ? 'In prep' : status.charAt(0).toUpperCase() + status.slice(1);
@@ -154,34 +159,32 @@ export function Money(): ReactNode {
       ) : null}
 
       {view !== null && view.rows.length > 0 && (
-        <section className="money-summary">
-          <h2>Across these dates</h2>
+        <section>
+          <SectionHeading icon="chart">Across these dates</SectionHeading>
 
-          <dl className="money-figures">
-            <div>
-              <dt>Revenue</dt>
-              <FigureValue value={view.summary.revenue} />
-              {view.summary.revenueNote !== null && (
-                <dd className="muted note">{view.summary.revenueNote}</dd>
-              )}
-            </div>
-
-            <div>
-              <dt>Food cost</dt>
-              <FigureValue value={view.summary.foodCost} />
-              {view.summary.foodCostNote !== null && (
-                <dd className="muted note">{view.summary.foodCostNote}</dd>
-              )}
-            </div>
-
-            <div>
-              <dt>Margin</dt>
-              <FigureValue value={view.summary.margin} />
-              {view.summary.marginNote !== null && (
-                <dd className="muted note">{view.summary.marginNote}</dd>
-              )}
-            </div>
-          </dl>
+          {/* The same stat cards as Today, so the two screens read alike. A
+              figure that cannot be known is a dash, and its caption says how
+              many jobs it leaves out. */}
+          <div className="stats stats-3">
+            <Stat
+              icon="money"
+              label="Revenue"
+              value={known(view.summary.revenue)}
+              caption={view.summary.revenueNote}
+            />
+            <Stat
+              icon="cart"
+              label="Food cost"
+              value={known(view.summary.foodCost)}
+              caption={view.summary.foodCostNote}
+            />
+            <Stat
+              icon="chart"
+              label="Margin"
+              value={known(view.summary.margin)}
+              caption={view.summary.marginNote}
+            />
+          </div>
 
           {/* Rule 15: cancelled jobs are kept and valued, never mixed into what
               was actually earned. */}
@@ -198,6 +201,8 @@ export function Money(): ReactNode {
           </p>
         </section>
       )}
+
+      {view !== null && view.rows.length > 0 && <SectionHeading icon="jobs">By job</SectionHeading>}
 
       {view?.rows.map((row) => (
         <section key={row.jobId} className={row.isLoss ? 'money-row loss' : 'money-row'}>

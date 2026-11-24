@@ -29,7 +29,8 @@ import {
 import { buildDashboardView } from '../../ui/dashboardView';
 import { BACKUP_STORAGE_KEY } from '../../ui/backup';
 import { AHEAD, DateRangeBar } from '../../ui/DateRangeBar';
-import { IconTile, SectionHeading, type IconName } from '../../ui/icons';
+import { SectionHeading } from '../../ui/icons';
+import { Stat } from '../../ui/Stat';
 import { formatMoney } from '../../ui/form';
 import { useAsync } from '../../ui/useAsync';
 import { Screen } from '../../ui/Screen';
@@ -68,35 +69,6 @@ const addDays = (date: string, days: number): string => {
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 };
-
-/**
- * One stat card: a label, a figure, a line saying what it covers — and its
- * icon. A null figure shows a dash, and the caption says why.
- */
-function Stat({
-  icon,
-  label,
-  value,
-  caption,
-}: {
-  icon: IconName;
-  label: string;
-  value: string | null;
-  caption: string;
-}): ReactNode {
-  return (
-    <div className="stat">
-      <div className="stat-head">
-        <span className="stat-label">{label}</span>
-        <IconTile name={icon} size={18} />
-      </div>
-      <p className={value === null ? 'stat-value is-absent' : 'stat-value num'}>
-        {value ?? '—'}
-      </p>
-      <p className="stat-caption">{caption}</p>
-    </div>
-  );
-}
 
 /**
  * Readiness as a ring and a percentage, from the engine's met / total — the

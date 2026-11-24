@@ -55,10 +55,39 @@ export function Icon({ name, size = 22 }: { readonly name: IconName; readonly si
   );
 }
 
+/**
+ * WHICH PART OF THE APP an icon belongs to, as one of four tints.
+ *
+ * Decided by the icon, not by the caller, so a screen cannot pick a colour for
+ * effect and two tiles for the same thing can never disagree. A `Record` keyed
+ * by every name: a new icon without a tone fails to compile.
+ */
+export type Tone = 'violet' | 'teal' | 'rose' | 'plum';
+
+export const TONE: Readonly<Record<IconName, Tone>> = {
+  jobs: 'violet',
+  service: 'violet',
+  menu: 'violet',
+  chat: 'violet',
+  settings: 'violet',
+  guests: 'teal',
+  people: 'teal',
+  home: 'teal',
+  library: 'teal',
+  scan: 'teal',
+  cloud: 'teal',
+  cart: 'rose',
+  box: 'rose',
+  truck: 'rose',
+  tag: 'rose',
+  money: 'plum',
+  chart: 'plum',
+};
+
 /** An icon on a soft square — beside a page title, a section heading, a stat. */
 export function IconTile({ name, size = 20 }: { readonly name: IconName; readonly size?: number }): ReactNode {
   return (
-    <span className="icon-tile" aria-hidden="true">
+    <span className={`icon-tile tone-${TONE[name]}`} aria-hidden="true">
       <Icon name={name} size={size} />
     </span>
   );

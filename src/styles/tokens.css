@@ -206,8 +206,9 @@
   --chrome-border: #e4e6eb;
 
   /*
-   * THE ONLY DECORATIVE COLOUR IN THE APP, and it is used once: a 2px stroke
-   * under the kitchen name.
+   * THE BRAND MARK, used once: a 2px stroke under the kitchen name. (The area
+   * tints below are the only other decorative colour, and they live in icon
+   * tiles alone.)
    *
    * It survived the move from a dark bar to a light one without changing: 4.50
    * on the old ink, 3.39 on white. Both clear the 3:1 a mark needs — it is
@@ -276,6 +277,39 @@
   --button-bg: #e4e6eb;
   --button-hover: #d8dbe0;
   --hover: #f5f6f8;
+
+  /*
+   * A FIELD is a soft grey well until you type in it, then white with a blue
+   * ring. Blue because typing is acting — the same colour as every other thing
+   * you can act on.
+   */
+  --field-bg: #f7f8fa;
+  --focus-ring: rgb(37 99 235 / 18%);
+
+  /* The main button's lift: a faint blue shadow under the blue fill. */
+  --primary-top: #3b78f0;
+  --primary-shadow: 0 1px 2px rgb(29 78 216 / 30%), 0 4px 12px rgb(37 99 235 / 22%);
+
+  /*
+   * AREA TINTS — ICON TILES ONLY.
+   *
+   * Four hues chosen to sit away from the five that MEAN something (blue acts,
+   * amber warns, red destroys, green is done, grey is absent). They name which
+   * part of the app a tile belongs to, and nothing else: they are never on
+   * text, a figure, a card edge, a warning or a control.
+   * `tests/ui/tokens.test.ts` holds them to `.icon-tile` rules, so a tint
+   * cannot drift onto something that would then look like a seventh signal.
+   * Ink on its own tint, light / dark: violet 6.11 / 8.67, teal 4.83 / 10.27,
+   * rose 5.24 / 8.95, plum 5.47 / 9.07.
+   */
+  --tint-violet: #6d28d9;
+  --tint-violet-bg: #f1ebff;
+  --tint-teal: #0f766e;
+  --tint-teal-bg: #e1f5f2;
+  --tint-rose: #be185d;
+  --tint-rose-bg: #fdeaf2;
+  --tint-plum: #a21caf;
+  --tint-plum-bg: #fbe9fd;
 }
 
 /*
@@ -335,6 +369,20 @@
     --button-bg: #262c34;
     --button-hover: #313843;
     --hover: #1b2026;
+
+    --field-bg: #11161b;
+    --focus-ring: rgb(96 165 250 / 28%);
+    --primary-top: #7cb4fb;
+    --primary-shadow: 0 4px 14px rgb(0 0 0 / 40%);
+
+    --tint-violet: #c4b5fd;
+    --tint-violet-bg: #251c3d;
+    --tint-teal: #5eead4;
+    --tint-teal-bg: #0f2a28;
+    --tint-rose: #f9a8d4;
+    --tint-rose-bg: #34162a;
+    --tint-plum: #f0abfc;
+    --tint-plum-bg: #33163a;
   }
 }
 

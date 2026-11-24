@@ -457,9 +457,24 @@ textarea {
   border-radius: var(--radius);
   /* `--card`, not `--bg`: a field is a thing you type into, so it sits above the
      page rather than merging with it. */
-  background: var(--card);
+  background: var(--field-bg);
   color: var(--text);
   width: 100%;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+/* Typing: white well, blue edge, a soft blue ring. The ring replaces the
+   outline here, and is wider than it, so focus is never less visible. */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  background: var(--card);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--focus-ring);
 }
 
 /* ---------------------------------------------------------------------------
@@ -737,9 +752,10 @@ a.record {
  * `--accent-strong` is 6.42; on `--accent` it is 5.17.)
  */
 button.primary {
-  background: var(--accent-strong);
+  background: linear-gradient(180deg, var(--primary-top), var(--accent-strong));
   color: var(--accent-text);
   border-color: var(--accent-strong);
+  box-shadow: var(--primary-shadow);
 }
 
 button.primary:hover,
@@ -1985,10 +2001,11 @@ section.danger-zone h2 {
 
   /* On the rail the mark moves to the left edge, against the label it names,
      over a faint accent ground so the active row reads at a glance. */
+  /* On the rail the current page is a solid blue row — it is where you are,
+     and the strongest thing in the menu should be that. */
   .tabs a[aria-current='page'] {
-    background:
-      linear-gradient(var(--accent), var(--accent)) left center / 3px 60% no-repeat,
-      var(--accent-subtle);
+    background: var(--accent);
+    color: var(--accent-text);
   }
 
   /*
@@ -2853,8 +2870,9 @@ section.danger-zone h2 {
 
 /* ---------------------------------------------------------------------------
    ICONS — a soft tile beside a page title, a section heading, a stat or a
-   Setup row. Grey ink on a grey tile: decoration that helps the eye find its
-   place, never a colour that could be read as meaning something.
+   Setup row. Tinted by which part of the app it belongs to (`TONE` in
+   `src/ui/icons.tsx`): decoration that helps the eye find its place, held to
+   this one element so it is never read as meaning something.
    --------------------------------------------------------------------------- */
 .icon-tile {
   flex: none;
@@ -2867,6 +2885,35 @@ section.danger-zone h2 {
   color: var(--text-muted);
 }
 
+/*
+ * The area tints. A tile names which part of the app it belongs to; the words
+ * beside it say what it is. Held to `.icon-tile` rules by the token guard.
+ */
+.icon-tile.tone-violet {
+  --tile-ink: var(--tint-violet);
+  --tile-bg: var(--tint-violet-bg);
+}
+
+.icon-tile.tone-teal {
+  --tile-ink: var(--tint-teal);
+  --tile-bg: var(--tint-teal-bg);
+}
+
+.icon-tile.tone-rose {
+  --tile-ink: var(--tint-rose);
+  --tile-bg: var(--tint-rose-bg);
+}
+
+.icon-tile.tone-plum {
+  --tile-ink: var(--tint-plum);
+  --tile-bg: var(--tint-plum-bg);
+}
+
+.icon-tile[class*='tone-'] {
+  background: var(--tile-bg);
+  color: var(--tile-ink);
+}
+
 /* The page icon sits beside the title block; the block itself is unchanged. */
 .page-title-row {
   display: flex;
@@ -2877,6 +2924,13 @@ section.danger-zone h2 {
 .page-title-row > .icon-tile {
   padding: 10px;
   margin-top: 2px;
+}
+
+/* The screen's own tile is the one solid one: its tint running into the
+   accent, so the page announces where you are. */
+.page-title-row > .icon-tile[class*='tone-'] {
+  background: linear-gradient(135deg, var(--tile-ink), var(--accent));
+  color: var(--accent-text);
 }
 
 .page-title-row > .page-head {

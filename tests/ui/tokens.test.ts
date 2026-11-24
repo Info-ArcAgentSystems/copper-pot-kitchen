@@ -875,3 +875,37 @@ describe('viewport', () => {
     expect(tabs).toMatch(/padding-bottom:\s*env\(safe-area-inset-bottom\)/);
   });
 });
+
+/**
+ * THE AREA TINTS LIVE IN ICON TILES AND NOWHERE ELSE.
+ *
+ * Five colours already mean something. A tint on a figure, a card edge or a
+ * warning would be a sixth thing to read — and an empty Revenue card with a warm
+ * tint looks like a warning when it is only honestly blank. So every rule that
+ * names a tint must be an `.icon-tile` rule.
+ */
+describe('area tints are held to icon tiles', () => {
+  const rules = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].map(([, selector, body]) => ({
+    selector: (selector ?? '').trim(),
+    body: body ?? '',
+  }));
+  const carriers = rules.filter((r) => /var\(--(tint-|tile-)/.test(r.body));
+
+  it('is used at all', () => {
+    expect(carriers.length).toBeGreaterThan(0);
+  });
+
+  it('every rule carrying a tint is an icon-tile rule', () => {
+    for (const r of carriers) {
+      for (const sel of r.selector.split(',')) {
+        expect(sel.trim(), `a tint reached ${sel.trim()}`).toMatch(/\.icon-tile/);
+      }
+    }
+  });
+
+  it('is declared in both themes', () => {
+    for (const t of ['violet', 'teal', 'rose', 'plum']) {
+      expect([...tokens.matchAll(new RegExp(`--tint-${t}:`, 'g'))]).toHaveLength(2);
+    }
+  });
+});

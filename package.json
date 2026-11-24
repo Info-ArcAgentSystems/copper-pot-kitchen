@@ -19,7 +19,7 @@
     "supabase:deploy:parse-image": "supabase functions deploy parse-image --project-ref vhzpwdzrlrcfhxrjawym",
     "supabase:deploy:find-recipes": "supabase functions deploy find-recipes --project-ref vhzpwdzrlrcfhxrjawym",
     "supabase:secrets": "supabase secrets set --project-ref vhzpwdzrlrcfhxrjawym",
-    "supabase:push": "supabase db push --project-ref vhzpwdzrlrcfhxrjawym",
+    "supabase:push": "supabase link --project-ref vhzpwdzrlrcfhxrjawym && supabase db push --linked",
     "verify": "bash scripts/verify.sh"
   },
   "dependencies": {

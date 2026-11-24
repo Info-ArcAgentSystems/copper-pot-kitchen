@@ -99,33 +99,26 @@ h1 {
 }
 
 /*
- * A SECTION LABEL — one subject with parts, not a page of rival titles.
+ * A SECTION HEADING — bold, dark, sentence case, clearly a heading.
  *
- * A section heading was Archivo 16/600 with a hairline under it, close enough
- * in weight to the page title that a screen read as a list of competing
- * headings. It is an overline now: small, quiet, clearly subordinate.
+ * REVERSES the overline (owner's call, 24 Nov 2026). Small grey capitals were
+ * meant to be quiet; in use they were quieter than the text UNDER them — "NEXT
+ * JOBS" at 12px grey over "Nothing confirmed in these dates" at 16px grey —
+ * so a screen read as one run of grey lines with no starts. A heading has to
+ * out-rank its own content, and size, weight and ink are what do that.
  *
- * A DELIBERATE PARTIAL REVERSAL of the Steel pass, which removed small
- * uppercase labels from eight places because they were all the SAME treatment
- * and nothing had rank. That reasoning was about sameness, not about uppercase:
- * eight competing overlines are a monotone, but one overline under one big
- * title is a hierarchy.
- *
- * THE SCOPING BELOW IS THE PART THAT WAS WRONG THE FIRST TIME. Shipping this
- * rule alone restyled every h2 in the app, so the warning block's amber
- * category label, the empty state's title, the impact preview's heading and
- * every form section heading shrank to 12px uppercase with it. That commit was
- * reverted and is back here with the other half: a heading that names a block
- * which already has an EDGE of its own is not dividing the page into sections,
- * it is the title of the thing it sits in, and it keeps its weight.
+ * Rank is kept by size, not by shouting: the page title (23px) over a section
+ * (20px) over a block's own title (16px, below) over body text. Sentence case
+ * throughout — the owner's own words (a supplier, a dish) never in capitals.
  */
 h2 {
-  font-size: var(--size-micro);
-  font-weight: var(--weight-semi);
+  font-family: var(--font-display);
+  font-size: var(--size-section);
+  font-weight: var(--weight-bold);
   line-height: var(--leading-tight);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-muted);
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--text);
   margin: 0 0 var(--space-3);
 }
 
@@ -173,7 +166,12 @@ fieldset.units > h2,
 /* A heading that OPENS a card gets no top margin; one that starts a new section
    further down the page needs air above it, or the sections run together. Being
    the first child is exactly the difference between the two. */
-h2:not(:first-child),
+/* More air ABOVE a section than below its heading, so the heading reads as
+   the start of what follows rather than the end of what came before. */
+h2:not(:first-child) {
+  margin-top: var(--space-6);
+}
+
 h3:not(:first-child) {
   margin-top: var(--space-5);
 }
@@ -818,14 +816,15 @@ fieldset.units > legend + * {
   margin-top: 0;
 }
 
+/* A form section's heading reads as one — bold and dark, a step below a page
+   section, never small grey capitals. */
 fieldset.units legend {
   padding: 0;
   margin-bottom: var(--space-3);
-  font-size: var(--size-micro);
-  font-weight: var(--weight-semi);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-muted);
+  font-family: var(--font-display);
+  font-size: var(--size-lead);
+  font-weight: var(--weight-bold);
+  color: var(--text);
 }
 
 /* A component or unquantified row inside a recipe. Boxed so it reads as one
@@ -1171,8 +1170,11 @@ button.link {
    `h2` overline as it is, and this adds only the rule beneath it and the
    tighter gap. The size, weight and colour it used to restate are the base
    rule's now; stating them twice is how two treatments drift apart. */
+/* A supplier or a prep day is a SUB-section of the list — a step below a
+   section heading, so it sits at body size over its rule. */
 .supplier-group h2,
 .prep-day h2 {
+  font-size: var(--size-body);
   border-bottom: 1px solid var(--border-strong);
   padding-bottom: var(--space-2);
   margin-bottom: var(--space-2);

@@ -375,7 +375,7 @@ describe('the container owns the gap, not the blocks inside it', () => {
   });
 });
 
-describe('the section overline is scoped to section labels', () => {
+describe('section headings, and the blocks that keep their own titles', () => {
   /*
    * THE PART THAT WAS SHIPPED WRONG. The rule below alone restyled every h2 in
    * the app: the warning block's amber category label, the empty state's title,
@@ -385,10 +385,17 @@ describe('the section overline is scoped to section labels', () => {
    */
   const h2 = /\bh2 \{([^}]*)\}/.exec(css)?.[1] ?? '';
 
-  it('makes a bare section label quiet and small', () => {
-    expect(h2).toMatch(/font-size: var\(--size-micro\)/);
-    expect(h2).toMatch(/text-transform: uppercase/);
-    expect(h2).toMatch(/color: var\(--text-muted\)/);
+  /*
+   * REVERSED on the owner's call, 24 Nov 2026. The overline was quieter than
+   * the content under it — 12px grey capitals over 16px grey text — so a
+   * section did not read as starting anywhere. A section heading now out-ranks
+   * its content: larger, bold, ink, sentence case.
+   */
+  it('makes a section heading out-rank what is under it', () => {
+    expect(h2).toMatch(/font-size: var\(--size-section\)/);
+    expect(h2).toMatch(/font-weight: var\(--weight-bold\)/);
+    expect(h2).toMatch(/color: var\(--text\)/);
+    expect(h2).toMatch(/text-transform: none/);
   });
 
   it.each([
@@ -429,7 +436,7 @@ describe('the section overline is scoped to section labels', () => {
     expect(warn).toMatch(/text-transform: none/);
   });
 
-  it('a supplier and a prep day take the overline rather than restating it', () => {
+  it('a supplier and a prep day sit a step below a section heading', () => {
     /*
      * They ARE the true section labels — a name over a run of rows, on the page
      * surface, with no edge of their own. Their rule used to set a size, a
@@ -439,6 +446,8 @@ describe('the section overline is scoped to section labels', () => {
 
     expect(rule, 'the section-label rule is gone').not.toBe('');
     expect(rule).toMatch(/border-bottom: 1px solid var\(--border-strong\)/);
-    expect(rule, 'restates the base rule, so the two can drift').not.toMatch(/font-size|color:/);
+    // A step BELOW a section heading: body size, and the base rule's ink.
+    expect(rule).toMatch(/font-size: var\(--size-body\)/);
+    expect(rule, 'restates the colour, so the two can drift').not.toMatch(/color:/);
   });
 });

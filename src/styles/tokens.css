@@ -132,6 +132,7 @@
   --size-body: 1rem; /* 16px — everything else */
   --size-lead: 1.0625rem; /* 17px — h2, h3, an answer's first line */
   --size-figure: 1.125rem; /* 18px — the quantity on a row */
+  --size-section: 1.25rem; /* 20px — a section heading on the page */
   --size-h1: 1.4375rem; /* 23px — the screen's name */
   --size-label: 0.8125rem; /* 13px — a field label */
 

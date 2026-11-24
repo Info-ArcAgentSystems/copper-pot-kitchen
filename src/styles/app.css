@@ -3063,3 +3063,81 @@ h2.with-icon > .icon-tile {
 .page-sub {
   max-width: 65ch;
 }
+
+/* ---------------------------------------------------------------------------
+   ASK SOUS BUBBLE — a round button in the corner, on every screen but /sous.
+   Blue because it is something to act on. Clears the bottom tab bar on a
+   phone, and the toasts sit at the centre, so the two never meet.
+   --------------------------------------------------------------------------- */
+.sous-bubble {
+  position: fixed;
+  right: var(--space-4);
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  z-index: 40;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, var(--primary-top), var(--accent-strong));
+  color: var(--accent-text);
+  box-shadow: var(--primary-shadow), 0 8px 24px rgb(0 0 0 / 14%);
+}
+
+.sous-bubble:hover,
+.sous-bubble:focus-visible {
+  background: var(--accent);
+  transform: translateY(-1px);
+}
+
+.sous-bubble:active {
+  background: var(--accent);
+  transform: scale(0.96);
+}
+
+/* Room under the last row, so the bubble never sits on top of it. */
+#root:has(.sous-bubble) .content {
+  padding-bottom: 72px;
+}
+
+/* Selecting rows to delete brings up the bar at the foot of the list; the
+   bubble steps aside rather than sit on its buttons. */
+body:has(.bulk-bar) .sous-bubble {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .sous-bubble {
+    right: var(--space-6);
+    bottom: var(--space-6);
+  }
+}
+
+/* In the panel the conversation fills it and the composer sits at the foot,
+   the way a chat does, rather than floating under the first message. */
+.sheet:has(.sous-panel) {
+  height: 92dvh;
+}
+
+.sheet-body:has(> .sous-panel) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.sous-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.sous-panel > .chat-composer {
+  margin-top: auto;
+}
+
+@media (min-width: 1024px) {
+  .sheet:has(.sous-panel) {
+    height: auto;
+  }
+}

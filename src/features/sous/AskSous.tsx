@@ -48,7 +48,15 @@ const addDays = (date: string, days: number): string => {
   return new Date(Date.UTC(y, m - 1, d) + days * 86_400_000).toISOString().slice(0, 10);
 };
 
-export function AskSous(): ReactNode {
+export function AskSous({
+  inPanel = false,
+  onSaved,
+}: {
+  /** Opened from the floating bubble: the panel carries the title, not a Screen. */
+  readonly inPanel?: boolean;
+  /** A confirmed change was saved — the page under the panel must re-read. */
+  readonly onSaved?: () => void;
+} = {}): ReactNode {
   const db = supabaseDb();
 
   const jobs = useAsync(() => jobRepository(db).list(), []);
@@ -254,16 +262,13 @@ export function AskSous(): ReactNode {
       // is the only thing that was committable.
       setLive(null);
       jobs.reload();
+      onSaved?.();
     }
     setCommitting(false);
   };
 
-  return (
-    <Screen
-      title="Ask Sous"
-      icon="chat"
-      description="Ask about shopping, prep, packing, money or whether a job is ready."
-    >
+  const body = (
+    <>
 
       {exchanges.length === 0 && (
         <p className="muted">
@@ -367,6 +372,18 @@ export function AskSous(): ReactNode {
           {asking ? 'Asking…' : 'Ask'}
         </button>
       </div>
+    </>
+  );
+
+  if (inPanel) return <div className="sous-panel">{body}</div>;
+
+  return (
+    <Screen
+      title="Ask Sous"
+      icon="chat"
+      description="Ask about shopping, prep, packing, money or whether a job is ready."
+    >
+      {body}
     </Screen>
   );
 }

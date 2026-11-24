@@ -10,8 +10,8 @@
  * things, and Rule 1 makes the distinction matter.
  */
 
-import { Navigate, NavLink, Route, Routes } from 'react-router-dom';
-import type { ReactNode } from 'react';
+import { Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom';
+import { useState, type ReactNode } from 'react';
 import { KitchenProvider } from './auth/KitchenContext';
 import { useKitchen } from './auth/kitchenState';
 import { RequireKitchen } from './auth/RequireKitchen';
@@ -36,6 +36,8 @@ import { Money } from './features/money/Money';
 import { NotFound } from './features/NotFound';
 import { AskSous } from './features/sous/AskSous';
 import { SousProvider } from './features/sous/SousContext';
+import { Sheet } from './ui/Sheet';
+import { Icon } from './ui/icons';
 
 /*
  * FIVE, and each one is a job rather than a screen.
@@ -68,11 +70,6 @@ function Header(): ReactNode {
           bottom border still reaches both window edges. */}
       <div className="app-header-inner">
         <span>{state.membership.kitchenName}</span>
-      {/* Ask Sous lives here rather than in the bottom bar: it is cross-cutting,
-          and the bar is already past the point where another tab fits. */}
-      <NavLink to="/sous" className="tap">
-        Ask Sous
-      </NavLink>
       <NavLink to="/setup" className="tap">
         Setup
       </NavLink>
@@ -150,7 +147,43 @@ function TabBar(): ReactNode {
   );
 }
 
+/**
+ * ASK SOUS, ONE TAP FROM ANY SCREEN.
+ *
+ * A round button in the corner opens the conversation in a panel over the page,
+ * so asking "is Friday ready?" does not lose his place. The transcript lives in
+ * `SousProvider`, above the router, so the panel and the full /sous page share
+ * one conversation. Hidden on /sous itself, where it would open a copy of the
+ * screen it sits on.
+ */
+function SousBubble({ onSaved }: { readonly onSaved: () => void }): ReactNode {
+  const { pathname } = useLocation();
+  const [open, setOpen] = useState(false);
+  if (pathname.startsWith('/sous')) return null;
+
+  return (
+    <>
+      {!open && (
+        <button
+          type="button"
+          className="sous-bubble"
+          aria-label="Ask Sous"
+          onClick={() => setOpen(true)}
+        >
+          <Icon name="chat" size={26} />
+        </button>
+      )}
+      {open && (
+        <Sheet title="Ask Sous" onClose={() => setOpen(false)}>
+          <AskSous inPanel onSaved={onSaved} />
+        </Sheet>
+      )}
+    </>
+  );
+}
+
 export default function App(): ReactNode {
+  const [dataVersion, setDataVersion] = useState(0);
   return (
     <KitchenProvider>
       {/* Above the router on purpose: the transcript has to outlive the Ask Sous
@@ -178,7 +211,9 @@ export default function App(): ReactNode {
            */}
           <TabBar />
           <main className="app-main">
-            <div className="content">
+            {/* Re-keyed when Sous saves a change from the bubble, so the page
+                underneath re-reads instead of showing the job as it was. */}
+            <div className="content" key={dataVersion}>
               <Routes>
               <Route path="/" element={<Jobs />} />
               {/* Bookmarks from the eight-tab era. Each resolves rather than
@@ -225,6 +260,7 @@ export default function App(): ReactNode {
               </Routes>
             </div>
           </main>
+          <SousBubble onSaved={() => setDataVersion((v) => v + 1)} />
         </RequireKitchen>
       </SousProvider>
     </KitchenProvider>

@@ -17,6 +17,8 @@ import { ingredientRepository, supplierRepository } from '../../data/repositorie
 import { commitScannedPrices } from '../../scan/commit';
 import { reviewInvoice, type InvoiceRead, type InvoiceReview } from '../../scan/invoice';
 import { tidyName } from '../../scan/jobDraft';
+import { packFromLine } from '../../scan/packFromLine';
+import { packSizeIn } from '../../engine/units';
 import { IngredientForm } from '../setup/Ingredients';
 import { parseInvoice } from '../../scan/parseImage';
 import { toScaledDataUrl } from './scaleImage';
@@ -26,7 +28,14 @@ import { groupLines, groupWorking, lineNote } from '../../ui/invoiceView';
 import { Screen } from '../../ui/Screen';
 import { useAsync } from '../../ui/useAsync';
 import type { DataSource } from '../../ui/sourceState';
-import type { Cents, KitchenId, SupplierId } from '../../engine/types';
+import type {
+  Cents,
+  Ingredient,
+  KitchenId,
+  PackDefinition,
+  PurchaseUnit,
+  SupplierId,
+} from '../../engine/types';
 import { useKitchen } from '../../auth/kitchenState';
 
 const today = (): string => new Date().toISOString().slice(0, 10);
@@ -123,7 +132,64 @@ export function ScanInvoice(): ReactNode {
     }
   };
 
-  /** The ONLY thing on this screen that writes. Rule 7's separate call. */
+  /*
+   * THE SIZE THE RECEIPT PRINTS — "RASPBERRIES 125G".
+   *
+   * His ingredient has no pack size, so the line cannot be priced; but the line
+   * says what the pack was. Found by code (`packFromLine`), offered as a button,
+   * and written to the ingredient only on his tap. Confirmed, not "assumed": it
+   * is printed on the receipt for the very pack he bought.
+   *
+   * Offered only when it can actually price the line — a 125 g pack on an
+   * ingredient he counts "each" would be refused by the costing, so it says why
+   * instead of offering a button that changes nothing.
+   */
+  const packOffer = (record: Ingredient, description: string): ReactNode => {
+    const read = packFromLine(description);
+    if (read === null) return null;
+    const pack: PackDefinition = { size: read.size, unit: read.unit as PurchaseUnit, assumed: false };
+
+    if (packSizeIn({ ...record, pack }, record.stockUnit) === null) {
+      return (
+        <p className="muted">
+          The receipt says “{read.said}”, but you count {record.name} in {record.stockUnit}, so it
+          can’t be its pack size. Set the pack in Ingredients.
+        </p>
+      );
+    }
+
+    return (
+      <p className="muted">
+        The receipt says “{read.said}”.{' '}
+        <button type="button" className="sm" disabled={busy} onClick={() => void applyPack(record, pack, description)}>
+          Use {read.size} {read.unit} as the pack size
+        </button>
+      </p>
+    );
+  };
+
+  /*
+   * One tap, two facts — both printed on this line. "RASPBERRIES 125G, 1" is ONE
+   * pack of 125 g: the size the line prints IS the pack, so its count is a count
+   * of packs. Without the second, the line would still ask "is each one one
+   * pack?" about a size it has just told us. Undoable on the line, like any other
+   * "one pack each".
+   */
+  const applyPack = async (record: Ingredient, pack: PackDefinition, description: string): Promise<void> => {
+    setBusy(true);
+    setRefusal(null);
+    try {
+      await ingredientRepository(db).update(record.id, { ...record, pack });
+      setOnePackEach((prev) => new Set(prev).add(description));
+      ingredients.reload();
+    } catch (cause) {
+      setRefusal(cause instanceof Error ? cause.message : `Could not set the pack size for ${record.name}.`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** The ONLY thing on this screen that writes PRICES. Rule 7's separate call. */
   const confirm = async (): Promise<void> => {
     if (review === null) return;
 
@@ -270,6 +336,10 @@ export function ScanInvoice(): ReactNode {
                         </button>
                       )}
 
+                    {first.ingredient.kind === 'matched' &&
+                      first.ingredient.record.pack === null &&
+                      packOffer(first.ingredient.record, group.description)}
+
                     {isNew && named !== undefined && ingredientList.some((i) => i.name === named) && (
                       <p className="muted">
                         You added “{named}”, but it doesn’t match “{group.description}”, so this
@@ -298,6 +368,7 @@ export function ScanInvoice(): ReactNode {
                         <IngredientForm
                           ingredient={null}
                           prefill={{ name: tidyName(group.description), supplierId: matchedSupplierId }}
+                          packHint={packFromLine(group.description)}
                           done={() => {
                             setAdding(null);
                             ingredients.reload();

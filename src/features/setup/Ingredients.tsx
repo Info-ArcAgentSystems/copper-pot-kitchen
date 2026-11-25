@@ -149,18 +149,27 @@ export function Ingredients(): ReactNode {
  * keeps Rule 4's three units asked the same way wherever an ingredient is born.
  *
  * `prefill` only seeds a NEW ingredient's name and supplier, from what the
- * receipt said. Units, pack and price are left for him: a receipt's "2L" is not
- * evidence of how he counts or buys it.
+ * receipt said. Units and price are left for him: a receipt's "2L" is not
+ * evidence of how he COUNTS it.
+ *
+ * `packHint` is the one exception, and it is an offer, not a prefill: when the
+ * receipt line prints a single plain size ("RASPBERRIES 125G", found by
+ * `packFromLine`, never the model), a button fills the pack fields with it. The
+ * boxes stay empty until he taps — it is the size of the pack he bought, printed
+ * on the receipt, but it is still his to accept.
  */
 export function IngredientForm({
   ingredient,
   done,
   prefill,
+  packHint = null,
   onSavedName,
 }: {
   ingredient: Ingredient | null;
   done: (said?: string) => void;
   prefill?: { readonly name: string; readonly supplierId: SupplierId | null };
+  /** A pack size printed on the receipt line, offered as a button. */
+  packHint?: { readonly size: number; readonly unit: string; readonly said: string } | null;
   /** Told the name a NEW ingredient was saved under, once the write succeeded. */
   onSavedName?: (name: string) => void;
 }): ReactNode {
@@ -457,6 +466,23 @@ export function IngredientForm({
           onChange={setPackUnit}
           error={packParse.kind === 'error' ? packParse.unitError : null}
         />
+
+        {packHint !== null && packSize.trim() === '' && packUnit.trim() === '' && (
+          <p className="muted">
+            The receipt says “{packHint.said}”.{' '}
+            <button
+              type="button"
+              className="sm"
+              onClick={() => {
+                setPackSize(String(packHint.size));
+                setPackUnit(packHint.unit);
+                setPackAssumed(false);
+              }}
+            >
+              Use {packHint.size} {packHint.unit}
+            </button>
+          </p>
+        )}
 
         {/* Shown until confirmed. An assumed pack size trusted silently is a
             wrong shopping quantity. */}

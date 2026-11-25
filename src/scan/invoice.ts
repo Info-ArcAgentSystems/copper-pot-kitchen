@@ -230,7 +230,7 @@ export function reviewInvoice(
     }
     if (price.kind === 'no_pack') {
       needsManualHandling.push(
-        `"${line.description}" has no pack size recorded, so a price per pack cannot be worked out. Set one in Ingredients.`,
+        `"${line.description}" has no pack size recorded, so a price per pack cannot be worked out. Set one in Ingredients — or, where the line prints its size, use it on the line above.`,
       );
     }
     if (price.kind === 'unreadable' && ingredient.kind === 'matched') {

@@ -213,6 +213,7 @@ export function Jobs(): ReactNode {
       <div id="jobs-list">
         <RecordScreen<JobRow>
           title="Jobs"
+          icon="jobs"
           why="everything the kitchen does is one of them, and shopping, prep and packing are all derived from this list"
           addLabel="Add a job"
           emptyDescription="A job is one service: who, where, when, how many, and what you are cooking."

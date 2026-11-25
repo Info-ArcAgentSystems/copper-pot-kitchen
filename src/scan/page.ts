@@ -32,6 +32,7 @@
  */
 
 import type { Customer } from '../engine/types';
+import { sameName, type NamedRecord } from '../engine/nameMatch';
 import { reviewJobSheet, type Gap, type JobSheetRead, type OwnerData } from './jobSheet';
 import {
   createdName,
@@ -437,11 +438,40 @@ export function needsDateConfirm(page: PageDraft, job: PageJob): boolean {
 }
 
 /** Everything blocking job `at`. Empty means it may be saved. */
-export function jobGaps(page: PageDraft, at: number): readonly Gap[] {
+/**
+ * What stops one job saving. `recipes` is REQUIRED, not optional: the duplicate
+ * check below is only as good as the list it is given, and a caller that forgot
+ * it would quietly turn the check off.
+ */
+export function jobGaps(page: PageDraft, at: number, recipes: readonly NamedRecord[]): readonly Gap[] {
   const job = page.jobs[at];
   if (job === undefined) return [];
 
   const gaps: Gap[] = [...draftGaps(job.draft)];
+
+  /*
+   * A NEW DISH WITH A NAME HE ALREADY HAS.
+   *
+   * Typing "Barbeque" when "Barbeque" is in his Library would create a second
+   * recipe of the same name. Shopping, prep, saved menus and costs would then be
+   * split across two records that look identical, and nothing would say which
+   * is which. The same name is the same dish: he picks the one he has.
+   *
+   * Exact names only (`sameName`). "BBQ sides" beside a "BBQ" recipe is a
+   * different dish and is not stopped.
+   */
+  job.draft.dishes.forEach((dish, i) => {
+    if (dish.choice.kind !== 'create') return;
+    const typed = createdName(dish.choice.name);
+    const have = recipes.find((r) => sameName(r.name, typed));
+    if (have === undefined) return;
+    gaps.push({
+      field: `dish:${i}`,
+      label: `“${have.name}” is already one of your recipes — pick it from the list instead of creating it again`,
+      saw: null,
+    });
+  });
+
   if (needsDateConfirm(page, job)) {
     gaps.push({
       field: HEADER_DATE_FIELD,
@@ -457,9 +487,9 @@ export function timeQuestion(job: PageJob): readonly string[] {
   return job.savedJobId === null && job.draft.serviceTime.trim() === '' ? job.meta.timeOptions : [];
 }
 
-export function saveable(page: PageDraft, at: number): boolean {
+export function saveable(page: PageDraft, at: number, recipes: readonly NamedRecord[]): boolean {
   const job = page.jobs[at];
-  return job !== undefined && job.savedJobId === null && jobGaps(page, at).length === 0;
+  return job !== undefined && job.savedJobId === null && jobGaps(page, at, recipes).length === 0;
 }
 
 // ---------------------------------------------------------------------------

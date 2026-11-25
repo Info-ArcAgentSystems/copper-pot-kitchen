@@ -59,6 +59,16 @@ export const words = (text: string): string[] =>
     .split(' ')
     .filter((w) => w !== '');
 
+/**
+ * The SAME name — tier 2 exactly, nothing looser. "Barbeque" = "barbeque" =
+ * "Barbeque." but never "BBQ sides" = "BBQ". For a hard stop, where a looser
+ * match would refuse a genuinely different dish.
+ */
+export const sameName = (a: string, b: string): boolean => {
+  const x = words(a).join(' ');
+  return x !== '' && x === words(b).join(' ');
+};
+
 /** Does `haystack` contain `needle` as a contiguous run of WHOLE words? */
 const runOfWords = (haystack: readonly string[], needle: readonly string[]): boolean => {
   if (needle.length === 0 || needle.length > haystack.length) return false;

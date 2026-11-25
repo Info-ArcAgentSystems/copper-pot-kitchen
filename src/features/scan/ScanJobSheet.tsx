@@ -204,6 +204,12 @@ export function ScanJobSheet(): ReactNode {
 
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
+  /*
+   * Which job's save failed, and why — shown ON that job. The page-level message
+   * sits under the photo box, out of sight when he is scrolled down at the job
+   * he just tapped: the button went back to "Save" and nothing said it failed.
+   */
+  const [failed, setFailed] = useState<{ readonly at: number; readonly error: string } | null>(null);
   const [page, setPage] = useState<PageDraft | null>(null);
   /** What "Save as your menu" said, per job, kept after the offer itself goes. */
   const [menuNotes, setMenuNotes] = useState<ReadonlyMap<number, string>>(new Map());
@@ -334,7 +340,7 @@ export function ScanJobSheet(): ReactNode {
     at: number,
   ): Promise<{ page: PageDraft; ok: boolean }> => {
     const job = current.jobs[at];
-    if (job === undefined || !saveable(current, at)) return { page: current, ok: false };
+    if (job === undefined || !saveable(current, at, recipeList)) return { page: current, ok: false };
 
     const result = await commitScannedDraft(
       db,
@@ -347,6 +353,7 @@ export function ScanJobSheet(): ReactNode {
     if (result.ok) return { page: markSaved(settled, at, result.jobId), ok: true };
 
     setRefusal(result.error);
+    setFailed({ at, error: result.error });
     /*
      * What DID get written. supabase-js has no transaction, so a partial write
      * is real: telling him nothing was saved when two recipes exist is a lie he
@@ -371,6 +378,7 @@ export function ScanJobSheet(): ReactNode {
     if (page === null) return;
     setBusy(true);
     setRefusal(null);
+    setFailed(null);
     const { page: next } = await commitOne(page, at);
     setPage(next);
     reloadLists();
@@ -382,10 +390,11 @@ export function ScanJobSheet(): ReactNode {
     if (page === null) return;
     setBusy(true);
     setRefusal(null);
+    setFailed(null);
 
     let current = page;
     for (let at = 0; at < current.jobs.length; at += 1) {
-      if (!saveable(current, at)) continue;
+      if (!saveable(current, at, recipeList)) continue;
       const step = await commitOne(current, at);
       current = step.page;
       if (!step.ok) break;
@@ -424,7 +433,7 @@ export function ScanJobSheet(): ReactNode {
 
   const jobs = page?.jobs ?? [];
   const unsaved = jobs.filter((j) => j.savedJobId === null);
-  const readyCount = page === null ? 0 : jobs.filter((_, at) => saveable(page, at)).length;
+  const readyCount = page === null ? 0 : jobs.filter((_, at) => saveable(page, at, recipeList)).length;
   const savedCount = jobs.length - unsaved.length;
   const headerDated = page === null ? [] : jobs.filter((j) => needsDateConfirm(page, j));
   const blocks = [...new Set(jobs.map((j) => j.meta.block))];
@@ -523,7 +532,7 @@ export function ScanJobSheet(): ReactNode {
         );
       }
 
-      for (const gap of jobGaps(page, at)) {
+      for (const gap of jobGaps(page, at, recipeList)) {
         if (gap.field === HEADER_DATE_FIELD) continue;
 
         if (gap.field === 'dishes') {
@@ -960,7 +969,7 @@ export function ScanJobSheet(): ReactNode {
   const jobCard = (job: PageJob, at: number): ReactNode => {
     if (page === null) return null;
     const d = job.draft;
-    const gaps = jobGaps(page, at);
+    const gaps = jobGaps(page, at, recipeList);
     const isOpen = open.has(at);
     const newRecipes = creationsFromDraft(d).recipes;
 
@@ -1030,12 +1039,18 @@ export function ScanJobSheet(): ReactNode {
             <button
               type="button"
               className="primary scan-job-save"
-              disabled={busy || !saveable(page, at)}
+              disabled={busy || !saveable(page, at, recipeList)}
               onClick={() => void saveJob(at)}
             >
               {busy ? 'Saving…' : 'Save this job'}
             </button>
           </div>
+        )}
+
+        {failed !== null && failed.at === at && job.savedJobId === null && (
+          <p className="error" role="alert">
+            This job was not saved — {failed.error}
+          </p>
         )}
 
         {isOpen && job.savedJobId === null && details(at, job)}

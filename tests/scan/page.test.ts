@@ -273,15 +273,29 @@ describe('Pandoras Cottage — two bookings under one heading', () => {
   });
 
   it('blocks both until the header-built dates are confirmed', () => {
-    expect(jobGaps(page, 1).map((g) => g.field)).toEqual([HEADER_DATE_FIELD]);
-    expect(saveable(page, 1)).toBe(false);
+    expect(jobGaps(page, 1, []).map((g) => g.field)).toEqual([HEADER_DATE_FIELD]);
+    expect(saveable(page, 1, [])).toBe(false);
   });
 
   it('readies the Sunday job once the dates are confirmed, and holds the BBQ for its menu', () => {
     const confirmed = { ...page, headerDatesConfirmed: true };
 
-    expect(saveable(confirmed, 1)).toBe(true);
-    expect(jobGaps(confirmed, 0).map((g) => g.field)).toEqual(['dishes']);
+    expect(saveable(confirmed, 1, [])).toBe(true);
+    expect(jobGaps(confirmed, 0, []).map((g) => g.field)).toEqual(['dishes']);
+  });
+
+  it('refuses to create a dish he already has — the Barbeque twice over', () => {
+    const confirmed = { ...page, headerDatesConfirmed: true };
+    const have = [recipe('r-pan', 'pancakes.'), recipe('r-fi', 'Full Irish breakfast')];
+
+    // "Pancakes" is "pancakes." — the same dish, so it blocks and names his.
+    const gaps = jobGaps(confirmed, 1, have);
+    expect(gaps.map((g) => g.field)).toEqual(['dish:1']);
+    expect(gaps[0]?.label).toContain('“pancakes.”');
+    expect(saveable(confirmed, 1, have)).toBe(false);
+
+    // "Full Irish" beside "Full Irish breakfast" is a different dish: not stopped.
+    expect(saveable(confirmed, 1, [recipe('r-fi', 'Full Irish breakfast')])).toBe(true);
   });
 
   it('lets the BBQ save once he SAYS the menu is not decided — the time does not block', () => {
@@ -290,7 +304,7 @@ describe('Pandoras Cottage — two bookings under one heading', () => {
       menuToBeDecided: true,
     }));
 
-    expect(saveable(decided, 0)).toBe(true);
+    expect(saveable(decided, 0, [])).toBe(true);
   });
 
   it('treats a date he typed himself as his answer, not one to confirm', () => {
@@ -314,7 +328,7 @@ describe('Tranquility House — two bookings on the same day, no page title', ()
 
   it('builds NO date without a title, and the empty date blocks the save', () => {
     expect(breakfast?.draft.serviceDate).toBe('');
-    expect(jobGaps(page, 0).map((g) => g.field)).toContain('serviceDate');
+    expect(jobGaps(page, 0, []).map((g) => g.field)).toContain('serviceDate');
   });
 
   it('splits counts at either end of a dish and leaves count-less dishes whole', () => {

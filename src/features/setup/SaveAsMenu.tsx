@@ -51,7 +51,7 @@ export function SaveAsMenu({
         written += 1;
       }
       onSaved(
-        `Saved as your ${menu.serviceType} menu. Every ${menu.serviceType} job will offer these ${dishes}.`,
+        `Saved as your ${menu.serviceType} menu. Every ${menu.serviceType} job will offer ${count === 1 ? 'this dish' : `these ${dishes}`}.`,
       );
     } catch (cause) {
       const why = cause instanceof Error ? cause.message : 'it could not be saved';
@@ -68,8 +68,9 @@ export function SaveAsMenu({
   return (
     <div className="save-as-menu">
       <p className="muted">
-        You have no {menu.serviceType} menu yet. Save these {dishes} as your {menu.serviceType} menu,
-        and every {menu.serviceType} job will offer them with one tap.
+        You have no {menu.serviceType} menu yet. Save {count === 1 ? 'this dish' : `these ${dishes}`} as
+        your {menu.serviceType} menu, and every {menu.serviceType} job will offer{' '}
+        {count === 1 ? 'it' : 'them'} with one tap.
       </p>
       <button type="button" disabled={busy || kitchenId === ''} onClick={() => void save()}>
         {busy ? 'Saving…' : `Save as your ${menu.serviceType} menu`}

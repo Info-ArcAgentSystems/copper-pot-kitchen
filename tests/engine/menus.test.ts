@@ -7,7 +7,14 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { menuFor, ownSpelling, savedMenus, serviceTypeKey } from '../../src/engine/menus';
+import {
+  menuFor,
+  menuToSave,
+  ownSpelling,
+  savedMenus,
+  serviceTypeFromMenus,
+  serviceTypeKey,
+} from '../../src/engine/menus';
 import type { KitchenId, MenuTemplate, MenuTemplateId, RecipeId } from '../../src/engine/types';
 
 const row = (serviceType: string, recipeId: string, position: number): MenuTemplate => ({
@@ -71,5 +78,63 @@ describe('ownSpelling — offered, never swapped', () => {
     expect(ownSpelling('BBQ', ['BBQ'])).toBeNull();
     expect(ownSpelling('Buffet', ['BBQ'])).toBeNull();
     expect(ownSpelling(null, ['BBQ'])).toBeNull();
+  });
+});
+
+const ids = (...xs: string[]): RecipeId[] => xs.map((x) => x as RecipeId);
+
+describe('menuToSave — a job\'s dishes become his menu, never overwrite one', () => {
+  it('offers a first Breakfast menu from a breakfast job, in his order', () => {
+    expect(menuToSave('Brunch', ids('eggs', 'toast'), TEMPLATES)).toEqual({
+      serviceType: 'Brunch',
+      recipeIds: ids('eggs', 'toast'),
+    });
+  });
+
+  it('keeps his spelling, trimmed, and saves a repeated dish once', () => {
+    expect(menuToSave('  Brunch ', ids('eggs', 'toast', 'eggs'), TEMPLATES)).toEqual({
+      serviceType: 'Brunch',
+      recipeIds: ids('eggs', 'toast'),
+    });
+  });
+
+  it('never replaces a menu he already has — "B.B.Q" is his BBQ', () => {
+    expect(menuToSave('BBQ', ids('burgers'), TEMPLATES)).toBeNull();
+    expect(menuToSave('B.B.Q', ids('burgers', 'corn'), TEMPLATES)).toBeNull();
+  });
+
+  it('offers nothing without a service type or without dishes', () => {
+    expect(menuToSave(null, ids('eggs'), TEMPLATES)).toBeNull();
+    expect(menuToSave('  ', ids('eggs'), TEMPLATES)).toBeNull();
+    expect(menuToSave('...', ids('eggs'), TEMPLATES)).toBeNull();
+    expect(menuToSave('Brunch', [], TEMPLATES)).toBeNull();
+  });
+});
+
+describe('serviceTypeFromMenus — dishes on the page, no service named', () => {
+  it('offers Breakfast when every dish is on the Breakfast menu', () => {
+    expect(serviceTypeFromMenus(ids('full-irish'), TEMPLATES)).toBe('Breakfast');
+  });
+
+  it('a page listing part of a menu still fits it', () => {
+    expect(serviceTypeFromMenus(ids('burgers', 'slaw'), TEMPLATES)).toBe('BBQ');
+  });
+
+  it('a dish on no menu means no offer — it is not on his BBQ', () => {
+    expect(serviceTypeFromMenus(ids('burgers', 'lasagne'), TEMPLATES)).toBeNull();
+  });
+
+  it('dishes from two different menus fit neither', () => {
+    expect(serviceTypeFromMenus(ids('burgers', 'full-irish'), TEMPLATES)).toBeNull();
+  });
+
+  it('dishes on two menus at once are a guess, so nothing is offered', () => {
+    const both = [...TEMPLATES, row('Party', 'slaw', 0), row('Party', 'burgers', 1)];
+    expect(serviceTypeFromMenus(ids('burgers', 'slaw'), both)).toBeNull();
+    expect(serviceTypeFromMenus(ids('sausages'), both)).toBe('BBQ');
+  });
+
+  it('no dishes, no offer', () => {
+    expect(serviceTypeFromMenus([], TEMPLATES)).toBeNull();
   });
 });

@@ -80,7 +80,8 @@ import {
 } from '../../scan/page';
 import { parseJobSheet } from '../../scan/parseImage';
 import { matchByName } from '../../engine/nameMatch';
-import { menuFor, ownSpelling, savedMenus } from '../../engine/menus';
+import { menuFor, menuToSave, ownSpelling, savedMenus, serviceTypeFromMenus } from '../../engine/menus';
+import { SaveAsMenu } from '../setup/SaveAsMenu';
 import { toScaledDataUrl } from './scaleImage';
 import { PhotoGate } from './PhotoGate';
 import { ChoiceField, Field } from '../../ui/Field';
@@ -97,6 +98,7 @@ import type {
   KitchenId,
   Property,
   Recipe,
+  RecipeId,
 } from '../../engine/types';
 
 /** The chip beside a box: where this value came from, in his words. */
@@ -203,6 +205,8 @@ export function ScanJobSheet(): ReactNode {
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [page, setPage] = useState<PageDraft | null>(null);
+  /** What "Save as your menu" said, per job, kept after the offer itself goes. */
+  const [menuNotes, setMenuNotes] = useState<ReadonlyMap<number, string>>(new Map());
   /** Which job cards have their full boxes open. */
   const [open, setOpen] = useState<ReadonlySet<number>>(new Set());
   /** What a failed save managed to create, so he is not told nothing happened. */
@@ -657,6 +661,60 @@ export function ScanJobSheet(): ReactNode {
     }
   };
 
+  /** The job's dishes as recipe ids — or null while any is new or unchosen. */
+  const dishIds = (job: PageJob): RecipeId[] | null => {
+    const out: RecipeId[] = [];
+    for (const dish of job.draft.dishes) {
+      if (dish.choice.kind !== 'existing') return null;
+      out.push(dish.choice.id as RecipeId);
+    }
+    return out;
+  };
+
+  /*
+   * The page lists dishes but never names the service ("10 x Full Irish, 3 x
+   * Pancakes"). When they are all on exactly one of his saved menus, that menu's
+   * service type is offered — never filled in, it sets the price.
+   */
+  const serviceOffer = (at: number, job: PageJob): ReactNode => {
+    if (job.savedJobId !== null || job.draft.serviceType.trim() !== '') return null;
+    const ids = dishIds(job);
+    const type = ids === null ? null : serviceTypeFromMenus(ids, menuList);
+    if (type === null) return null;
+    return (
+      <p className="muted scan-phone">
+        No service type is written, but these dishes are all on your {type} menu.{' '}
+        <button type="button" className="sm" onClick={() => patchJob(at, { serviceType: type })}>
+          Set it to “{type}”
+        </button>
+      </p>
+    );
+  };
+
+  /*
+   * After a save: "Save these dishes as your BBQ menu", when he has none yet.
+   * The saved job's dishes are all real recipes by now — the save settled any
+   * new ones to the records it created.
+   */
+  const menuSaveOffer = (at: number, job: PageJob): ReactNode => {
+    const note = menuNotes.get(at);
+    if (note !== undefined) return <p role="status">{note}</p>;
+    if (job.savedJobId === null) return null;
+    const ids = dishIds(job);
+    const offer = ids === null ? null : menuToSave(parseTextOrNull(job.draft.serviceType), ids, menuList);
+    if (offer === null) return null;
+    return (
+      <SaveAsMenu
+        menu={offer}
+        kitchenId={kitchenId}
+        onSaved={(said) => {
+          setMenuNotes((m) => new Map(m).set(at, said));
+          menus.reload();
+        }}
+      />
+    );
+  };
+
   /*
    * "Use your BBQ menu": his own saved dishes for this service type, in his
    * order, each an existing recipe. Offered only — and only when every dish on
@@ -957,8 +1015,13 @@ export function ScanJobSheet(): ReactNode {
           </p>
         )}
 
+        {serviceOffer(at, job)}
+
         {job.savedJobId !== null ? (
-          <p role="status">Saved as a new enquiry — open it on the Jobs screen.</p>
+          <>
+            <p role="status">Saved as a new enquiry — open it on the Jobs screen.</p>
+            {menuSaveOffer(at, job)}
+          </>
         ) : (
           <div className="actions">
             <button type="button" onClick={() => toggleJob(at)}>

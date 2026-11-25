@@ -36,7 +36,8 @@ import { SourceNotice } from '../../ui/SourceNotice';
 import { sourceState, type DataSource } from '../../ui/sourceState';
 import { useAsync, type AsyncState } from '../../ui/useAsync';
 import { formatMoney, moneyValue, parseCount, parseMoney, parseText, textValue } from '../../ui/form';
-import { menuFor } from '../../engine/menus';
+import { menuFor, menuToSave, serviceTypeFromMenus } from '../../engine/menus';
+import { SaveAsMenu } from '../setup/SaveAsMenu';
 import { jobRevenue } from '../../engine/costing';
 import { portionsDerivable } from '../../engine/rules';
 import type { JobChanges } from '../../engine/impact';
@@ -401,6 +402,8 @@ function JobForm({ job, done }: { job: Job | null; done: (said?: string) => void
     textValue(job?.serviceTime === undefined || job.serviceTime === null ? null : job.serviceTime.slice(0, 5)),
   );
   const [serviceType, setServiceType] = useState(textValue(job?.serviceType ?? null));
+  /** What "Save as your menu" said, kept after the offer itself goes. */
+  const [menuNote, setMenuNote] = useState<string | null>(null);
   const [guests, setGuests] = useState(job?.guests === null || job === null ? '' : String(job.guests));
   const [guestsConfirmed, setGuestsConfirmed] = useState(job?.guestsConfirmed ?? false);
   const [meatEating, setMeatEating] = useState(
@@ -628,6 +631,27 @@ function JobForm({ job, done }: { job: Job | null; done: (said?: string) => void
         hint="Must match a rate-card service type exactly for a rate to apply."
       />
 
+      {/* Dishes chosen, no service type: offered from his saved menus only,
+          when the dishes fit exactly one. Never filled in — it sets the price. */}
+      {serviceType.trim() === '' &&
+        (() => {
+          const chosen = dishes.map((d) => d.recipeId).filter((id) => id !== '');
+          if (chosen.length === 0 || chosen.length !== dishes.length) return null;
+          const type = serviceTypeFromMenus(
+            chosen as RecipeId[],
+            menus.state.status === 'ready' ? menus.state.data : [],
+          );
+          if (type === null) return null;
+          return (
+            <p className="muted">
+              These dishes are all on your {type} menu.{' '}
+              <button type="button" className="sm" onClick={() => setServiceType(type)}>
+                Set service type to “{type}”
+              </button>
+            </p>
+          );
+        })()}
+
       <Field
         label="Guests"
         value={guests}
@@ -731,6 +755,29 @@ function JobForm({ job, done }: { job: Job | null; done: (said?: string) => void
         >
           Add a dish
         </button>
+
+        {/* No saved menu for this service type yet: one tap makes these dishes
+            the standard. Never replaces a menu he already has. */}
+        {menuNote !== null ? (
+          <p role="status">{menuNote}</p>
+        ) : (
+          (() => {
+            const chosen = dishes.map((d) => d.recipeId).filter((id) => id !== '');
+            if (chosen.length !== dishes.length || menus.state.status !== 'ready') return null;
+            const offer = menuToSave(parseText(serviceType), chosen as RecipeId[], menus.state.data);
+            if (offer === null) return null;
+            return (
+              <SaveAsMenu
+                menu={offer}
+                kitchenId={kitchenId}
+                onSaved={(said) => {
+                  setMenuNote(said);
+                  menus.reload();
+                }}
+              />
+            );
+          })()
+        )}
       </fieldset>
 
       {/* --- dietaries -------------------------------------------------- */}

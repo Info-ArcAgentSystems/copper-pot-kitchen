@@ -20,6 +20,7 @@ import { tidyName } from '../../scan/jobDraft';
 import { packFromLine } from '../../scan/packFromLine';
 import { packSizeIn } from '../../engine/units';
 import { IngredientForm } from '../setup/Ingredients';
+import { AddAllIngredients, type BulkResult } from './AddAllIngredients';
 import { parseInvoice } from '../../scan/parseImage';
 import { toScaledDataUrl } from './scaleImage';
 import { PhotoGate } from './PhotoGate';
@@ -64,6 +65,10 @@ export function ScanInvoice(): ReactNode {
   const [supplierNote, setSupplierNote] = useState<string | null>(null);
   /** Receipt lines he has said are one of his packs per item. His word, per line. */
   const [onePackEach, setOnePackEach] = useState<ReadonlySet<string>>(new Set());
+  /** The "Add all new lines" checklist is open. */
+  const [bulkOpen, setBulkOpen] = useState(false);
+  /** What the checklist did, said after it closes. */
+  const [bulkNote, setBulkNote] = useState<BulkResult | null>(null);
 
   const ingredientList = ingredients.state.status === 'ready' ? ingredients.state.data : [];
   const supplierList = suppliers.state.status === 'ready' ? suppliers.state.data : [];
@@ -105,6 +110,8 @@ export function ScanInvoice(): ReactNode {
     setAddedAs({});
     setSupplierNote(null);
     setOnePackEach(new Set());
+    setBulkOpen(false);
+    setBulkNote(null);
 
     try {
       const base = import.meta.env.VITE_SUPABASE_URL ?? '';
@@ -226,6 +233,30 @@ export function ScanInvoice(): ReactNode {
   const matchedSupplierId: SupplierId | null =
     review?.supplier.kind === 'matched' ? review.supplier.record.id : null;
 
+  /** Receipt lines whose ingredient he has not added yet — the checklist's rows. */
+  const newLines: readonly string[] =
+    review === null
+      ? []
+      : groupLines(review.lines)
+          .filter((g) => {
+            const p = g.lines[0]?.price;
+            return p !== undefined && p.kind === 'no_ingredient' && p.reason === 'new';
+          })
+          .map((g) => g.description);
+
+  const bulkDone = (result: BulkResult): void => {
+    setBulkOpen(false);
+    setBulkNote(result);
+    // A printed pack makes the line's count a count of packs — the same rule as
+    // the one-line "Use 125 g as the pack size".
+    setOnePackEach((prev) => {
+      const next = new Set(prev);
+      for (const a of result.added) if (a.printed) next.add(a.description);
+      return next;
+    });
+    ingredients.reload();
+  };
+
   return (
     <Screen
       title="Scan an invoice"
@@ -278,6 +309,46 @@ export function ScanInvoice(): ReactNode {
               <p className="unresolved">
                 “{review.supplier.read}” matches {review.supplier.matches.join(' and ')}.
               </p>
+            )}
+
+            {bulkNote !== null && (
+              <div className="bulk-note" role="status">
+                {bulkNote.added.length > 0 && (
+                  <p>
+                    Added {bulkNote.added.length} ingredient{bulkNote.added.length === 1 ? '' : 's'}:{' '}
+                    {bulkNote.added.map((a) => a.name).join(', ')}.
+                  </p>
+                )}
+                {bulkNote.added.length > 0 && (
+                  <p className="unresolved">
+                    None of {bulkNote.added.length === 1 ? 'it' : 'them'} has allergens recorded yet —
+                    that is not the same as having none. Check {bulkNote.added.length === 1 ? 'it' : 'them'} in
+                    Library → Ingredients.
+                  </p>
+                )}
+                {bulkNote.failed.length > 0 && (
+                  <p className="error">
+                    Not added: {bulkNote.failed.map((f) => `${f.name} (${f.why})`).join('; ')}.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {newLines.length >= 2 && !bulkOpen && (
+              <button type="button" disabled={busy || adding !== null} onClick={() => setBulkOpen(true)}>
+                Add all {newLines.length} new lines as ingredients
+              </button>
+            )}
+
+            {bulkOpen && (
+              <AddAllIngredients
+                descriptions={newLines}
+                existing={ingredientList}
+                kitchenId={(kitchen.status === 'ready' ? kitchen.membership.kitchenId : '') as KitchenId}
+                supplierId={matchedSupplierId}
+                onDone={bulkDone}
+                onCancel={() => setBulkOpen(false)}
+              />
             )}
 
             <ul className="invoice-lines">
@@ -347,7 +418,7 @@ export function ScanInvoice(): ReactNode {
                       </p>
                     )}
 
-                    {isNew && adding !== group.description && (
+                    {isNew && !bulkOpen && adding !== group.description && (
                       <button
                         type="button"
                         className="sm"

@@ -23,6 +23,7 @@ import { pricePerPackFromInvoice, type InvoicePrice } from '../engine/costing';
 import { matchByName } from '../engine/nameMatch';
 import type { Cents, Ingredient, StockUnit, Supplier } from '../engine/types';
 import type { Gap, Resolved } from './jobSheet';
+import { packFromLine } from './packFromLine';
 
 /**
  * What the model reported, as printed on the page.
@@ -230,7 +231,7 @@ export function reviewInvoice(
     }
     if (price.kind === 'no_pack') {
       needsManualHandling.push(
-        `"${line.description}" has no pack size recorded, so a price per pack cannot be worked out. Set one in Ingredients — or, where the line prints its size, use it on the line above.`,
+        `"${line.description}" has no pack size recorded, so a price per pack cannot be worked out. Set one in Ingredients${packFromLine(line.description) === null ? '' : ' — the line prints a size, and its own line says whether it can be used'}.`,
       );
     }
     if (price.kind === 'unreadable' && ingredient.kind === 'matched') {

@@ -3153,3 +3153,45 @@ body:has(.bulk-bar) .sous-bubble {
 .save-as-menu > p {
   margin: 0;
 }
+
+/* "Add all new lines" — one checklist instead of a form per receipt line. */
+.bulk-add {
+  margin: var(--space-3) 0;
+}
+
+.bulk-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.bulk-row {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+
+.bulk-row.is-off {
+  opacity: 0.6;
+}
+
+.bulk-pack {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.bulk-note {
+  display: grid;
+  gap: var(--space-1);
+  margin: var(--space-2) 0;
+}
+
+.bulk-note > p {
+  margin: 0;
+}

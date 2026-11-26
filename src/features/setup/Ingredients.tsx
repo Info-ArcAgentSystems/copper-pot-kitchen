@@ -104,7 +104,7 @@ export function Ingredients(): ReactNode {
       bulk={{
         remove: (i) => repo.remove(i.id),
         nameOf: (i) => i.name,
-        refusal: referenceRefusal('a recipe uses it — remove it from the recipe first'),
+        refusal: referenceRefusal('still used in a recipe — remove from the recipe first, then delete'),
         noun: ['ingredient', 'ingredients'],
       }}
       renderRow={(i) => (

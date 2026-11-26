@@ -526,7 +526,13 @@ button:focus-visible {
 /* The press registers under the thumb, where there is no hover to tell him. */
 button:active {
   background: var(--button-hover);
-  transform: scale(0.98);
+  transform: scale(0.97);
+}
+
+button {
+  transition-property: background-color, border-color, box-shadow, transform;
+  transition-duration: var(--dur-press);
+  transition-timing-function: var(--ease-out);
 }
 
 .signin button[type='submit'] {
@@ -2505,7 +2511,7 @@ section.danger-zone h2 {
   position: absolute;
   inset: 0;
   background: rgb(0 0 0 / 38%);
-  animation: sheet-fade 0.2s ease;
+  animation: sheet-fade var(--dur-enter) var(--ease-out);
 }
 
 .sheet {
@@ -2518,7 +2524,7 @@ section.danger-zone h2 {
   border-radius: 20px 20px 0 0;
   box-shadow: 0 -8px 30px rgb(0 0 0 / 16%);
   padding-bottom: env(safe-area-inset-bottom);
-  animation: sheet-up 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: sheet-up 0.28s var(--ease-out);
   outline: none;
 }
 
@@ -2705,13 +2711,13 @@ section.danger-zone h2 {
   color: #f9fafb;
   box-shadow: var(--shadow-raise);
   font-size: var(--size-small);
-  animation: toast-in 0.25s ease;
+  animation: toast-in var(--dur-enter) var(--ease-out);
 }
 
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(8px) scale(0.96);
   }
 }
 
@@ -3194,4 +3200,89 @@ body:has(.bulk-bar) .sous-bubble {
 
 .bulk-note > p {
   margin: 0;
+}
+
+
+/* ---------------------------------------------------------------------------
+   LIST ROWS SETTLE IN — 30 ms apart, the first dozen (`--i` set per row).
+   --------------------------------------------------------------------------- */
+.records > li {
+  animation: row-in var(--dur-enter) var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 30ms);
+}
+
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   WHAT A BULK DELETE DID — a calm card, one line per reason, names as chips.
+   --------------------------------------------------------------------------- */
+.bulk-result {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--shadow-raise);
+  animation: row-in var(--dur-enter) var(--ease-out);
+}
+
+.bulk-result > p,
+.bulk-result-group > p {
+  margin: 0;
+}
+
+.bulk-result-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.bulk-result-title {
+  margin: 0;
+  font-weight: 700;
+  font-size: var(--size-body);
+}
+
+.bulk-result-group {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.name-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.name-chips > li {
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--button-bg);
+  font-size: var(--size-small);
+}
+
+/* ---------------------------------------------------------------------------
+   REDUCED MOTION. Asked for in the system settings — honoured everywhere.
+   Things still appear; they just don't travel.
+   --------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

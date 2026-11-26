@@ -10,7 +10,7 @@
  * row appears is if the owner saved one.
  */
 
-import { useRef, useState, type ReactNode } from 'react';
+import { useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { EmptyState } from './EmptyState';
 import { Screen } from './Screen';
 import { Sheet } from './Sheet';
@@ -295,11 +295,14 @@ export function RecordScreen<T>({
           )}
 
           <ul className="records">
-            {visible.map((item) => {
+            {visible.map((item, index) => {
               const key = keyOf(item);
+              // Rows arrive 30 ms apart, the first dozen only — a list that
+              // settles in, not one that keeps the eye waiting.
+              const enter = { '--i': Math.min(index, 12) } as CSSProperties;
               if (bulk === undefined) {
                 return (
-                  <li key={key}>
+                  <li key={key} style={enter}>
                     <button type="button" className="record" onClick={() => setEditing(item)}>
                       {renderRow(item)}
                     </button>
@@ -310,7 +313,7 @@ export function RecordScreen<T>({
               if (!selecting) {
                 const lockedReason = bulk.lockedReason?.(item) ?? null;
                 return (
-                  <li key={key}>
+                  <li key={key} style={enter}>
                     <SwipeRow
                       locked={lockedReason}
                       onOpen={() => setEditing(item)}
@@ -337,7 +340,7 @@ export function RecordScreen<T>({
 
               const locked = bulk.lockedReason?.(item) ?? null;
               return (
-                <li key={key}>
+                <li key={key} style={enter}>
                   <label className={`record record-select check${locked === null ? '' : ' is-locked'}`}>
                     <input
                       type="checkbox"
@@ -466,7 +469,22 @@ export function RecordScreen<T>({
   );
 }
 
-/** What a bulk delete did — every record kept is named, with why. */
+/**
+ * What a bulk delete did — every record kept is named, with why.
+ *
+ * Grouped by reason, so "four recipes are in use" is said once with the four
+ * names under it, not four times. A neutral card, not the amber block: amber is
+ * for data the app cannot vouch for (Rule 8). A delete it refused is plain
+ * information, and the records are exactly as they were.
+ */
+/** "still in use — remove it first" → "Still in use. Remove it first." */
+const sentences = (reason: string): string =>
+  reason
+    .split(' — ')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join('. ')
+    .concat('.');
+
 function BulkResult({
   outcome,
   onDismiss,
@@ -474,27 +492,37 @@ function BulkResult({
   outcome: BulkOutcome;
   onDismiss: () => void;
 }): ReactNode {
+  const groups = new Map<string, string[]>();
+  for (const k of outcome.kept) groups.set(k.reason, [...(groups.get(k.reason) ?? []), k.name]);
+
+  const done = outcome.deleted.length;
+  const kept = outcome.kept.length;
+  const headline =
+    done === 0 ? 'Nothing was deleted' : kept === 0 ? `Deleted ${done}` : `Deleted ${done}, kept ${kept}`;
+
   return (
-    <section className={outcome.kept.length > 0 ? 'unresolved-block' : 'card'} aria-live="polite">
-      <p>
-        Deleted {outcome.deleted.length}
-        {outcome.deleted.length > 0 && `: ${outcome.deleted.join(', ')}`}.
-      </p>
-      {outcome.kept.length > 0 && (
-        <>
-          <p>Kept {outcome.kept.length}:</p>
-          <ul>
-            {outcome.kept.map((k, i) => (
-              <li key={`${i}-${k.name}`}>
-                {k.name} — {k.reason}
-              </li>
+    <section className="bulk-result" aria-live="polite">
+      <div className="bulk-result-head">
+        <p className="bulk-result-title">{headline}</p>
+        <button type="button" className="sm" onClick={onDismiss}>
+          Done
+        </button>
+      </div>
+
+      {done > 0 && <p className="muted">{outcome.deleted.join(', ')}</p>}
+
+      {[...groups].map(([reason, names]) => (
+        <div key={reason} className="bulk-result-group">
+          <p>
+            <strong>{names.length} kept.</strong> {sentences(reason)}
+          </p>
+          <ul className="name-chips">
+            {names.map((n, i) => (
+              <li key={`${i}-${n}`}>{n}</li>
             ))}
           </ul>
-        </>
-      )}
-      <button type="button" className="sm" onClick={onDismiss}>
-        Done
-      </button>
+        </div>
+      ))}
     </section>
   );
 }

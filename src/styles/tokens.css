@@ -160,6 +160,16 @@
   --radius-button: 10px;
   --radius-pill: 999px;
 
+  /*
+   * MOTION. Ease-out for anything arriving — it moves fast at first, so the
+   * screen answers at once, then settles. Exits run about 20% shorter than
+   * entrances: leaving should never hold him up. No bounce anywhere.
+   */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --dur-press: 120ms;
+  --dur-enter: 220ms;
+  --dur-exit: 180ms;
+
   /* -------------------------------------------------------------------------
      COLOUR — light. Neutral greys, one accent, used sparingly.
      Every value below clears WCAG AA for the size it is used at.

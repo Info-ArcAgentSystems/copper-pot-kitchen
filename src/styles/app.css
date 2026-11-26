@@ -2262,9 +2262,19 @@ section.danger-zone h2 {
   cursor: pointer;
 }
 
+/*
+ * The tick sits BESIDE the row, centred on it — not on a line of its own.
+ * `.record` stacks its children in a column; a select row is the one row that
+ * must not, so the direction is set back here.
+ */
 .record-select.check {
+  flex-direction: row;
+  align-items: center;
   margin-bottom: 0;
-  align-items: flex-start;
+}
+
+.record-select-body {
+  flex: 1;
 }
 
 .record-select-body {
@@ -3285,4 +3295,10 @@ body:has(.bulk-bar) .sous-bubble {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* A ticked row reads as ticked from across the screen, not only by its box. */
+.record-select:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
 }

@@ -10,8 +10,9 @@
 import { useState, type ReactNode } from 'react';
 import { supabaseDb } from '../../data/client';
 import { clientRateRepository, customerRepository, referenceCounts } from '../../data/repositories';
-import { distinctNames, useSuggestions } from '../../ui/suggestions';
-import { Field } from '../../ui/Field';
+import { serviceTypeKey } from '../../engine/menus';
+import { distinctNames, useLoadedNames } from '../../ui/suggestions';
+import { ChoiceField, Field } from '../../ui/Field';
 import { RecordForm, RecordScreen } from '../../ui/RecordScreen';
 import { byName, deleteWarning, parseText, requireText, textValue } from '../../ui/form';
 import { useKitchen } from '../../auth/kitchenState';
@@ -58,16 +59,25 @@ function CustomerForm({
 
   const [name, setName] = useState(textValue(customer?.name ?? null));
   const [clientGroup, setClientGroup] = useState(textValue(customer?.clientGroup ?? null));
-  // Groups the rate card prices first, then ones other customers use: the
-  // customer's group must match a rate's EXACTLY for any price to apply.
-  const groups = useSuggestions(async () => {
-    const db = supabaseDb();
-    const [rates, customers] = await Promise.all([
-      clientRateRepository(db).list(),
-      customerRepository(db).list(),
-    ]);
-    return distinctNames(rates.map((r) => r.clientGroup), customers.map((c) => c.clientGroup));
-  });
+  /*
+   * A customer's group is PICKED from the groups the Rate card names — never
+   * typed — so it always matches a rate. A group already on the record but not
+   * on the card is kept and labelled, so nothing changes unless he changes it.
+   */
+  const rateGroups = useLoadedNames(async () =>
+    distinctNames((await clientRateRepository(supabaseDb()).list()).map((r) => r.clientGroup)),
+  );
+  const current = clientGroup.trim();
+  const onCard = current === '' || rateGroups.some((g) => serviceTypeKey(g) === serviceTypeKey(current));
+  const groupOptions = [
+    { value: '', label: 'No group — no rate can apply' },
+    ...(onCard ? [] : [{ value: current, label: `${current} (not on the rate card — no price)` }]),
+    ...rateGroups.map((g) => ({ value: g, label: g })),
+  ];
+  // Show the card's spelling when his stored one differs only in case or dots.
+  const selected = onCard
+    ? (rateGroups.find((g) => serviceTypeKey(g) === serviceTypeKey(current)) ?? '')
+    : current;
   const [phone, setPhone] = useState(textValue(customer?.phone ?? null));
   const [email, setEmail] = useState(textValue(customer?.email ?? null));
   const [notes, setNotes] = useState(textValue(customer?.notes ?? null));
@@ -145,12 +155,16 @@ function CustomerForm({
       deleteWarningText={warning ?? undefined}
     >
       <Field label="Name" value={name} onChange={setName} required error={nameError} />
-      <Field
+      <ChoiceField
         label="Client group"
-        value={clientGroup}
+        value={selected}
+        options={groupOptions}
         onChange={setClientGroup}
-        suggestions={groups}
-        hint="Rates are looked up by client group and service type. Without one, no rate can apply and revenue stays blank."
+        hint={
+          rateGroups.length === 0
+            ? 'Groups come from Setup → Rate card. Add a rate there first and its group appears here.'
+            : 'Groups come from Setup → Rate card. Without one, no rate can apply and revenue stays blank.'
+        }
       />
       <Field label="Phone" value={phone} onChange={setPhone} inputMode="tel" autoComplete="tel" />
       <Field label="Email" value={email} onChange={setEmail} inputMode="email" autoComplete="email" />

@@ -11,6 +11,7 @@
  * per line and then summing accumulates error.
  */
 
+import { serviceTypeKey } from './menus';
 import { applyBuffetSplit } from './rules';
 import { scaleRecipe } from './scaling';
 import { packSizeIn, recipeToStock } from './units';
@@ -342,6 +343,46 @@ function extrasTotal(job: Job): { value: number; missing: MissingInput[] } {
  * The computed rate-card figure stays available on `computed` even when an override
  * is in force, so a screen can show both without a second calculation (Rule 11).
  */
+/**
+ * The rate for (client group, service type), matched on LETTERS AND DIGITS.
+ *
+ * The scan reads "B.B.Q" off Paul's page; the rate card says "BBQ". They are the
+ * same service, and saved menus already treat them so (`serviceTypeKey`). Exact
+ * matching left a scanned job silently unpriced over a full stop.
+ *
+ * Safe because the rate card refuses two rates whose pair has the same key
+ * (`rateClash`), so this can never have two candidates to choose between. A key
+ * with no letters or digits matches nothing — "..." is not a service.
+ */
+export function rateFor(
+  rates: readonly ClientRate[],
+  clientGroup: string,
+  serviceType: string,
+): ClientRate | undefined {
+  const g = serviceTypeKey(clientGroup);
+  const t = serviceTypeKey(serviceType);
+  if (g === '' || t === '') return undefined;
+  return rates.find((r) => serviceTypeKey(r.clientGroup) === g && serviceTypeKey(r.serviceType) === t);
+}
+
+/**
+ * Another rate already covering this (client group, service type) — the one
+ * that would be ambiguous with it — or undefined. `self` is the rate being
+ * edited, which does not clash with itself.
+ */
+export function rateClash(
+  rates: readonly ClientRate[],
+  clientGroup: string,
+  serviceType: string,
+  self: ClientRate['id'] | null,
+): ClientRate | undefined {
+  return rateFor(
+    rates.filter((r) => r.id !== self),
+    clientGroup,
+    serviceType,
+  );
+}
+
 export function jobRevenue(
   job: Job,
   customer: Customer | undefined,
@@ -353,7 +394,7 @@ export function jobRevenue(
   const rate =
     group === null || job.serviceType === null
       ? undefined
-      : rates.find((r) => r.clientGroup === group && r.serviceType === job.serviceType);
+      : rateFor(rates, group, job.serviceType);
 
   const extras = extrasTotal(job);
 

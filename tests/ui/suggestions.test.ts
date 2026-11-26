@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { distinctNames } from '../../src/ui/suggestions';
 
 describe('distinctNames — the spellings he already uses, once each', () => {
-  it('keeps the first spelling, so the rate card’s wins over a job’s', () => {
+  it('keeps the first spelling of each name', () => {
     expect(distinctNames(['BBQ', 'Breakfast'], ['B.B.Q', 'bbq', 'Dinner'])).toEqual([
       'BBQ',
       'Breakfast',

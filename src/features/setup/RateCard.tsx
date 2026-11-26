@@ -13,13 +13,8 @@
 
 import { useState, type ReactNode } from 'react';
 import { supabaseDb } from '../../data/client';
-import {
-  clientRateRepository,
-  customerRepository,
-  jobRepository,
-  menuTemplateRepository,
-} from '../../data/repositories';
-import { distinctNames, useSuggestions } from '../../ui/suggestions';
+import { clientRateRepository } from '../../data/repositories';
+import { rateClash } from '../../engine/costing';
 import { Field } from '../../ui/Field';
 import { RecordForm, RecordScreen } from '../../ui/RecordScreen';
 import { formatMoney, moneyValue, parseMoney, parseText, requireText, textValue } from '../../ui/form';
@@ -80,32 +75,6 @@ function RateForm({ rate, done }: { rate: ClientRate | null; done: (said?: strin
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  /*
-   * The spellings already in use, so the pair this rate is looked up by can be
-   * picked rather than retyped — a rate only applies on an EXACT match.
-   */
-  const groups = useSuggestions(async () => {
-    const db = supabaseDb();
-    const [rates, customers] = await Promise.all([
-      clientRateRepository(db).list(),
-      customerRepository(db).list(),
-    ]);
-    return distinctNames(rates.map((r) => r.clientGroup), customers.map((c) => c.clientGroup));
-  });
-  const types = useSuggestions(async () => {
-    const db = supabaseDb();
-    const [rates, menus, jobs] = await Promise.all([
-      clientRateRepository(db).list(),
-      menuTemplateRepository(db).list(),
-      jobRepository(db).list(),
-    ]);
-    return distinctNames(
-      rates.map((r) => r.serviceType),
-      menus.map((m) => m.serviceType),
-      jobs.map((j) => j.serviceType),
-    );
-  });
-
   const perHeadParse = parseMoney(perHead);
   const flatFeeParse = parseMoney(flatFee);
 
@@ -122,6 +91,31 @@ function RateForm({ rate, done }: { rate: ClientRate | null; done: (said?: strin
 
     setSaving(true);
     setError(null);
+
+    /*
+     * One rate per (group, service), however it is spelled. Jobs find their rate
+     * ignoring capitals, dots and spaces (`rateFor`), so "Priority · B.B.Q" beside
+     * "Priority · BBQ" would leave a job with two prices and no way to say which.
+     */
+    try {
+      const clash = rateClash(
+        await repo.list(),
+        parseText(clientGroup) ?? '',
+        parseText(serviceType) ?? '',
+        rate?.id ?? null,
+      );
+      if (clash !== undefined) {
+        setError(
+          `There is already a rate for ${clash.clientGroup} · ${clash.serviceType}. Edit that one instead.`,
+        );
+        setSaving(false);
+        return;
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not check the existing rates.');
+      setSaving(false);
+      return;
+    }
 
     const value: ClientRate = {
       id: rate?.id ?? ('' as ClientRateId),
@@ -171,8 +165,7 @@ function RateForm({ rate, done }: { rate: ClientRate | null; done: (said?: strin
         onChange={setClientGroup}
         required
         error={groupError}
-        suggestions={groups}
-        hint="Must match the client group on the customer exactly — pick one you already use."
+        hint="Name the group here. Customers then pick their group from the ones on this card."
       />
       <Field
         label="Service type"
@@ -180,8 +173,7 @@ function RateForm({ rate, done }: { rate: ClientRate | null; done: (said?: strin
         onChange={setServiceType}
         required
         error={typeError}
-        suggestions={types}
-        hint="Must match the service type on the job exactly — pick one you already use."
+        hint="Jobs find this rate ignoring capitals, dots and spaces — a job saying “B.B.Q” gets a “BBQ” rate."
       />
       <Field
         label="Per head"

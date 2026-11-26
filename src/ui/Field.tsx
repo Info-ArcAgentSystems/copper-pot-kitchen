@@ -39,11 +39,6 @@ export interface FieldProps {
   /** Right-aligned tabular numerals, for quantities and money. */
   readonly numeric?: boolean;
   readonly placeholder?: string;
-  /**
-   * Names he already uses, offered as a dropdown (a native `<datalist>`). The
-   * box stays free text: a suggestion is never filled in by itself.
-   */
-  readonly suggestions?: readonly string[];
 }
 
 export function Field({
@@ -59,7 +54,6 @@ export function Field({
   autoComplete,
   numeric = false,
   placeholder,
-  suggestions = [],
 }: FieldProps): ReactNode {
   const id = nextId();
   const hintId = hint === undefined ? undefined : `${id}-hint`;
@@ -96,15 +90,7 @@ export function Field({
           aria-describedby={describedBy}
           aria-invalid={error !== null}
           placeholder={placeholder}
-          list={suggestions.length > 0 ? `${id}-list` : undefined}
         />
-      )}
-      {!multiline && suggestions.length > 0 && (
-        <datalist id={`${id}-list`}>
-          {suggestions.map((s) => (
-            <option key={s} value={s} />
-          ))}
-        </datalist>
       )}
 
       {hint !== undefined && (

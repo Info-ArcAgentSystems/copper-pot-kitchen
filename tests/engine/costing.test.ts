@@ -15,6 +15,8 @@ import {
   jobFoodCost,
   jobMargin,
   jobRevenue,
+  rateClash,
+  rateFor,
   recipeFoodCost,
   recipePortionCost,
 } from '../../src/engine/costing';
@@ -247,6 +249,31 @@ describe('recipePortionCost and jobFoodCost', () => {
 
   it('is zero for a job with no dishes, which is a real answer', () => {
     expect(jobFoodCost(makeJob({}), [scone], [flour, butter]).total).toBe(0);
+  });
+});
+
+describe('rateFor — a scanned "B.B.Q" finds the "BBQ" rate', () => {
+  const rates = [clientRate('Priority', 'BBQ', { perHead: 25 }), clientRate('Priority', 'Breakfast', { flatFee: 20 })];
+
+  it('ignores capitals, dots and spaces on both halves of the pair', () => {
+    expect(rateFor(rates, 'priority', 'B.B.Q')?.serviceType).toBe('BBQ');
+    expect(rateFor(rates, ' Priority ', 'bbq')?.serviceType).toBe('BBQ');
+    expect(jobRevenue(makeJob({ serviceType: 'B.B.Q', guests: 13 }), makeCustomer('Priority'), rates).total).toBe(
+      euros(325),
+    );
+  });
+
+  it('still never matches a different service or group', () => {
+    expect(rateFor(rates, 'Priority', 'Dinner')).toBeUndefined();
+    expect(rateFor(rates, 'Standard', 'BBQ')).toBeUndefined();
+    expect(rateFor(rates, 'Priority', '...')).toBeUndefined();
+  });
+
+  it('a second rate for the same pair, spelled differently, is a clash', () => {
+    expect(rateClash(rates, 'PRIORITY', 'B B Q', null)?.serviceType).toBe('BBQ');
+    const bbq = rates[0];
+    expect(bbq === undefined ? 'missing' : rateClash(rates, 'Priority', 'BBQ', bbq.id)).toBeUndefined();
+    expect(rateClash(rates, 'Priority', 'Dinner', null)).toBeUndefined();
   });
 });
 

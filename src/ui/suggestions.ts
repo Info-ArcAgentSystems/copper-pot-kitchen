@@ -1,30 +1,25 @@
 /**
- * NAMES HE ALREADY USES — offered as a dropdown under a free-text box.
+ * NAMES ANOTHER SCREEN OWNS — the options of a real dropdown.
  *
- * Rates are found by client group + service type matched EXACTLY
- * (`src/engine/costing.ts`). "Priority" on the customer and "priority " on the
- * rate are two different groups, and the job silently has no price. Offering
- * the spellings already in use makes the matching one a tap away instead of a
- * thing to retype perfectly.
+ * One screen names a thing as free text; every other screen PICKS it. The Rate
+ * card names client groups, and a customer's group is chosen from them, so a
+ * customer can never carry a group no rate is looked up by. That makes the
+ * mismatch impossible instead of merely suggesting the right spelling.
  *
- * Suggestions only. The box stays free text — a new group or service type is
- * typed as before — and nothing is ever filled in by itself.
- *
- * WHY THESE READS ARE NOT IN A SCREEN'S `sources` GATE. The gate exists so a
- * failed read is never shown as an empty or partial answer. A suggestion list
- * is not an answer: if its read fails, the box is simply a plain text box again,
- * exactly as it was before this existed. Nothing on the screen says less than
- * the truth, so there is nothing for the gate to warn about.
+ * WHY THIS READ IS NOT IN A SCREEN'S `sources` GATE. The gate exists so a failed
+ * read is never shown as an empty or partial answer. These are options, not an
+ * answer: if the read fails, the dropdown offers "No group" and whatever the
+ * record already holds, and nothing changes unless he picks. The screen that
+ * names the groups (the Rate card) gates its own read in full.
  */
 
 import { useEffect, useState } from 'react';
 import { serviceTypeKey } from '../engine/menus';
 
 /**
- * One spelling per name, first-come: callers list the most authoritative source
- * first (the rate card), so a job's "B.B.Q" is offered as the rate's "BBQ".
- * Blank and null entries are dropped; letters-and-digits decide sameness, the
- * same key saved menus use.
+ * One spelling per name, first-come. Blank and null entries are dropped;
+ * letters-and-digits decide sameness — the same key rates and saved menus are
+ * matched by, so two spellings of one group are offered once.
  */
 export function distinctNames(...lists: readonly (readonly (string | null)[])[]): string[] {
   const seen = new Set<string>();
@@ -41,8 +36,8 @@ export function distinctNames(...lists: readonly (readonly (string | null)[])[])
   return out;
 }
 
-/** Load once; a failure is an empty list — the box still works as plain text. */
-export function useSuggestions(load: () => Promise<readonly string[]>): readonly string[] {
+/** Load once; a failure is an empty list — see above for why that is safe. */
+export function useLoadedNames(load: () => Promise<readonly string[]>): readonly string[] {
   const [names, setNames] = useState<readonly string[]>([]);
   useEffect(() => {
     let live = true;

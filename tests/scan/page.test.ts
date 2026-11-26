@@ -294,6 +294,18 @@ describe('Pandoras Cottage — two bookings under one heading', () => {
     expect(gaps[0]?.label).toContain('“pancakes.”');
     expect(saveable(confirmed, 1, have)).toBe(false);
 
+    // "B.B.Q" typed beside a "BBQ" recipe — the live case — is the same dish too.
+    const bbqPage = {
+      ...confirmed,
+      jobs: confirmed.jobs.map((j, k) =>
+        k === 1
+          ? { ...j, draft: { ...j.draft, dishes: [{ ...j.draft.dishes[0]!, choice: { kind: 'create' as const, name: 'B.B.Q' } }] } }
+          : j,
+      ),
+    };
+    expect(jobGaps(bbqPage, 1, [recipe('r-bbq', 'BBQ')]).map((g) => g.field)).toContain('dish:0');
+    expect(jobGaps(bbqPage, 1, [recipe('r-bbq', 'BBQ sides')]).map((g) => g.field)).not.toContain('dish:0');
+
     // "Full Irish" beside "Full Irish breakfast" is a different dish: not stopped.
     expect(saveable(confirmed, 1, [recipe('r-fi', 'Full Irish breakfast')])).toBe(true);
   });

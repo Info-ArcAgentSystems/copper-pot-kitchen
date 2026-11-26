@@ -874,6 +874,7 @@ export function ScanJobSheet(): ReactNode {
                 (dish.choice.kind === 'create' || dish.choice.kind === 'none') && (
                   <Field
                     label={dish.read === null ? 'Or type a new dish' : 'Name it will be created as'}
+                    autoComplete="off"
                     value={dish.choice.kind === 'create' ? dish.choice.name : ''}
                     onChange={(v) =>
                       patchJob(at, {

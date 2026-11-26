@@ -13,7 +13,13 @@
 
 import { useState, type ReactNode } from 'react';
 import { supabaseDb } from '../../data/client';
-import { clientRateRepository } from '../../data/repositories';
+import {
+  clientRateRepository,
+  customerRepository,
+  jobRepository,
+  menuTemplateRepository,
+} from '../../data/repositories';
+import { distinctNames, useSuggestions } from '../../ui/suggestions';
 import { Field } from '../../ui/Field';
 import { RecordForm, RecordScreen } from '../../ui/RecordScreen';
 import { formatMoney, moneyValue, parseMoney, parseText, requireText, textValue } from '../../ui/form';
@@ -73,6 +79,32 @@ function RateForm({ rate, done }: { rate: ClientRate | null; done: (said?: strin
   const [typeError, setTypeError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  /*
+   * The spellings already in use, so the pair this rate is looked up by can be
+   * picked rather than retyped — a rate only applies on an EXACT match.
+   */
+  const groups = useSuggestions(async () => {
+    const db = supabaseDb();
+    const [rates, customers] = await Promise.all([
+      clientRateRepository(db).list(),
+      customerRepository(db).list(),
+    ]);
+    return distinctNames(rates.map((r) => r.clientGroup), customers.map((c) => c.clientGroup));
+  });
+  const types = useSuggestions(async () => {
+    const db = supabaseDb();
+    const [rates, menus, jobs] = await Promise.all([
+      clientRateRepository(db).list(),
+      menuTemplateRepository(db).list(),
+      jobRepository(db).list(),
+    ]);
+    return distinctNames(
+      rates.map((r) => r.serviceType),
+      menus.map((m) => m.serviceType),
+      jobs.map((j) => j.serviceType),
+    );
+  });
 
   const perHeadParse = parseMoney(perHead);
   const flatFeeParse = parseMoney(flatFee);
@@ -139,7 +171,8 @@ function RateForm({ rate, done }: { rate: ClientRate | null; done: (said?: strin
         onChange={setClientGroup}
         required
         error={groupError}
-        hint="Must match the client group on the customer exactly."
+        suggestions={groups}
+        hint="Must match the client group on the customer exactly — pick one you already use."
       />
       <Field
         label="Service type"
@@ -147,7 +180,8 @@ function RateForm({ rate, done }: { rate: ClientRate | null; done: (said?: strin
         onChange={setServiceType}
         required
         error={typeError}
-        hint="Must match the service type on the job exactly."
+        suggestions={types}
+        hint="Must match the service type on the job exactly — pick one you already use."
       />
       <Field
         label="Per head"

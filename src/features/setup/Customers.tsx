@@ -9,7 +9,8 @@
 
 import { useState, type ReactNode } from 'react';
 import { supabaseDb } from '../../data/client';
-import { customerRepository, referenceCounts } from '../../data/repositories';
+import { clientRateRepository, customerRepository, referenceCounts } from '../../data/repositories';
+import { distinctNames, useSuggestions } from '../../ui/suggestions';
 import { Field } from '../../ui/Field';
 import { RecordForm, RecordScreen } from '../../ui/RecordScreen';
 import { byName, deleteWarning, parseText, requireText, textValue } from '../../ui/form';
@@ -57,6 +58,16 @@ function CustomerForm({
 
   const [name, setName] = useState(textValue(customer?.name ?? null));
   const [clientGroup, setClientGroup] = useState(textValue(customer?.clientGroup ?? null));
+  // Groups the rate card prices first, then ones other customers use: the
+  // customer's group must match a rate's EXACTLY for any price to apply.
+  const groups = useSuggestions(async () => {
+    const db = supabaseDb();
+    const [rates, customers] = await Promise.all([
+      clientRateRepository(db).list(),
+      customerRepository(db).list(),
+    ]);
+    return distinctNames(rates.map((r) => r.clientGroup), customers.map((c) => c.clientGroup));
+  });
   const [phone, setPhone] = useState(textValue(customer?.phone ?? null));
   const [email, setEmail] = useState(textValue(customer?.email ?? null));
   const [notes, setNotes] = useState(textValue(customer?.notes ?? null));
@@ -138,6 +149,7 @@ function CustomerForm({
         label="Client group"
         value={clientGroup}
         onChange={setClientGroup}
+        suggestions={groups}
         hint="Rates are looked up by client group and service type. Without one, no rate can apply and revenue stays blank."
       />
       <Field label="Phone" value={phone} onChange={setPhone} inputMode="tel" autoComplete="tel" />

@@ -46,6 +46,7 @@
 import { useState, type ReactNode } from 'react';
 import { supabaseClient, supabaseDb } from '../../data/client';
 import {
+  clientRateRepository,
   customerRepository,
   propertyRepository,
   menuTemplateRepository,
@@ -82,6 +83,7 @@ import { parseJobSheet } from '../../scan/parseImage';
 import { matchByName } from '../../engine/nameMatch';
 import { menuFor, menuToSave, ownSpelling, savedMenus, serviceTypeFromMenus } from '../../engine/menus';
 import { SaveAsMenu } from '../setup/SaveAsMenu';
+import { distinctNames, useSuggestions } from '../../ui/suggestions';
 import { toScaledDataUrl } from './scaleImage';
 import { PhotoGate } from './PhotoGate';
 import { ChoiceField, Field } from '../../ui/Field';
@@ -411,7 +413,7 @@ export function ScanJobSheet(): ReactNode {
     read: string | null,
     value: string,
     onChange: (v: string) => void,
-    extra: { type?: 'date'; inputMode?: 'numeric'; hint?: string } = {},
+    extra: { type?: 'date'; inputMode?: 'numeric'; hint?: string; suggestions?: readonly string[] } = {},
   ): ReactNode => (
     <div className="scan-field">
       <Field
@@ -422,6 +424,7 @@ export function ScanJobSheet(): ReactNode {
         inputMode={extra.inputMode}
         numeric={extra.inputMode === 'numeric'}
         hint={extra.hint}
+        suggestions={extra.suggestions}
       />
       {read !== null && read !== value && <p className="muted">Sheet said “{read}”.</p>}
     </div>
@@ -670,6 +673,15 @@ export function ScanJobSheet(): ReactNode {
     }
   };
 
+  /*
+   * Service types he already uses — the rate card's spelling first — offered
+   * under the box. A read "B.B.Q" gets no price from a "BBQ" rate.
+   */
+  const rateTypes = useSuggestions(async () =>
+    (await clientRateRepository(supabaseDb()).list()).map((r) => r.serviceType),
+  );
+  const typeNames = distinctNames(rateTypes, savedMenus(menuList).map((m) => m.serviceType));
+
   /** The job's dishes as recipe ids — or null while any is new or unchosen. */
   const dishIds = (job: PageJob): RecipeId[] | null => {
     const out: RecipeId[] = [];
@@ -804,7 +816,8 @@ export function ScanJobSheet(): ReactNode {
           hint: job.meta.timeWording !== null ? `The sheet says “${job.meta.timeWording}”.` : undefined,
         })}
         {scannedField('Service type', d.from.serviceType, d.serviceType, (v) => patchJob(at, { serviceType: v }), {
-          hint: 'Must match a rate-card service type exactly for a rate to apply.',
+          hint: 'Must match a rate-card service type exactly for a rate to apply — pick one you already use.',
+          suggestions: typeNames,
         })}
         {/* "B.B.Q" read, "BBQ" is how he writes it: offered, never swapped. */}
         {(() => {

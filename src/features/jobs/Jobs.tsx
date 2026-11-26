@@ -38,6 +38,7 @@ import { useAsync, type AsyncState } from '../../ui/useAsync';
 import { formatMoney, moneyValue, parseCount, parseMoney, parseText, textValue } from '../../ui/form';
 import { menuFor, menuToSave, serviceTypeFromMenus } from '../../engine/menus';
 import { SaveAsMenu } from '../setup/SaveAsMenu';
+import { distinctNames } from '../../ui/suggestions';
 import { jobRevenue } from '../../engine/costing';
 import { portionsDerivable } from '../../engine/rules';
 import type { JobChanges } from '../../engine/impact';
@@ -628,7 +629,12 @@ function JobForm({ job, done }: { job: Job | null; done: (said?: string) => void
         label="Service type"
         value={serviceType}
         onChange={setServiceType}
-        hint="Must match a rate-card service type exactly for a rate to apply."
+        suggestions={distinctNames(
+          rates.state.status === 'ready' ? rates.state.data.map((r) => r.serviceType) : [],
+          menus.state.status === 'ready' ? menus.state.data.map((m) => m.serviceType) : [],
+          jobs.state.status === 'ready' ? jobs.state.data.map((j) => j.serviceType) : [],
+        )}
+        hint="Must match a rate-card service type exactly for a rate to apply — pick one you already use."
       />
 
       {/* Dishes chosen, no service type: offered from his saved menus only,

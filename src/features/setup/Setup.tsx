@@ -11,10 +11,11 @@ import { IconTile } from '../../ui/icons';
 import type { ReactNode } from 'react';
 
 const SECTIONS = [
+  { to: 'groups', icon: 'people', label: 'Client groups', blurb: 'How you group clients for pricing' },
   { to: 'customers', icon: 'people', label: 'Customers', blurb: 'Who you cook for, and their client group' },
   { to: 'properties', icon: 'home', label: 'Properties', blurb: 'Venues, access notes and facilities' },
   { to: 'suppliers', icon: 'truck', label: 'Suppliers', blurb: 'Used to group the shopping list' },
-  { to: 'rates', icon: 'tag', label: 'Rate card', blurb: 'Per-head and flat rates by client group' },
+  { to: 'rates', icon: 'tag', label: 'Rate card', blurb: 'Per-head and flat prices for each client group' },
   { to: 'templates', icon: 'box', label: 'Service templates', blurb: 'What to pack for each service type' },
   { to: 'menus', icon: 'menu', label: 'Saved menus', blurb: 'Your usual dishes for a service type — your BBQ' },
   // The live routes. `/ingredients` and `/recipes` still resolve, but only by

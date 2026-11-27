@@ -271,6 +271,7 @@ describe('the shared record screen — eight screens, one gate', () => {
     'features/setup/RateCard.tsx',
     'features/setup/ServiceTemplates.tsx',
     'features/setup/SavedMenus.tsx',
+    'features/setup/ClientGroups.tsx',
     'features/setup/Recipes.tsx',
     'features/setup/Ingredients.tsx',
   ] as const;

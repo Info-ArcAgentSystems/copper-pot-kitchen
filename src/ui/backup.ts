@@ -27,6 +27,7 @@ export const FORMAT_VERSION = 1;
 export const EXPORTED_TABLES = [
   'suppliers',
   'properties',
+  'client_groups',
   'customers',
   'client_rates',
   'service_templates',

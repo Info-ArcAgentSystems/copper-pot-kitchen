@@ -38,7 +38,12 @@ export function distinctNames(...lists: readonly (readonly (string | null)[])[])
 
 /** Load once; a failure is an empty list — see above for why that is safe. */
 export function useLoadedNames(load: () => Promise<readonly string[]>): readonly string[] {
-  const [names, setNames] = useState<readonly string[]>([]);
+  return useLoaded(load);
+}
+
+/** The same, for records rather than names (client groups for a dropdown). */
+export function useLoaded<T>(load: () => Promise<readonly T[]>): readonly T[] {
+  const [names, setNames] = useState<readonly T[]>([]);
   useEffect(() => {
     let live = true;
     load().then(

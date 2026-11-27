@@ -9,9 +9,9 @@
 
 import { useState, type ReactNode } from 'react';
 import { supabaseDb } from '../../data/client';
-import { clientRateRepository, customerRepository, referenceCounts } from '../../data/repositories';
-import { serviceTypeKey } from '../../engine/menus';
-import { distinctNames, useLoadedNames } from '../../ui/suggestions';
+import { clientGroupRepository, customerRepository, referenceCounts } from '../../data/repositories';
+import { groupChoice } from '../../ui/clientGroups';
+import { useLoaded } from '../../ui/suggestions';
 import { ChoiceField, Field } from '../../ui/Field';
 import { RecordForm, RecordScreen } from '../../ui/RecordScreen';
 import { byName, deleteWarning, parseText, requireText, textValue } from '../../ui/form';
@@ -60,24 +60,13 @@ function CustomerForm({
   const [name, setName] = useState(textValue(customer?.name ?? null));
   const [clientGroup, setClientGroup] = useState(textValue(customer?.clientGroup ?? null));
   /*
-   * A customer's group is PICKED from the groups the Rate card names — never
-   * typed — so it always matches a rate. A group already on the record but not
-   * on the card is kept and labelled, so nothing changes unless he changes it.
+   * A customer's group is PICKED from Setup → Client groups — never typed — so
+   * it always matches the name a rate is looked up by. A group already on the
+   * record but no longer in the list is kept and labelled, so opening and saving
+   * a customer never silently changes their group.
    */
-  const rateGroups = useLoadedNames(async () =>
-    distinctNames((await clientRateRepository(supabaseDb()).list()).map((r) => r.clientGroup)),
-  );
-  const current = clientGroup.trim();
-  const onCard = current === '' || rateGroups.some((g) => serviceTypeKey(g) === serviceTypeKey(current));
-  const groupOptions = [
-    { value: '', label: 'No group — no rate can apply' },
-    ...(onCard ? [] : [{ value: current, label: `${current} (not on the rate card — no price)` }]),
-    ...rateGroups.map((g) => ({ value: g, label: g })),
-  ];
-  // Show the card's spelling when his stored one differs only in case or dots.
-  const selected = onCard
-    ? (rateGroups.find((g) => serviceTypeKey(g) === serviceTypeKey(current)) ?? '')
-    : current;
+  const groups = useLoaded(async () => clientGroupRepository(supabaseDb()).list());
+  const choice = groupChoice(groups, clientGroup, 'No group — no rate can apply');
   const [phone, setPhone] = useState(textValue(customer?.phone ?? null));
   const [email, setEmail] = useState(textValue(customer?.email ?? null));
   const [notes, setNotes] = useState(textValue(customer?.notes ?? null));
@@ -157,13 +146,13 @@ function CustomerForm({
       <Field label="Name" value={name} onChange={setName} required error={nameError} />
       <ChoiceField
         label="Client group"
-        value={selected}
-        options={groupOptions}
+        value={choice.selected}
+        options={choice.options}
         onChange={setClientGroup}
         hint={
-          rateGroups.length === 0
-            ? 'Groups come from Setup → Rate card. Add a rate there first and its group appears here.'
-            : 'Groups come from Setup → Rate card. Without one, no rate can apply and revenue stays blank.'
+          groups.length === 0
+            ? 'Groups come from Setup → Client groups. Add one there first and it appears here.'
+            : 'Groups come from Setup → Client groups. Without one, no rate can apply and revenue stays blank.'
         }
       />
       <Field label="Phone" value={phone} onChange={setPhone} inputMode="tel" autoComplete="tel" />

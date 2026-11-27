@@ -394,6 +394,19 @@ export interface ServiceTemplate {
   readonly position: number;
 }
 
+export type ClientGroupId = Brand<string, 'ClientGroupId'>;
+
+/**
+ * A client group, named once in Setup → Client groups. Customers and rates pick
+ * it by name from a dropdown; a rate is found by (group, service type) matched
+ * on letters and digits. Owner-entered (Rule 1) — the app ships with none.
+ */
+export interface ClientGroup {
+  readonly id: ClientGroupId;
+  readonly kitchenId: KitchenId;
+  readonly name: string;
+}
+
 export type MenuTemplateId = Brand<string, 'MenuTemplateId'>;
 
 /**

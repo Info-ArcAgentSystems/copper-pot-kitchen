@@ -339,6 +339,24 @@ create table service_templates (
   unique (kitchen_id, service_type, item)
 );
 
+-- Client groups: the one place a group is named. Customers and rates pick from
+-- it; names are unique on letters and digits. See 20261127000100_client_groups.sql.
+create or replace function client_group_key(p text)
+returns text
+language sql
+immutable
+as $$ select lower(regexp_replace(coalesce(p, ''), '[^[:alnum:]]', '', 'g')) $$;
+
+create table client_groups (
+  id          uuid primary key default gen_random_uuid(),
+  kitchen_id  uuid not null references kitchens(id) on delete cascade,
+  name        text not null check (client_group_key(name) <> ''),
+  created_at  timestamptz not null default now()
+);
+
+create unique index client_groups_kitchen_key
+  on client_groups (kitchen_id, client_group_key(name));
+
 -- Saved menus: the dishes a service type usually has, from his own recipes.
 -- Empty until he builds one (Rule 1); offered on a job, never applied by itself.
 create table menu_templates (
@@ -402,7 +420,7 @@ begin
     'ingredients','ingredient_price_history','stock','recipes','recipe_ingredients',
     'recipe_unquantified','jobs','job_dishes','job_dietaries','job_extras','job_changes',
     'purchase_state','prep_state','packing_state','service_templates','menu_templates',
-    'invoices','invoice_lines'
+    'client_groups','invoices','invoice_lines'
   ]
   loop
     execute format('alter table %I enable row level security', t);
@@ -418,7 +436,7 @@ begin
     'ingredient_price_history','stock','recipes','recipe_ingredients',
     'recipe_unquantified','jobs','job_dishes','job_dietaries','job_extras','job_changes',
     'purchase_state','prep_state','packing_state','service_templates','menu_templates',
-    'invoices','invoice_lines'
+    'client_groups','invoices','invoice_lines'
   ]
   loop
     execute format($f$

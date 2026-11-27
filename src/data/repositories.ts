@@ -36,6 +36,8 @@ import {
   prepStateToDomain,
   purchaseStateToDomain,
   recipeToDomain,
+  clientGroupToDomain,
+  clientGroupToRow,
   menuTemplateToDomain,
   menuTemplateToRow,
   serviceTemplateToDomain,
@@ -60,6 +62,7 @@ import type {
   RecipeIngredientRow,
   RecipeRow,
   RecipeUnquantifiedRow,
+  ClientGroupRow,
   MenuTemplateRow,
   ServiceTemplateRow,
   StockRow,
@@ -80,6 +83,8 @@ import type {
   PurchaseState,
   Recipe,
   RecipeId,
+  ClientGroup,
+  ClientGroupId,
   MenuTemplate,
   ServiceTemplate,
   StockLevel,
@@ -106,6 +111,7 @@ const T = {
   jobChanges: 'job_changes',
   serviceTemplates: 'service_templates',
   menuTemplates: 'menu_templates',
+  clientGroups: 'client_groups',
   purchaseState: 'purchase_state',
   prepState: 'prep_state',
   packingState: 'packing_state',
@@ -193,6 +199,28 @@ export const menuTemplateRepository = (db: Db) =>
   crudRepository<MenuTemplate, MenuTemplateRow>(
     db, T.menuTemplates, menuTemplateToDomain, menuTemplateToRow,
   );
+
+/**
+ * Client groups. Create and list are plain; RENAME and DELETE go through the
+ * database functions, so a rename carries every customer and rate with it and a
+ * delete is refused while anything still uses the group — on the server, not
+ * only on screen. The generic `update`/`remove` are deliberately not offered.
+ */
+export const clientGroupRepository = (db: Db) => {
+  const crud = crudRepository<ClientGroup, ClientGroupRow>(
+    db, T.clientGroups, clientGroupToDomain, clientGroupToRow,
+  );
+  return {
+    list: crud.list,
+    create: crud.create,
+    async rename(id: ClientGroupId, name: string): Promise<void> {
+      await db.rpc('rename_client_group', { p_id: id, p_name: name });
+    },
+    async remove(id: ClientGroupId): Promise<void> {
+      await db.rpc('delete_client_group', { p_id: id });
+    },
+  };
+};
 
 export const serviceTemplateRepository = (db: Db) =>
   crudRepository<ServiceTemplate, ServiceTemplateRow>(

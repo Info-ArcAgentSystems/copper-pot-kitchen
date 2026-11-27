@@ -176,6 +176,12 @@ export type JobChangeRow = {
   source: string | null;
 }
 
+export type ClientGroupRow = {
+  id: string;
+  kitchen_id: string;
+  name: string;
+}
+
 export type MenuTemplateRow = {
   id: string;
   kitchen_id: string;

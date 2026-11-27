@@ -13,9 +13,11 @@
 
 import { useState, type ReactNode } from 'react';
 import { supabaseDb } from '../../data/client';
-import { clientRateRepository } from '../../data/repositories';
+import { clientGroupRepository, clientRateRepository } from '../../data/repositories';
+import { groupChoice } from '../../ui/clientGroups';
+import { useLoaded } from '../../ui/suggestions';
 import { rateClash } from '../../engine/costing';
-import { Field } from '../../ui/Field';
+import { ChoiceField, Field } from '../../ui/Field';
 import { RecordForm, RecordScreen } from '../../ui/RecordScreen';
 import { formatMoney, moneyValue, parseMoney, parseText, requireText, textValue } from '../../ui/form';
 import { useKitchen } from '../../auth/kitchenState';
@@ -80,6 +82,13 @@ function RateForm({ rate, done }: { rate: ClientRate | null; done: (said?: strin
 
   const kitchenId =
     state.status === 'ready' ? (state.membership.kitchenId as KitchenId) : ('' as KitchenId);
+
+  /*
+   * The group is PICKED from Setup → Client groups, so the name a rate is looked
+   * up by is the same name the customer carries.
+   */
+  const groups = useLoaded(async () => clientGroupRepository(supabaseDb()).list());
+  const choice = groupChoice(groups, clientGroup, 'Choose a client group');
 
   const save = async (): Promise<void> => {
     const g = requireText(clientGroup, 'Client group');
@@ -159,14 +168,22 @@ function RateForm({ rate, done }: { rate: ClientRate | null; done: (said?: strin
       onDelete={rate === null ? undefined : () => void remove()}
       deleteWarningText="Delete this rate? Jobs matching it will have no price until another rate covers them."
       >
-      <Field
+      <ChoiceField
         label="Client group"
-        value={clientGroup}
+        value={choice.selected}
+        options={choice.options}
         onChange={setClientGroup}
-        required
-        error={groupError}
-        hint="Name the group here. Customers then pick their group from the ones on this card."
+        hint={
+          groups.length === 0
+            ? 'Add your client groups in Setup → Client groups first; they appear here.'
+            : 'From Setup → Client groups. Customers in this group get this price.'
+        }
       />
+      {groupError !== null && (
+        <p className="error" role="alert">
+          Choose a client group.
+        </p>
+      )}
       <Field
         label="Service type"
         value={serviceType}

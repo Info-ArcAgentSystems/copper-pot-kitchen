@@ -21,6 +21,8 @@
 import type {
   AllocatedDietary,
   Cents,
+  ClientGroup,
+  ClientGroupId,
   MenuTemplate,
   MenuTemplateId,
   ServiceTemplate,
@@ -74,6 +76,7 @@ import type {
 } from '../engine/types';
 import type {
   ClientRateRow,
+  ClientGroupRow,
   MenuTemplateRow,
   ServiceTemplateRow,
   CustomerRow,
@@ -543,6 +546,18 @@ export const packingStateToDomain = (r: PackingStateRow): PackingState => ({
 // ---------------------------------------------------------------------------
 // Saved menus
 // ---------------------------------------------------------------------------
+
+export const clientGroupToDomain = (r: ClientGroupRow): ClientGroup => ({
+  id: r.id as ClientGroupId,
+  kitchenId: r.kitchen_id as KitchenId,
+  name: r.name,
+});
+
+export const clientGroupToRow = (g: ClientGroup): ClientGroupRow => ({
+  id: g.id,
+  kitchen_id: g.kitchenId,
+  name: g.name,
+});
 
 export const menuTemplateToDomain = (r: MenuTemplateRow): MenuTemplate => ({
   id: r.id as MenuTemplateId,

@@ -166,8 +166,14 @@
    * entrances: leaving should never hold him up. No bounce anywhere.
    */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  /* Something already on screen moving or resizing (the nav highlight). */
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  /* Sheets and panels sliding up from the edge — iOS-like. */
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
   --dur-press: 120ms;
+  --dur-pop: 180ms; /* menus, small popovers */
   --dur-enter: 220ms;
+  --dur-sheet: 280ms; /* sheets and panels — the one move allowed to be longer */
   --dur-exit: 180ms;
 
   /* -------------------------------------------------------------------------
@@ -407,6 +413,16 @@ body,
   min-height: 100%;
 }
 
+/*
+ * A TAP IS A TAP. `manipulation` drops the double-tap-to-zoom wait, so a button
+ * answers the moment the thumb lifts; pinch zoom still works. The grey iOS
+ * flash goes because every control draws its own pressed state (`:active`).
+ */
+html {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
   font-family: var(--font);
   font-size: var(--size-body);
@@ -481,10 +497,15 @@ input[type='date']::-webkit-calendar-picker-indicator {
   cursor: pointer;
 }
 
-input[type='date']::-webkit-calendar-picker-indicator:hover,
 input[type='date']::-webkit-calendar-picker-indicator:focus-visible {
   /* Full ink on contact. Paired, because a touch screen has no hover. */
   opacity: 1;
+}
+@media (hover: hover) and (pointer: fine) {
+  input[type='date']::-webkit-calendar-picker-indicator:hover {
+    /* Full ink on contact. Paired, because a touch screen has no hover. */
+    opacity: 1;
+  }
 }
 
 /* A ticked box is the owner's own mark on a derived list — the one thing on these
@@ -516,9 +537,6 @@ textarea:focus-visible {
   outline-offset: 2px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation: none !important;
-    transition: none !important;
-  }
-}
+/* Reduced motion lives in ONE place, at the end of app.css. A second, harsher
+   block here used to switch every transition off, which also removed the fades
+   that show something changed. */

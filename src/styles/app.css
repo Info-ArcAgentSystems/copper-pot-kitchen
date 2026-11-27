@@ -425,6 +425,66 @@ h3 {
   outline-offset: -3px;
 }
 
+/* Pressed, so the tap shows under the thumb now the iOS grey flash is gone. */
+.tabs a:active {
+  color: var(--text);
+}
+
+/*
+ * THE SLIDING MARK (useSlidingMark in App.tsx). Positioned over the links and
+ * sized inline. It takes over from the link's own mark only once it has
+ * measured — `data-ready` — so the active tab is never unmarked.
+ */
+.tabs-inner {
+  position: relative;
+}
+
+.tabs-mark {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: 0 0 3px 3px;
+  background: var(--accent);
+}
+
+.tabs-mark[data-ready='true'] {
+  transition:
+    transform var(--dur-enter) var(--ease-in-out),
+    width var(--dur-enter) var(--ease-in-out),
+    height var(--dur-enter) var(--ease-in-out);
+}
+
+.tabs-inner a {
+  position: relative;
+  z-index: 1;
+  /* Fades with the mark arriving under it, so white text never sits on grey. */
+  transition: color var(--dur-enter) ease;
+}
+
+.tabs-inner:has(> .tabs-mark[data-ready='true']) a[aria-current='page'] {
+  background-image: none;
+}
+
+/* On the rail the mark IS the solid row, so the link drops its own fill. */
+.tabs-mark[data-rail='true'] {
+  border-radius: var(--radius-button);
+}
+
+.tabs-inner:has(> .tabs-mark[data-ready='true'][data-rail='true']) a[aria-current='page'] {
+  background: transparent;
+}
+
+/* The bar gains a soft edge once the page scrolls under it (Header in App.tsx). */
+.app-header {
+  transition: box-shadow var(--dur-enter) ease;
+}
+
+.app-header.is-scrolled {
+  box-shadow: 0 6px 16px rgb(15 23 42 / 7%);
+}
+
 .centred,
 .signin {
   flex: 1;
@@ -518,9 +578,13 @@ button.sm {
 }
 
 /* Paired with focus-visible: a touch screen has no hover. */
-button:hover,
 button:focus-visible {
   background: var(--button-hover);
+}
+@media (hover: hover) and (pointer: fine) {
+  button:hover {
+    background: var(--button-hover);
+  }
 }
 
 /* The press registers under the thumb, where there is no hover to tell him. */
@@ -629,11 +693,17 @@ button:disabled {
 
 /* The card lifts under a pointer or a keyboard focus — never the only sign of
    anything; the card already reads as one without it. */
-.record:hover,
 .record:focus-visible {
   background: var(--card);
   box-shadow: var(--shadow-raise);
   transform: translateY(-1px);
+}
+@media (hover: hover) and (pointer: fine) {
+  .record:hover {
+    background: var(--card);
+    box-shadow: var(--shadow-raise);
+    transform: translateY(-1px);
+  }
 }
 
 .record:active {
@@ -744,9 +814,13 @@ a.record {
 }
 
 /* Paired, because a touch screen has no hover. */
-.qlink:hover,
 .qlink:focus-visible {
   color: var(--text);
+}
+@media (hover: hover) and (pointer: fine) {
+  .qlink:hover {
+    color: var(--text);
+  }
 }
 
 /*
@@ -764,11 +838,16 @@ button.primary {
   box-shadow: var(--primary-shadow);
 }
 
-button.primary:hover,
 button.primary:focus-visible,
 button.primary:active {
   background: var(--accent);
   border-color: var(--accent);
+}
+@media (hover: hover) and (pointer: fine) {
+  button.primary:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
 }
 
 /*
@@ -788,10 +867,14 @@ button.danger {
   border-color: var(--danger-border);
 }
 
-button.danger:hover,
 button.danger:focus-visible,
 button.danger:active {
   background: var(--danger-subtle);
+}
+@media (hover: hover) and (pointer: fine) {
+  button.danger:hover {
+    background: var(--danger-subtle);
+  }
 }
 
 /* Set apart, below the save actions, so it is never the button reached for by
@@ -1483,11 +1566,17 @@ button.link {
 }
 
 /* Paired with focus-visible: a touch screen has no hover. */
-.tile:hover,
 .tile:focus-visible {
   border-color: var(--border-strong);
   box-shadow: var(--shadow-raise);
   transform: translateY(-1px);
+}
+@media (hover: hover) and (pointer: fine) {
+  .tile:hover {
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-raise);
+    transform: translateY(-1px);
+  }
 }
 
 .tile > h3 {
@@ -2066,10 +2155,15 @@ section.danger-zone h2 {
   font-weight: var(--weight-semi);
 }
 
-.segmented button:hover,
 .segmented button:focus-visible {
   background: var(--hover);
   color: var(--text);
+}
+@media (hover: hover) and (pointer: fine) {
+  .segmented button:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
 }
 
 .segmented button[aria-selected='true'] {
@@ -2170,10 +2264,15 @@ section.danger-zone h2 {
 }
 
 /* Paired with focus-visible: a touch screen has no hover. */
-.scan-card:hover,
 .scan-card:focus-visible {
   box-shadow: var(--shadow-raise);
   transform: translateY(-2px);
+}
+@media (hover: hover) and (pointer: fine) {
+  .scan-card:hover {
+    box-shadow: var(--shadow-raise);
+    transform: translateY(-2px);
+  }
 }
 
 .scan-card:active {
@@ -2333,7 +2432,7 @@ section.danger-zone h2 {
 }
 
 .date-chip-dow {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: var(--weight-bold);
   letter-spacing: 0.03em;
   color: var(--text-muted);
@@ -2349,7 +2448,7 @@ section.danger-zone h2 {
 .date-chip.is-none {
   gap: 3px;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: var(--weight-semi);
   text-align: center;
 }
@@ -2430,10 +2529,15 @@ section.danger-zone h2 {
   font-size: var(--size-small);
 }
 
-.chip:hover,
 .chip:focus-visible {
   background: var(--hover);
   color: var(--text);
+}
+@media (hover: hover) and (pointer: fine) {
+  .chip:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
 }
 
 /* The chosen view: solid ink, not the accent — blue is for acting. */
@@ -2534,7 +2638,7 @@ section.danger-zone h2 {
   border-radius: 20px 20px 0 0;
   box-shadow: 0 -8px 30px rgb(0 0 0 / 16%);
   padding-bottom: env(safe-area-inset-bottom);
-  animation: sheet-up 0.28s var(--ease-out);
+  animation: sheet-up var(--dur-sheet) var(--ease-drawer);
   outline: none;
 }
 
@@ -2575,6 +2679,8 @@ section.danger-zone h2 {
 
 .sheet-body {
   overflow-y: auto;
+  /* Scrolling to the end of the sheet stops there; the page behind stays put. */
+  overscroll-behavior: contain;
   padding: var(--space-4);
 }
 
@@ -2664,15 +2770,24 @@ section.danger-zone h2 {
   background: var(--danger);
 }
 
-.swipe-select:hover,
 .swipe-select:focus-visible {
   background: #374151;
 }
+@media (hover: hover) and (pointer: fine) {
+  .swipe-select:hover {
+    background: #374151;
+  }
+}
 
-.swipe-delete:hover,
 .swipe-delete:focus-visible {
   background: var(--danger);
   filter: brightness(0.92);
+}
+@media (hover: hover) and (pointer: fine) {
+  .swipe-delete:hover {
+    background: var(--danger);
+    filter: brightness(0.92);
+  }
 }
 
 .swipe-locked {
@@ -3063,7 +3178,7 @@ h2.with-icon > .icon-tile {
 
 .ring-label {
   position: absolute;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: var(--weight-bold);
   color: var(--text);
 }
@@ -3100,10 +3215,15 @@ h2.with-icon > .icon-tile {
   box-shadow: var(--primary-shadow), 0 8px 24px rgb(0 0 0 / 14%);
 }
 
-.sous-bubble:hover,
 .sous-bubble:focus-visible {
   background: var(--accent);
   transform: translateY(-1px);
+}
+@media (hover: hover) and (pointer: fine) {
+  .sous-bubble:hover {
+    background: var(--accent);
+    transform: translateY(-1px);
+  }
 }
 
 .sous-bubble:active {
@@ -3293,7 +3413,9 @@ body:has(.bulk-bar) .sous-bubble {
     animation-duration: 0.01ms !important;
     animation-delay: 0ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    /* Reduce, don't remove: nothing slides, scales or lifts, but a colour or
+       a fade still changes, so he can see that something happened. */
+    transition-property: opacity, color, background-color, border-color, box-shadow !important;
   }
 }
 

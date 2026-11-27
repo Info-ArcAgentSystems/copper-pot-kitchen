@@ -11,7 +11,7 @@
  */
 
 import { Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { KitchenProvider } from './auth/KitchenContext';
 import { useKitchen } from './auth/kitchenState';
 import { RequireKitchen } from './auth/RequireKitchen';
@@ -63,10 +63,31 @@ const TABS = [
 
 function Header(): ReactNode {
   const { state } = useKitchen();
+  const ref = useRef<HTMLElement>(null);
+
+  /*
+   * A hairline shadow once the page has scrolled under the bar, so the edge
+   * reads as "content continues up here". Toggled on the element directly, not
+   * through React state: a scroll handler that re-rendered the shell would
+   * redraw every screen on every frame of a scroll.
+   */
+  useEffect(() => {
+    if (state.status !== 'ready') return undefined;
+    const main = document.querySelector('.app-main');
+    const header = ref.current;
+    if (main === null || header === null) return undefined;
+    const onScroll = (): void => {
+      header.classList.toggle('is-scrolled', main.scrollTop > 4);
+    };
+    onScroll();
+    main.addEventListener('scroll', onScroll, { passive: true });
+    return () => main.removeEventListener('scroll', onScroll);
+  }, [state.status]);
+
   if (state.status !== 'ready') return null;
 
   return (
-    <header className="app-header">
+    <header className="app-header" ref={ref}>
       {/* The BAR is full-width; its CONTENTS align to the reading column, so the
           bottom border still reaches both window edges. */}
       <div className="app-header-inner">
@@ -133,10 +154,69 @@ function TabIcon({ to }: { readonly to: (typeof TABS)[number]['to'] }): ReactNod
   );
 }
 
+/*
+ * THE HIGHLIGHT SLIDES to the tab you chose instead of jumping, so the eye
+ * follows where you went. One element, measured from whichever link NavLink
+ * marked `aria-current`: a solid row behind the label on the rail, a short mark
+ * over the icon on the phone bar.
+ *
+ * Progressive: until it has measured, the link's own `aria-current` style shows
+ * the active tab, so a failed measure never leaves him without one. Its size is
+ * set here, inline, because `tests/ui/tokens.test.ts` holds every px height in
+ * the stylesheet to the 44px touch floor, and a 3px mark is decoration, not a
+ * target.
+ */
+function useSlidingMark(): {
+  readonly inner: RefObject<HTMLDivElement | null>;
+  readonly mark: RefObject<HTMLSpanElement | null>;
+} {
+  const { pathname } = useLocation();
+  const inner = useRef<HTMLDivElement>(null);
+  const mark = useRef<HTMLSpanElement>(null);
+
+  useLayoutEffect(() => {
+    const box = inner.current;
+    const el = mark.current;
+    if (box === null || el === null) return undefined;
+
+    const place = (): void => {
+      const active = box.querySelector<HTMLElement>('a[aria-current="page"]');
+      if (active === null) {
+        el.hidden = true;
+        return;
+      }
+      el.hidden = false;
+      const rail = getComputedStyle(box).flexDirection === 'column';
+      const w = rail ? active.offsetWidth : 26;
+      const h = rail ? active.offsetHeight : 3;
+      const x = rail ? active.offsetLeft : active.offsetLeft + (active.offsetWidth - w) / 2;
+      const y = rail ? active.offsetTop : 0;
+      el.style.width = `${w}px`;
+      el.style.height = `${h}px`;
+      el.style.transform = `translate(${x}px, ${y}px)`;
+      el.dataset.rail = rail ? 'true' : 'false';
+      // The first placement must not slide in from the corner.
+      if (el.dataset.ready !== 'true') {
+        requestAnimationFrame(() => {
+          el.dataset.ready = 'true';
+        });
+      }
+    };
+
+    place();
+    window.addEventListener('resize', place);
+    return () => window.removeEventListener('resize', place);
+  }, [pathname]);
+
+  return { inner, mark };
+}
+
 function TabBar(): ReactNode {
+  const { inner, mark } = useSlidingMark();
   return (
     <nav className="tabs" aria-label="Sections">
-      <div className="tabs-inner">
+      <div className="tabs-inner" ref={inner}>
+        <span className="tabs-mark" ref={mark} aria-hidden="true" hidden />
         {TABS.map((tab) => (
           <NavLink key={tab.to} to={tab.to} end={tab.to === '/'} className="tap">
             <TabIcon to={tab.to} />

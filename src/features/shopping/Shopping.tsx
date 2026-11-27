@@ -32,6 +32,9 @@ import { SourceNotice } from '../../ui/SourceNotice';
 import { sourceState, type DataSource } from '../../ui/sourceState';
 import { useDateRange, type DateRange } from '../../ui/dateRange';
 import { useKitchen } from '../../auth/kitchenState';
+import { useUndoToast } from '../../ui/UndoToast';
+import { tickedAt } from '../../ui/tickedAt';
+import { useTickMotion } from '../../ui/tickMotion';
 import type { IngredientId, IsoDate, KitchenId, StockUnit } from '../../engine/types';
 
 /**
@@ -171,8 +174,8 @@ export function Shopping({ range }: { range?: DateRange }): ReactNode {
     unit: StockUnit,
     qtyBought: number,
     done: boolean,
-  ): Promise<void> => {
-    if (kitchenState.status !== 'ready') return;
+  ): Promise<boolean> => {
+    if (kitchenState.status !== 'ready') return false;
     setBusy(ingredientId);
     setError(null);
 
@@ -184,14 +187,52 @@ export function Shopping({ range }: { range?: DateRange }): ReactNode {
         to as IsoDate,
         { qtyBought, unit, done },
       );
-      // Re-read rather than patching local state: the tick feeds back INTO the
-      // cascade, so the whole list is recomputed with it. That is the behaviour
-      // being demonstrated, not a refresh for tidiness.
-      ticks.reload();
+      return true;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save that.');
+      return false;
     } finally {
       setBusy(null);
+    }
+  };
+
+  const { show, toast } = useUndoToast();
+  const motion = useTickMotion();
+
+  /*
+   * A TICK, end to end. The row plays its short "done" move WHILE the write is
+   * in flight — never instead of it: the line only moves to "In the trolley"
+   * once the write has succeeded and the ticks are re-read. A failed write
+   * leaves the row where it was, unticked, with the error above.
+   *
+   * Re-read rather than patch local state: the tick feeds back INTO the cascade,
+   * so the whole list is recomputed with it.
+   */
+  const tick = async (
+    line: { readonly ingredientId: IngredientId; readonly name: string },
+    unit: StockUnit,
+    qty: number,
+    done: boolean,
+  ): Promise<void> => {
+    const id = line.ingredientId;
+    const [ok] = await Promise.all([
+      setBought(id, unit, qty, done),
+      done ? motion.leave(id) : Promise.resolve(),
+    ]);
+    motion.settle(id, ok);
+    if (!ok) return;
+    ticks.reload();
+    if (done) {
+      show(`${line.name} ticked`, () => {
+        void setBought(id, unit, qty, false).then((back) => {
+          if (back) {
+            motion.settle(id, true);
+            ticks.reload();
+          }
+        });
+      });
+    } else {
+      show(`${line.name} is back on the list`);
     }
   };
 
@@ -220,6 +261,22 @@ export function Shopping({ range }: { range?: DateRange }): ReactNode {
           the segmented control names this view — three statements of the same
           word before any content. The dates caption says what the window means
           here, which is the only part this view has of its own. */}
+
+      {/* Printed only: what the paper copy is, and when it was made, so an old
+          printout on the fridge can be told from today's. */}
+      <div className="print-only print-head">
+        <p className="print-title">Shopping list</p>
+        <p>
+          {from} – {to} · printed{' '}
+          {new Date().toLocaleString('en-IE', {
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit',
+          })}
+        </p>
+      </div>
 
       {/* The filter, stated. Rule 15 keeps cancelled and completed jobs; it does
           not mean buying for them. */}
@@ -276,44 +333,114 @@ export function Shopping({ range }: { range?: DateRange }): ReactNode {
         );
       })()}
 
-      {view?.groups.map((group) => (
-        <section key={group.supplierName} className="supplier-group">
-          <h2>{group.supplierName}</h2>
+      {view !== null && view.groups.length > 0 && (
+        <div className="no-print list-actions">
+          <button type="button" onClick={() => window.print()}>
+            Print list
+          </button>
+        </div>
+      )}
 
-          <ul className="records">
-            {group.lines.map((line) => {
-              const tick = tickFor(line.ingredientId);
-              const done = tick?.done ?? false;
+      {/*
+       * STILL TO BUY, by supplier. A ticked line leaves its group and goes to
+       * "In the trolley" below, so what is left is what he looks at. A supplier
+       * with nothing left drops its heading rather than showing an empty box.
+       */}
+      {view?.groups.map((group) => {
+        const left = group.lines.filter((l) => tickFor(l.ingredientId)?.done !== true);
+        if (left.length === 0) return null;
+        return (
+          <section key={group.supplierName} className="supplier-group">
+            <h2>
+              {group.supplierName}
+              <span className="muted num group-count"> · {left.length} left</span>
+            </h2>
 
-              return (
-                <li key={line.ingredientId} className={done ? 'shop-line done' : 'shop-line'}>
-                  <label className="check">
-                    <input
-                      type="checkbox"
-                      checked={done}
-                      disabled={busy === line.ingredientId}
-                      onChange={(e) => {
-                        void setBought(
-                          line.ingredientId,
-                          (tick?.qtyBought.unit ?? '') as StockUnit,
-                          tick?.qtyBought.value ?? 0,
-                          e.target.checked,
-                        );
-                      }}
-                    />
-                    <span className="num buy">{line.buy ?? line.outstanding}</span>
-                    <span className="shop-name">{line.name}</span>
-                  </label>
+            <ul className="records">
+              {left.map((line) => {
+                const t = tickFor(line.ingredientId);
+                const unit = (t?.qtyBought.unit ?? '') as StockUnit;
+                const qty = t?.qtyBought.value ?? 0;
+                const leaving = motion.isLeaving(line.ingredientId);
 
-                  <span className="muted num workings">{line.workings}</span>
+                return (
+                  <li
+                    key={line.ingredientId}
+                    className={`shop-line${motion.classFor(line.ingredientId)}`}
+                  >
+                    <label className="check" {...motion.pointerProps}>
+                      <input
+                        type="checkbox"
+                        checked={leaving}
+                        disabled={busy === line.ingredientId || leaving}
+                        onChange={(e) => {
+                          void tick(line, unit, qty, e.target.checked);
+                        }}
+                      />
+                      <span className="num buy">{line.buy ?? line.outstanding}</span>
+                      <span className="shop-name">{line.name}</span>
+                    </label>
 
-                  {line.note !== null && <span className="unresolved">{line.note}</span>}
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      ))}
+                    <span className="muted num workings">{line.workings}</span>
+
+                    {line.note !== null && <span className="unresolved">{line.note}</span>}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        );
+      })}
+
+      {/* IN THE TROLLEY — ticked lines, with when. Tap one to put it back. Not
+          printed: the paper copy is for what is still to buy. */}
+      {view !== null &&
+        (() => {
+          const ticked = view.groups
+            .flatMap((g) => g.lines)
+            .filter((l) => tickFor(l.ingredientId)?.done === true);
+          if (ticked.length === 0) return null;
+          const now = new Date();
+          return (
+            <section className="supplier-group trolley no-print">
+              <h2>
+                In the trolley
+                <span className="muted num group-count"> · {ticked.length}</span>
+              </h2>
+              <ul className="records">
+                {ticked.map((line) => {
+                  const t = tickFor(line.ingredientId);
+                  const when = tickedAt(t?.updatedAt, now);
+                  return (
+                    <li
+                      key={line.ingredientId}
+                      className={`shop-line done${motion.classFor(line.ingredientId)}`}
+                    >
+                      <label className="check">
+                        <input
+                          type="checkbox"
+                          checked
+                          disabled={busy === line.ingredientId}
+                          onChange={() => {
+                            void tick(
+                              line,
+                              (t?.qtyBought.unit ?? '') as StockUnit,
+                              t?.qtyBought.value ?? 0,
+                              false,
+                            );
+                          }}
+                        />
+                        <span className="num buy">{line.buy ?? line.outstanding}</span>
+                        <span className="shop-name">{line.name}</span>
+                      </label>
+                      {when !== null && <span className="num ticked-at">✓ {when}</span>}
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          );
+        })()}
 
       {/* Rule 8 at the surface: things the engine could NOT put a number on are
           shown, not omitted. An item he never sees is the same defect as a
@@ -364,10 +491,12 @@ export function Shopping({ range }: { range?: DateRange }): ReactNode {
       )}
 
       {view !== null && !view.nothingToBuy && (
-        <button type="button" onClick={() => void copy()}>
+        <button type="button" className="no-print" onClick={() => void copy()}>
           Copy for WhatsApp
         </button>
       )}
+
+      {toast}
     </Screen>
   );
 }

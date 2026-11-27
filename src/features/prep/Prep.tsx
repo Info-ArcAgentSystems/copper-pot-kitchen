@@ -28,6 +28,9 @@ import { SourceNotice } from '../../ui/SourceNotice';
 import { sourceState, type DataSource } from '../../ui/sourceState';
 import { useDateRange, type DateRange } from '../../ui/dateRange';
 import { useKitchen } from '../../auth/kitchenState';
+import { useUndoToast } from '../../ui/UndoToast';
+import { tickedAt } from '../../ui/tickedAt';
+import { useTickMotion } from '../../ui/tickMotion';
 import type { IsoDate, KitchenId, RecipeId } from '../../engine/types';
 
 /**
@@ -136,8 +139,12 @@ export function Prep({ range }: { range?: DateRange }): ReactNode {
     return buildPrepView(days, gaps, jobList, customerList, tickList, recipeList);
   }, [ready, jobList, recipes.state, ingredients.state, customers.state, ticks.state, from, to]);
 
-  const setDone = async (recipeId: RecipeId, prepDate: IsoDate, done: boolean): Promise<void> => {
-    if (kitchenState.status !== 'ready') return;
+  const setDone = async (
+    recipeId: RecipeId,
+    prepDate: IsoDate,
+    done: boolean,
+  ): Promise<boolean> => {
+    if (kitchenState.status !== 'ready') return false;
     const key = `${recipeId} ${prepDate}`;
     setBusy(key);
     setError(null);
@@ -149,12 +156,52 @@ export function Prep({ range }: { range?: DateRange }): ReactNode {
         prepDate,
         done,
       );
-      ticks.reload();
+      return true;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save that.');
+      return false;
     } finally {
       setBusy(null);
     }
+  };
+
+  const { show, toast } = useUndoToast();
+  const motion = useTickMotion();
+
+  // Same shape as Shopping's tick: the move plays while the write runs, and the
+  // line only lands in "Done" once the write has succeeded and is re-read.
+  const tick = async (
+    recipeId: RecipeId,
+    name: string,
+    prepDate: IsoDate,
+    done: boolean,
+  ): Promise<void> => {
+    const key = `${recipeId} ${prepDate}`;
+    const [ok] = await Promise.all([
+      setDone(recipeId, prepDate, done),
+      done ? motion.leave(key) : Promise.resolve(),
+    ]);
+    motion.settle(key, ok);
+    if (!ok) return;
+    ticks.reload();
+    if (done) {
+      show(`${name} done`, () => {
+        void setDone(recipeId, prepDate, false).then((back) => {
+          if (back) {
+            motion.settle(key, true);
+            ticks.reload();
+          }
+        });
+      });
+    } else {
+      show(`${name} is back on the list`);
+    }
+  };
+
+  const tickTime = (recipeId: RecipeId, prepDate: IsoDate): string | null => {
+    const list = ticks.state.status === 'ready' ? ticks.state.data : [];
+    const t = list.find((x) => x.recipeId === recipeId && x.prepDate === prepDate);
+    return tickedAt(t?.updatedAt, new Date());
   };
 
   if (!ready) return <SourceNotice state={loaded} />;
@@ -188,55 +235,98 @@ export function Prep({ range }: { range?: DateRange }): ReactNode {
             {day.isToday && <span className="today"> today</span>}
           </h2>
 
+          {/* STILL TO MAKE first, in the engine's order; DONE gathered beneath,
+              with when. Tapping a done line puts it back. */}
           <ul className="records">
-            {day.lines.map((line) => (
-              <li
-                key={`${line.recipeId} ${day.prepDate}`}
-                className={line.done ? 'prep-line done' : 'prep-line'}
-              >
-                <label className="check">
-                  <input
-                    type="checkbox"
-                    checked={line.done}
-                    disabled={busy === `${line.recipeId} ${day.prepDate}`}
-                    onChange={(e) => {
-                      void setDone(line.recipeId, day.prepDate, e.target.checked);
-                    }}
-                  />
-                  <span className="num batch">{line.batchLabel ?? `${line.portions} portions`}</span>
-                  <span className="prep-name">{line.recipeName}</span>
-                </label>
+            {day.lines
+              .filter((line) => !line.done)
+              .map((line) => {
+                const key = `${line.recipeId} ${day.prepDate}`;
+                const leaving = motion.isLeaving(key);
+                return (
+                  <li key={key} className={`prep-line${motion.classFor(key)}`}>
+                    <label className="check" {...motion.pointerProps}>
+                      <input
+                        type="checkbox"
+                        checked={leaving}
+                        disabled={busy === key || leaving}
+                        onChange={(e) => {
+                          void tick(line.recipeId, line.recipeName, day.prepDate, e.target.checked);
+                        }}
+                      />
+                      <span className="num batch">
+                        {line.batchLabel ?? `${line.portions} portions`}
+                      </span>
+                      <span className="prep-name">{line.recipeName}</span>
+                    </label>
 
-                <span className="muted num prep-total">
-                  {line.batchLabel === null ? '' : `${line.portions} portions`}
-                  {/* Surplus is shown, never folded into the tray count — it is
-                      real food he can plan around. */}
-                  {line.surplus !== null && (
-                    <>
-                      {line.batchLabel === null ? '' : ' · '}
-                      <span className="surplus">{line.surplus}</span>
-                    </>
-                  )}
-                </span>
+                    <span className="muted num prep-total">
+                      {line.batchLabel === null ? '' : `${line.portions} portions`}
+                      {/* Surplus is shown, never folded into the tray count — it is
+                          real food he can plan around. */}
+                      {line.surplus !== null && (
+                        <>
+                          {line.batchLabel === null ? '' : ' · '}
+                          <span className="surplus">{line.surplus}</span>
+                        </>
+                      )}
+                    </span>
 
-                {/* MARK, DON'T FILTER. The portions above are real work — people
-                    are eating it — but there is nothing to buy and no cost, and
-                    that has to be said beside the tray count rather than only in
-                    the flags at the foot of the screen. */}
-                {line.stub !== null && <p className="unresolved">{line.stub}</p>}
+                    {/* MARK, DON'T FILTER. The portions above are real work — people
+                        are eating it — but there is nothing to buy and no cost, and
+                        that has to be said beside the tray count rather than only in
+                        the flags at the foot of the screen. */}
+                    {line.stub !== null && <p className="unresolved">{line.stub}</p>}
 
-                {/* The per-job split. This is the reason a consolidated tray is
-                    still usable: he has to know which portions go where. */}
-                <ul className="allocations">
-                  {line.allocations.map((a) => (
-                    <li key={a.label}>
-                      <span className="num">{a.portions}</span> {a.label}
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ))}
+                    {/* The per-job split. This is the reason a consolidated tray is
+                        still usable: he has to know which portions go where. */}
+                    <ul className="allocations">
+                      {line.allocations.map((a) => (
+                        <li key={a.label}>
+                          <span className="num">{a.portions}</span> {a.label}
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                );
+              })}
           </ul>
+
+          {day.lines.some((line) => line.done) && (
+            <>
+              <h3 className="done-head">
+                Done
+                <span className="muted num"> · {day.lines.filter((line) => line.done).length}</span>
+              </h3>
+              <ul className="records">
+                {day.lines
+                  .filter((line) => line.done)
+                  .map((line) => {
+                    const key = `${line.recipeId} ${day.prepDate}`;
+                    const when = tickTime(line.recipeId, day.prepDate);
+                    return (
+                      <li key={key} className={`prep-line done${motion.classFor(key)}`}>
+                        <label className="check">
+                          <input
+                            type="checkbox"
+                            checked
+                            disabled={busy === key}
+                            onChange={() => {
+                              void tick(line.recipeId, line.recipeName, day.prepDate, false);
+                            }}
+                          />
+                          <span className="num batch">
+                            {line.batchLabel ?? `${line.portions} portions`}
+                          </span>
+                          <span className="prep-name">{line.recipeName}</span>
+                        </label>
+                        {when !== null && <span className="num ticked-at">✓ {when}</span>}
+                      </li>
+                    );
+                  })}
+              </ul>
+            </>
+          )}
         </section>
       ))}
 
@@ -282,6 +372,8 @@ export function Prep({ range }: { range?: DateRange }): ReactNode {
           </ul>
         </section>
       )}
+
+      {toast}
     </Screen>
   );
 }

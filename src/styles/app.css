@@ -3424,3 +3424,240 @@ body:has(.bulk-bar) .sous-bubble {
   border-color: var(--accent);
   background: var(--accent-subtle);
 }
+
+/* ---------------------------------------------------------------------------
+   TICK TO DONE — Shopping and Prep (ui/tickMotion.ts, ui/UndoToast.tsx).
+
+   A tapped line fills its box, then slides off (150ms + 200ms, the LEAVE_MS in
+   tickMotion.ts) while the write runs. It lands in "In the trolley" / "Done"
+   only once the write has succeeded, and flashes once there so the eye finds
+   it. Reduced motion skips the move; the line still moves lists.
+   --------------------------------------------------------------------------- */
+
+.is-leaving {
+  animation: tick-leave 200ms var(--ease-out) 150ms forwards;
+  pointer-events: none;
+}
+
+.is-leaving .check input[type='checkbox'] {
+  animation: tick-pop 150ms var(--ease-out);
+}
+
+@keyframes tick-leave {
+  to {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
+@keyframes tick-pop {
+  50% {
+    transform: scale(1.18);
+  }
+}
+
+.is-arrived {
+  animation: tick-arrive 900ms var(--ease-out);
+}
+
+@keyframes tick-arrive {
+  from {
+    background-color: color-mix(in srgb, var(--ok) 14%, transparent);
+  }
+}
+
+/* "· 3 left" beside a supplier, "· 4" beside a done list. */
+.group-count {
+  font-family: var(--font);
+  font-weight: var(--weight-normal);
+  font-size: var(--size-small);
+}
+
+/* Done rows are one line: what it was, and when it was ticked. */
+.shop-line.done,
+.prep-line.done {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  box-shadow: none;
+}
+
+.shop-line.done .check,
+.prep-line.done .check {
+  flex: 1;
+  min-width: 0;
+}
+
+.ticked-at {
+  flex: none;
+  font-size: var(--size-small);
+  font-weight: var(--weight-semi);
+  color: var(--ok);
+  white-space: nowrap;
+}
+
+.done-head {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: var(--size-small);
+  color: var(--ok);
+}
+
+.trolley > h2 {
+  color: var(--ok);
+}
+
+.list-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+/* The toast that carries an Undo: it must take a tap, unlike the plain ones. */
+.toast.has-action {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-right: var(--space-2);
+  pointer-events: auto;
+}
+
+.toast-text {
+  flex: 1;
+}
+
+.toast .toast-action {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: #9dbbff;
+  font-weight: var(--weight-bold);
+}
+
+.toast .toast-action:active {
+  background: rgb(255 255 255 / 10%);
+}
+
+/* How long the Undo has left — drains, and stops while a pointer rests on it. */
+.toast-timer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-bottom: 2px solid #9dbbff;
+  transform-origin: left;
+  animation: toast-drain linear forwards;
+}
+
+@keyframes toast-drain {
+  to {
+    transform: scaleX(0);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   PRINT — the shopping list on paper. Only the list: no navigation, buttons,
+   ticked lines or Sous. Boxes to tick with a pen and a line for notes, at a
+   size readable on a clipboard, and a page count so a missing sheet shows.
+   --------------------------------------------------------------------------- */
+
+.print-only {
+  display: none;
+}
+
+@page {
+  size: A4;
+  margin: 12mm;
+}
+
+@media print {
+  /* The rail layout is a grid with :has() in the selector, so it outranks a
+     bare #root; !important is the honest way to say "never on paper". */
+  #root,
+  #root:has(> .tabs) {
+    display: block !important;
+    height: auto !important;
+  }
+
+  .app-main,
+  .content,
+  .screen {
+    max-width: none !important;
+    width: auto !important;
+  }
+
+  body {
+    background: #fff;
+    font-size: 11pt;
+  }
+
+  .app-header,
+  .tabs,
+  .sous-bubble,
+  .toasts,
+  .no-print,
+  .segmented,
+  .date-range,
+  .progress-block,
+  .page-title-row,
+  .error,
+  button {
+    display: none !important;
+  }
+
+  .app-main {
+    overflow: visible;
+    padding: 0;
+  }
+
+  .print-only {
+    display: block;
+  }
+
+  .print-head .print-title {
+    margin: 0;
+    font-size: 16pt;
+    font-weight: var(--weight-bold);
+  }
+
+  .print-head p:not(.print-title) {
+    margin: 2pt 0 10pt;
+    font-size: 10pt;
+  }
+
+  .shop-line {
+    flex-direction: row;
+    align-items: center;
+    break-inside: avoid;
+    box-shadow: none;
+    border-color: #999;
+    border-radius: 0;
+    padding: 4pt 6pt;
+  }
+
+  .shop-line .check {
+    flex: 1;
+  }
+
+  .shop-line .workings {
+    padding-left: 0;
+    font-size: 9pt;
+  }
+
+  /* A line to write on: "only had 2", "got the big bag". */
+  .shop-line::after {
+    content: '';
+    flex: none;
+    width: 80pt;
+    align-self: flex-end;
+    border-bottom: 1px solid #999;
+  }
+
+  .unresolved-block,
+  .needs-fixing {
+    break-inside: avoid;
+    box-shadow: none;
+  }
+}

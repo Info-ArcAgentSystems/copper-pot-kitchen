@@ -3763,3 +3763,160 @@ body:has(.bulk-bar) .sous-bubble {
     justify-content: center;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   MONEY — revenue by week (ui/WeekChart.tsx). Bar heights are inline; gaps are
+   drawn as gaps, never as a zero bar. Grey bars, one accent bar: the latest
+   week the headline is about.
+   --------------------------------------------------------------------------- */
+
+.week-chart {
+  margin: 0;
+  padding: var(--space-4);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+}
+
+.week-chart figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: var(--space-3);
+}
+
+.week-title {
+  font-family: var(--font-display);
+  font-size: var(--size-body);
+}
+
+.week-sub,
+.week-note {
+  font-size: var(--size-small);
+  color: var(--text-muted);
+}
+
+.week-note {
+  margin: var(--space-3) 0 0;
+}
+
+.week-cols {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.week-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.week-col.is-clipped {
+  opacity: 0.55;
+}
+
+.week-value {
+  font-size: var(--size-micro);
+  font-weight: var(--weight-semi);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.week-bar {
+  display: block;
+  width: 100%;
+  max-width: 56px;
+  border-radius: 6px 6px 0 0;
+  background: var(--text-muted);
+  opacity: 0.45;
+  transform-origin: bottom;
+  animation: week-grow var(--dur-enter) var(--ease-out) both;
+}
+
+.week-bar.is-latest {
+  background: var(--accent);
+  opacity: 1;
+}
+
+.week-bar.is-partial {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--text-muted),
+    var(--text-muted) 6px,
+    color-mix(in srgb, var(--text-muted) 60%, transparent) 6px,
+    color-mix(in srgb, var(--text-muted) 60%, transparent) 12px
+  );
+}
+
+.week-bar.is-gap {
+  opacity: 1;
+  background: repeating-linear-gradient(
+    45deg,
+    var(--surface),
+    var(--surface) 4px,
+    transparent 4px,
+    transparent 8px
+  );
+  border: 1px dashed var(--border-strong);
+  border-bottom: 0;
+}
+
+.week-bar.is-empty {
+  opacity: 1;
+  background: none;
+  border-top: 2px dashed var(--border-strong);
+  border-radius: 0;
+}
+
+@keyframes week-grow {
+  from {
+    transform: scaleY(0.6);
+    opacity: 0;
+  }
+}
+
+.week-labels {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: 6px;
+}
+
+.week-labels span {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-size: var(--size-micro);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The Sheet's "Discard your changes?" bar (ui/Sheet.tsx). */
+.sheet-discard {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: color-mix(in srgb, var(--warn) 10%, var(--card));
+  border-bottom: 1px solid var(--border);
+}
+
+.sheet-discard > span {
+  flex-basis: 100%;
+  font-weight: var(--weight-semi);
+}
+
+.sheet-discard > button {
+  flex: 1;
+}

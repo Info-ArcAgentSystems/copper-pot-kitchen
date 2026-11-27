@@ -454,15 +454,19 @@ export function Dashboard(): ReactNode {
       {/* ------------------------------------------------------------------ */}
       {/* Last, because it is housekeeping rather than service. It states when,
           and never that the backup is current — see `backupReminder`. */}
-      <section className={view.backup.state === 'never' ? 'unresolved-block' : 'money-row'}>
-        <h2>Backup</h2>
-        <p className={view.backup.state === 'never' ? undefined : 'muted'}>
-          {view.backup.message}
-        </p>
-        <p className="hint muted">
-          <Link className="qlink" to="/setup/backup">Open backup</Link>
-        </p>
-      </section>
+      {/* Only once a backup is known: "never" is already item one of Needs
+          you, and saying it twice made the warning look like two problems. */}
+      {view.backup.state !== 'never' && (
+        <section className="money-row">
+          <h2>Backup</h2>
+          <p className="muted">
+            {view.backup.message}
+          </p>
+          <p className="hint muted">
+            <Link className="qlink" to="/setup/backup">Open backup</Link>
+          </p>
+        </section>
+      )}
     </Screen>
   );
 }

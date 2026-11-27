@@ -265,7 +265,7 @@ function SousBubble({ onSaved }: { readonly onSaved: () => void }): ReactNode {
         </button>
       )}
       {open && (
-        <Sheet title="Ask Sous" onClose={() => setOpen(false)}>
+        <Sheet title="Ask Sous" onClose={() => setOpen(false)} guardChanges={false}>
           <AskSous inPanel onSaved={onSaved} />
         </Sheet>
       )}

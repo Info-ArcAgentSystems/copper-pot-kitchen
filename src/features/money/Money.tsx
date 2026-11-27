@@ -29,6 +29,8 @@ import { buildMoneyView, UNKNOWN_FIGURE } from '../../ui/moneyView';
 import { EmptyState } from '../../ui/EmptyState';
 import { BEHIND, DateRangeBar } from '../../ui/DateRangeBar';
 import { SectionHeading } from '../../ui/icons';
+import { WeekChart } from '../../ui/WeekChart';
+import { moneyWeeks } from '../../ui/moneyWeeks';
 import { Stat } from '../../ui/Stat';
 import { useAsync } from '../../ui/useAsync';
 import { Screen } from '../../ui/Screen';
@@ -137,7 +139,11 @@ export function Money(): ReactNode {
 
     const total = rangeMoney(inRange, customerList, rateList, recipeList, ingredientList);
 
-    return buildMoneyView(inputs, total, customerList);
+    return {
+      ...buildMoneyView(inputs, total, customerList),
+      // The chart's weeks: `rangeMoney` again, per week, over the same jobs.
+      weeks: moneyWeeks(inRange, from, to, customerList, rateList, recipeList, ingredientList),
+    };
   }, [ready, jobList, recipes.state, ingredients.state, customers.state, rates.state, from, to]);
 
   if (!ready) return <SourceNotice state={loaded} title="Money" />;
@@ -199,6 +205,13 @@ export function Money(): ReactNode {
             Margin is shown as an amount. Tell us whether you want it as a share of the price or
             of the cost.
           </p>
+        </section>
+      )}
+
+      {view !== null && view.rows.length > 0 && (
+        <section>
+          <SectionHeading icon="chart">By week</SectionHeading>
+          <WeekChart weeks={view.weeks} />
         </section>
       )}
 

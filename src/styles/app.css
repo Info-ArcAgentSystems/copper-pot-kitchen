@@ -3661,3 +3661,105 @@ body:has(.bulk-bar) .sous-bubble {
     box-shadow: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   TODAY — "Needs you" (ui/needsYou.ts). One card per thing to fix: a rank, what
+   is wrong and why, and ONE link to the screen that fixes it. Safety and money
+   items carry a coloured rank; the colour is never the only signal — the title
+   says what it is.
+   --------------------------------------------------------------------------- */
+
+.needs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.need {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+}
+
+.need-rank {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  aspect-ratio: 1;
+  border-radius: var(--radius-pill);
+  background: var(--button-bg);
+  color: var(--text-muted);
+  font-size: var(--size-small);
+  font-weight: var(--weight-bold);
+}
+
+.need-safety .need-rank {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: var(--danger);
+}
+
+.need-money .need-rank {
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
+  color: var(--warn);
+}
+
+.need-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.need-why {
+  font-size: var(--size-small);
+  color: var(--text-muted);
+}
+
+.need-go {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-min);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-button);
+  background: var(--button-bg);
+  color: var(--text);
+  font-weight: var(--weight-semi);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.need-go:focus-visible {
+  background: var(--button-hover);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .need-go:hover {
+    background: var(--button-hover);
+  }
+}
+
+.need-go:active {
+  transform: scale(0.97);
+}
+
+/* On a phone the action drops under the words, full width, within thumb reach. */
+@media (max-width: 560px) {
+  .need {
+    flex-wrap: wrap;
+  }
+
+  .need-go {
+    width: 100%;
+    justify-content: center;
+  }
+}

@@ -81,6 +81,8 @@ export interface DashboardView {
    * same defect as a guessed number.
    */
   readonly shopping: { readonly outstanding: number; readonly blocked: number };
+  /** Jobs in the window still waiting to be confirmed — not shopped or prepped for. */
+  readonly enquiries: number;
   readonly anomalies: readonly Anomaly[];
   /** Issues, not a count — Rule 16 forbids a summable dietary total. */
   readonly dietary: readonly DietaryIssue[];
@@ -152,6 +154,7 @@ export function buildDashboardView(input: DashboardInput): DashboardView {
       outstanding: outstanding.filter((l) => l.outstanding.value > 0).length,
       blocked: blockers.length,
     },
+    enquiries: windowJobs.filter((j) => j.status === 'enquiry').length,
     anomalies: anomalyScan(live, recipes)
       .slice()
       .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]),

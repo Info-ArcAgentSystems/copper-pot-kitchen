@@ -26,6 +26,7 @@ import { SavedMenus } from './features/setup/SavedMenus';
 import { ClientGroups } from './features/setup/ClientGroups';
 import { BackupScreen } from './features/setup/Backup';
 import { Jobs } from './features/jobs/Jobs';
+import { Dashboard } from './features/dashboard/Dashboard';
 import { Service } from './features/service/Service';
 import { Library } from './features/library/Library';
 import { ScanHub } from './features/scan/ScanHub';
@@ -41,7 +42,13 @@ import { Sheet } from './ui/Sheet';
 import { Icon } from './ui/icons';
 
 /*
- * FIVE, and each one is a job rather than a screen.
+ * SIX, and each one is a job rather than a screen.
+ *
+ * TODAY IS BACK AS ITS OWN TAB (Nov 2026). It was folded into the top of Jobs
+ * when eight tabs became five; that made Jobs one very long screen that answered
+ * two questions — "what needs me?" and "show me the bookings". Today answers the
+ * first and opens the app; Jobs is the list. Six tabs are ~65px each at 390px and
+ * ~53px at 320px, still clear of the 44px floor.
  *
  * Eight tabs did not fit: they scrolled sideways on a phone, which hid Recipes,
  * Ingredients and Setup behind a gesture nobody discovers, and left no room for
@@ -54,7 +61,8 @@ import { Icon } from './ui/icons';
  * rarely opened, which is exactly what a header link is for.
  */
 const TABS = [
-  { to: '/', label: 'Jobs' },
+  { to: '/', label: 'Today' },
+  { to: '/jobs', label: 'Jobs' },
   { to: '/service', label: 'Service' },
   { to: '/money', label: 'Money' },
   { to: '/library', label: 'Library' },
@@ -120,8 +128,10 @@ function Header(): ReactNode {
  * for something nobody taps on its own.
  */
 const ICON_PATHS: Readonly<Record<(typeof TABS)[number]['to'], readonly string[]>> = {
+  // Today — home: what the coming days look like and what needs him.
+  '/': ['M4 11l8-6.5 8 6.5', 'M6 9.5V19.5h12V9.5', 'M10 19.5v-5h4v5'],
   // Jobs — a calendar page.
-  '/': ['M4 6.5h16v13H4z', 'M4 10.5h16', 'M8.5 4v4', 'M15.5 4v4'],
+  '/jobs': ['M4 6.5h16v13H4z', 'M4 10.5h16', 'M8.5 4v4', 'M15.5 4v4'],
   // Service — a clipboard with ticks: shopping, prep, packing.
   '/service': ['M7 5H5.5v15h13V5H17', 'M9 3.5h6v3H9z', 'M8.5 11l1.5 1.5 3-3', 'M8.5 16.5h7'],
   // Money — a note.
@@ -296,10 +306,10 @@ export default function App(): ReactNode {
                 underneath re-reads instead of showing the job as it was. */}
             <div className="content" key={dataVersion}>
               <Routes>
-              <Route path="/" element={<Jobs />} />
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/jobs" element={<Jobs />} />
               {/* Bookmarks from the eight-tab era. Each resolves rather than
                   404s — see tests/ui/routes.test.ts. */}
-              <Route path="/jobs" element={<Navigate to="/" replace />} />
               <Route path="/today" element={<Navigate to="/" replace />} />
               <Route path="/service" element={<Navigate to="/service/shopping" replace />} />
               <Route path="/service/:view" element={<Service />} />

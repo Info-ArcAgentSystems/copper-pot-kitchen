@@ -148,7 +148,9 @@ describe('the route table still welcomes an old bookmark', () => {
      */
     const redirects = ROUTES.filter((r) => r.redirectOnly).map((r) => r.path);
 
-    for (const legacy of ['/jobs', '/today', '/recipes', '/ingredients', '/shopping', '/prep']) {
+    // `/jobs` left this list in Nov 2026: it is the live Jobs route again, so an
+    // old bookmark reaches the list directly instead of through a redirect.
+    for (const legacy of ['/today', '/recipes', '/ingredients', '/shopping', '/prep']) {
       expect(redirects, `${legacy} no longer resolves for an old bookmark`).toContain(legacy);
     }
   });

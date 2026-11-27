@@ -42,7 +42,6 @@ import { jobRevenue } from '../../engine/costing';
 import { portionsDerivable } from '../../engine/rules';
 import type { JobChanges } from '../../engine/impact';
 import { ImpactPreview } from './ImpactPreview';
-import { Dashboard } from '../dashboard/Dashboard';
 import { useKitchen } from '../../auth/kitchenState';
 import type {
   AllocatedDietary,
@@ -200,17 +199,8 @@ export function Jobs(): ReactNode {
 
   return (
     <>
-      {/* The former "Today" screen. Folded in rather than kept as its own tab:
-          what is coming up and the jobs it comes from are one question, and the
-          dashboard was the only tab that answered half of it.
-
-          Still its own component in `features/dashboard/` — `derived.test.ts`
-          guards that directory by name, and it writes nothing. */}
-      <Dashboard />
-
-      {/* The target of the dashboard's "All jobs". A fragment on the same
-          screen rather than a route, because the list IS on the same screen —
-          the comment at that link records what the route did instead. */}
+      {/* Today's "See all jobs" and its job rows link to /jobs. The id stays
+          as a stable anchor for anything that still points at the list. */}
       <div id="jobs-list">
         <RecordScreen<JobRow>
           title="Jobs"

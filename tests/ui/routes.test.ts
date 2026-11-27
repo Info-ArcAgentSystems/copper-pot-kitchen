@@ -21,7 +21,6 @@ const app = readFileSync(fileURLToPath(new URL('../../src/App.tsx', import.meta.
 
 /** Paths the old tab bar and its links could put in a bookmark. */
 const OLD_PATHS = [
-  '/jobs',
   '/shopping',
   '/prep',
   '/packing',
@@ -44,10 +43,12 @@ describe('old bookmarks still land somewhere', () => {
     expect(route?.[1], `${path} redirects to nothing`).toMatch(/^\//);
   });
 
-  it('the index route renders Jobs, not the old dashboard', () => {
-    // Jobs is the home tab now; the dashboard is folded into it rather than
-    // being its own destination.
-    expect(app).toMatch(/path="\/"\s+element=\{<Jobs \/>\}/);
+  it('the index route renders Today, and Jobs has its own live route', () => {
+    // Nov 2026: Today is the home tab again, and `/jobs` stopped being a
+    // redirect and became the Jobs list. An old `/jobs` bookmark therefore
+    // still lands on Jobs — now directly rather than via a redirect.
+    expect(app).toMatch(/path="\/"\s+element=\{<Dashboard \/>\}/);
+    expect(app).toMatch(/path="\/jobs"\s+element=\{<Jobs \/>\}/);
   });
 
   it('every scanner route is untouched', () => {
@@ -67,17 +68,19 @@ describe('old bookmarks still land somewhere', () => {
 });
 
 describe('the tab bar fits a phone', () => {
-  it('has exactly five tabs', () => {
+  it('has exactly six tabs', () => {
     // Eight scrolled sideways, which is what hid Recipes, Ingredients and Setup.
     const tabs = /const TABS = \[([\s\S]*?)\] as const;/.exec(app)?.[1] ?? '';
 
-    expect([...tabs.matchAll(/\{ to: '/g)]).toHaveLength(5);
+    // Six since Today came back (Nov 2026): ~65px each at 390px, ~53px at 320px,
+    // still clear of the 44px floor. A seventh needs that sum redone first.
+    expect([...tabs.matchAll(/\{ to: '/g)]).toHaveLength(6);
   });
 
-  it('leads with Jobs and ends with Scan', () => {
+  it('leads with Today and ends with Scan', () => {
     const tabs = /const TABS = \[([\s\S]*?)\] as const;/.exec(app)?.[1] ?? '';
     const labels = [...tabs.matchAll(/label: '([^']+)'/g)].map((m) => m[1]);
 
-    expect(labels).toEqual(['Jobs', 'Service', 'Money', 'Library', 'Scan']);
+    expect(labels).toEqual(['Today', 'Jobs', 'Service', 'Money', 'Library', 'Scan']);
   });
 });

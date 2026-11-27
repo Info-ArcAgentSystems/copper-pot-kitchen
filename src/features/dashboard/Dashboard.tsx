@@ -27,6 +27,7 @@ import {
   stockRepository,
 } from '../../data/repositories';
 import { buildDashboardView } from '../../ui/dashboardView';
+import { needsYou } from '../../ui/needsYou';
 import { BACKUP_STORAGE_KEY } from '../../ui/backup';
 import { AHEAD, DateRangeBar } from '../../ui/DateRangeBar';
 import { SectionHeading } from '../../ui/icons';
@@ -211,6 +212,7 @@ export function Dashboard(): ReactNode {
   }
 
   const money = view.money;
+  const needs = needsYou(view);
 
   /* Guests booked: RECORDED guest counts added up, and the jobs without one
      counted separately — a missing count is never added in as zero. */
@@ -225,8 +227,8 @@ export function Dashboard(): ReactNode {
   return (
     <Screen
       title="Today"
-      icon="jobs"
-      description="What's coming up in your chosen dates, and where the gaps are."
+      icon="home"
+      description="How the coming days look, and what needs you now."
     >
       {/* The SAME date control as Service and Money. It was two loose `.field`
           divs, which read as two unrelated blocks once the container owns the
@@ -279,6 +281,37 @@ export function Dashboard(): ReactNode {
         />
       </div>
 
+      {/* ------------------------------------------------------------------
+          NEEDS YOU — what stops a job being ready, worst first, each with ONE
+          place to fix it. Ordered and worded by `needsYou`, which only arranges
+          what the view above already holds. An empty list says what it means:
+          nothing was found, not "everything is fine".
+          ------------------------------------------------------------------ */}
+      <SectionHeading icon="chart">Needs you</SectionHeading>
+      {needs.length === 0 ? (
+        <p className="muted">
+          Nothing found to fix in these dates — every confirmed job is priced, costed and
+          shoppable.
+        </p>
+      ) : (
+        <ol className="needs">
+          {needs.map((n, i) => (
+            <li key={n.key} className={`need need-${n.tone}`}>
+              <span className="need-rank num" aria-hidden="true">
+                {i + 1}
+              </span>
+              <span className="need-body">
+                <strong>{n.title}</strong>
+                {n.why !== '' && <span className="need-why">{n.why}</span>}
+              </span>
+              <Link className="need-go" to={n.action.to}>
+                {n.action.label}
+              </Link>
+            </li>
+          ))}
+        </ol>
+      )}
+
       {/* ------------------------------------------------------------------ */}
       <SectionHeading icon="jobs">Next jobs</SectionHeading>
       {view.nextJobs.length === 0 ? (
@@ -287,12 +320,10 @@ export function Dashboard(): ReactNode {
         <ul className="records">
           {view.nextJobs.map((n) => (
             <li key={n.job.id}>
-              {/* Same fragment, same reason. This row cannot OPEN the job it
-                  describes — no route addresses one, because `RecordScreen`
-                  holds its editing state internally — so it takes him to the
-                  list, where the job can be tapped. The real fix is logged
-                  rather than bolted on here. */}
-              <a className="record" href="#jobs-list">
+              {/* To the Jobs list, where the job can be tapped. No route opens
+                  one job directly — `RecordScreen` holds its editing state
+                  internally — so this is the honest destination. */}
+              <Link className="record" to="/jobs">
                 <span className="record-row">
                   {/* How ready, as a ring: the engine's own count of checks met
                       (guests confirmed, time, menu, priced, shopping…). */}
@@ -312,37 +343,21 @@ export function Dashboard(): ReactNode {
                     )}
                   </span>
                 </span>
-              </a>
+              </Link>
             </li>
           ))}
         </ul>
       )}
-      {/* A LINK DOWN THE PAGE, NOT A ROUTE.
-
-          This was `<Link to="/jobs">`, which looked right and was not: `/jobs`
-          is a redirect left over from the eight-tab era and it sends you to
-          `/` — the screen you are already on, because this dashboard renders at
-          the top of it with the jobs list directly below. The round trip
-          remounted `Jobs`, which remounted this dashboard's six reads AND the
-          list's own, blanking the whole screen to its loading state and
-          repopulating it. It read as a full page reload, and it landed back
-          where it started.
-
-          The list is already here. Going to it is a fragment, not a journey. */}
       <p className="hint muted">
-        <a className="qlink" href="#jobs-list">See all jobs</a>
+        <Link className="qlink" to="/jobs">
+          See all jobs
+        </Link>
       </p>
 
       {/* ------------------------------------------------------------------
           AT A GLANCE — two summaries, each a single tile the owner taps.
-
-          They used to be two bordered blocks each ending in a bright-blue
-          "Open X" sentence. The card is the affordance now, so there is no blue
-          text inside either, and the chevron does the saying.
-
-          Every figure keeps the treatment it had: `Figure` still renders a null
-          as `.unresolved` "not known", and the blocked count is still carried
-          separately. Making an empty state quieter must not make it silent.
+          Every null still renders as `.unresolved` "not known", and the blocked
+          count is still carried separately: quieter, never silent.
           ------------------------------------------------------------------ */}
       <SectionHeading icon="chart">At a glance</SectionHeading>
       <div className="tiles">
@@ -352,9 +367,6 @@ export function Dashboard(): ReactNode {
           <h3>To buy</h3>
           <dl className="money-figures">
             <Figure label="Lines outstanding" value={String(view.shopping.outstanding)} />
-            {/* Carried separately on purpose: a dropped line counts ZERO above,
-                so an empty list and an uncomputable one look identical without
-                this. */}
             {view.shopping.blocked > 0 && (
               <div>
                 <dt>Could not be worked out</dt>
@@ -364,31 +376,6 @@ export function Dashboard(): ReactNode {
           </dl>
           <p className="tile-go">Shopping list</p>
         </Link>
-
-      {/* ------------------------------------------------------------------ */}
-      {view.anomalies.length > 0 && (
-        <section className="needs-fixing">
-          <h2>Worth a look</h2>
-          <ul>
-            {view.anomalies.map((a) => (
-              <li key={`${a.jobId}-${a.reason}`}>{a.detail}</li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* Rule 9: possible conflicts for review. Never a verdict, never a count
-          summed across guests (Rule 16) — each issue names its own guests. */}
-      {view.dietary.length > 0 && (
-        <section className="unresolved-block">
-          <h2>Dietary — review required</h2>
-          <ul>
-            {view.dietary.map((d) => (
-              <li key={d.dietaryId}>{d.detail}</li>
-            ))}
-          </ul>
-        </section>
-      )}
 
         <Link className="tile" to="/money">
           <h3>Money in these dates</h3>
@@ -413,6 +400,32 @@ export function Dashboard(): ReactNode {
           <p className="tile-go">Open Money</p>
         </Link>
       </div>
+
+      {/* Every anomaly and dietary issue in full. "Needs you" leads with the
+          serious ones; nothing is dropped for being smaller. */}
+      {view.anomalies.length > 0 && (
+        <section className="needs-fixing">
+          <h2>Worth a look</h2>
+          <ul>
+            {view.anomalies.map((a) => (
+              <li key={`${a.jobId}-${a.reason}`}>{a.detail}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* Rule 9: possible conflicts for review. Never a verdict, never a count
+          summed across guests (Rule 16) — each issue names its own guests. */}
+      {view.dietary.length > 0 && (
+        <section className="unresolved-block">
+          <h2>Dietary — review required</h2>
+          <ul>
+            {view.dietary.map((d) => (
+              <li key={d.dietaryId}>{d.detail}</li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <SectionHeading icon="guests">Covers served</SectionHeading>
       <section className="money-row">

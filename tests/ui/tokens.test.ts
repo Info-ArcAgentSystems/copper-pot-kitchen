@@ -554,12 +554,19 @@ describe('blue is reserved for acting', () => {
      * what noticed, which is the point of listing the forms rather than
      * checking for the absence of blue. A fourth form has to be argued for
      * here before it can ship.
+     *
+     *   need-go  ARGUED FOR, Nov 2026: the one action on a "Needs you" card.
+     *            Grey button-ground and ink like every secondary button, never
+     *            the accent; full width on a phone, because it is the thing he
+     *            taps from that card and a text link is a small target with
+     *            wet hands. One per card, so it never competes with the
+     *            screen's main action.
      */
     expect(links.length).toBeGreaterThan(3);
     for (const attrs of links) {
       expect(
-        /className="[^"]*\b(qlink|record|tile)\b/.test(attrs),
-        `a dashboard link is none of the three quiet forms: ${attrs.trim()}`,
+        /className="[^"]*\b(qlink|record|tile|need-go)\b/.test(attrs),
+        `a dashboard link is none of the four quiet forms: ${attrs.trim()}`,
       ).toBe(true);
     }
   });
